@@ -1,0 +1,1 @@
+import {FinancePage} from "./AllPages.jsx"; export default FinancePage;

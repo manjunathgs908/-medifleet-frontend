@@ -1,0 +1,123 @@
+/* src/index.css */
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ink:      #0a0f1e;
+  --ink2:     #1a2035;
+  --ink3:     #242c45;
+  --surface:  #111827;
+  --surface2: #1f2937;
+  --surface3: #374151;
+  --border:   rgba(255,255,255,0.07);
+  --border2:  rgba(255,255,255,0.12);
+  --accent:   #00d4aa;
+  --accent2:  #00b896;
+  --red:      #ff4d6d;
+  --amber:    #ffb830;
+  --blue:     #3b9eff;
+  --purple:   #a78bfa;
+  --text:     #f0f4ff;
+  --text2:    #94a3b8;
+  --text3:    #64748b;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--ink);
+  color: var(--text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Scrollbar ─────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 4px; }
+
+/* ── Global input reset ────────────────────────────── */
+input, select, textarea {
+  outline: none;
+  font-family: 'DM Sans', sans-serif;
+}
+
+/* ── Utility classes ───────────────────────────────── */
+.font-display { font-family: 'Syne', sans-serif; }
+.font-mono    { font-family: 'DM Mono', monospace; }
+
+/* ── Card ──────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+}
+.card-sm {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+/* ── Stat card accent bars ─────────────────────────── */
+.stat-bar-green::before { background: linear-gradient(90deg, var(--accent), transparent); }
+.stat-bar-red::before   { background: linear-gradient(90deg, var(--red), transparent); }
+.stat-bar-blue::before  { background: linear-gradient(90deg, var(--blue), transparent); }
+.stat-bar-amber::before { background: linear-gradient(90deg, var(--amber), transparent); }
+
+/* ── Input ─────────────────────────────────────────── */
+.inp {
+  width: 100%;
+  background: var(--ink3);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 13.5px;
+  color: var(--text);
+  transition: border-color .15s;
+}
+.inp:focus { border-color: var(--accent); }
+.inp option { background: var(--ink2); }
+
+/* ── Table ─────────────────────────────────────────── */
+.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tbl th {
+  padding: 10px 14px; text-align: left;
+  font-size: 11px; font-weight: 600; letter-spacing: .06em;
+  color: var(--text3); text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+}
+.tbl td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.tbl tr:last-child td { border-bottom: none; }
+.tbl tbody tr:hover td { background: rgba(255,255,255,.015); }
+
+/* ── Badge ─────────────────────────────────────────── */
+.badge {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px; border-radius: 20px;
+  font-size: 11px; font-weight: 600;
+}
+.badge-green  { background: rgba(0,212,170,.15); color: var(--accent); border: 1px solid rgba(0,212,170,.25); }
+.badge-amber  { background: rgba(255,184,48,.15); color: var(--amber); border: 1px solid rgba(255,184,48,.25); }
+.badge-red    { background: rgba(255,77,109,.15); color: var(--red);   border: 1px solid rgba(255,77,109,.25); }
+.badge-blue   { background: rgba(59,158,255,.15); color: var(--blue);  border: 1px solid rgba(59,158,255,.25); }
+.badge-gray   { background: rgba(100,116,139,.12); color: var(--text3); border: 1px solid rgba(100,116,139,.2); }
+
+/* ── Page fade ─────────────────────────────────────── */
+.page-enter { animation: slideUp .25s ease-out; }
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+/* ── Pulse dot ─────────────────────────────────────── */
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: .4; transform: scale(.85); }
+}
+.pulse-dot { animation: pulseDot 2s infinite; }

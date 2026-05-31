@@ -1,0 +1,1 @@
+import {SalaryPage} from "./AllPages.jsx"; export default SalaryPage;

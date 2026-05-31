@@ -1,0 +1,1 @@
+import {HospitalsPage} from "./AllPages.jsx"; export default HospitalsPage;

@@ -1,0 +1,1 @@
+import {CompliancePage} from "./AllPages.jsx"; export default CompliancePage;

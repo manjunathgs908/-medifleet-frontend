@@ -1,0 +1,1 @@
+import {BillingPage} from "./AllPages.jsx"; export default BillingPage;

@@ -1,0 +1,1 @@
+import {LeadsPage} from "./AllPages.jsx"; export default LeadsPage;
