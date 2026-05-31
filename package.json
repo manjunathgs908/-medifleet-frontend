@@ -2,11 +2,14 @@
   "name": "medifleet-crm-frontend",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": "18.x"
+  },
   "scripts": {
     "dev":     "vite",
-    "build":   "npx vite build",
-    "preview": "npx vite preview",
-    "start":   "npx vite preview --port $PORT --host 0.0.0.0"
+    "build":   "./node_modules/.bin/vite build",
+    "preview": "./node_modules/.bin/vite preview",
+    "start":   "./node_modules/.bin/vite preview --port $PORT --host 0.0.0.0"
   },
   "dependencies": {
     "react":            "^18.2.0",
