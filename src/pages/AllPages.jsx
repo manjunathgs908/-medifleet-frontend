@@ -1,4 +1,5 @@
 import { tripsApi, billingApi, hospitalsApi, financeApi, salaryApi, leadsApi, vehiclesApi, authApi } from '../api/client';
+import api from '../api/client';
 import { PageHeader, StatusBadge, Btn, Modal, StatCard, Tabs, Spinner, Empty, rupee } from '../components/ui';
 import toast from 'react-hot-toast';
 // src/pages/FleetPage.jsx
@@ -145,15 +146,18 @@ export default function FleetPage() {
 // src/pages/TripsPage.jsx
 // ─────────────────────────────────────────────────────────────
 export function TripsPage() {
-  const [trips,   setTrips]   = useState([]);
+ const [trips,   setTrips]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter,  setFilter]  = useState('all');
+  const [mainTab, setMainTab] = useState('dispatch');
+  const [bookingTrips, setBookingTrips] = useState([]);
+  const [btLoading, setBtLoading] = useState(false);
 
   useEffect(() => { load(); }, [filter]);
 
   
 
-  const load = async () => {
+ const load = async () => {
     setLoading(true);
     try {
       const params = filter !== 'all' ? { status: filter } : {};
@@ -162,6 +166,38 @@ export function TripsPage() {
     } finally { setLoading(false); }
   };
 
+  const loadBookingTrips = async () => {
+    setBtLoading(true);
+    try {
+      const { data } = await api.get('/booking-trips');
+      setBookingTrips(data.trips || []);
+    } catch(e) { toast.error('Failed to load booking trips'); }
+    finally { setBtLoading(false); }
+  };
+
+  useEffect(() => { if(mainTab === 'booking') loadBookingTrips(); }, [mainTab]);
+
+  const fmt = (date) => {
+    if (!date) return '';
+    const d = new Date(date);
+    return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  };
+
+  const approveCancel = async (id) => {
+    try {
+      await api.put(`/booking-trips/${id}/approve-cancel`);
+      toast.success('Cancel approved!');
+      loadBookingTrips();
+    } catch { toast.error('Failed'); }
+  };
+
+  const reopenTrip = async (id) => {
+    try {
+      await api.put(`/booking-trips/${id}/reopen`);
+      toast.success('Trip reopened!');
+      loadBookingTrips();
+    } catch { toast.error('Failed'); }
+  };
   
 
   const FILTERS = ['all','booked','dispatched','en_route','completed','cancelled'];
@@ -204,15 +240,16 @@ export function TripsPage() {
             </tbody>
           </table>
         }
-      </div>
+     </div>
+      )}
     </div>
   );
 }
 
 
-// ─────────────────────────────────────────────────────────────
-// src/pages/BillingPage.jsx
-// ─────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
+// src/pages/BillingPage.jsx//
+ ─────────────────────────────────────────────────────────────
 export function BillingPage() {
   const [tab,      setTab]      = useState('bills');
   const [bills,    setBills]    = useState([]);
