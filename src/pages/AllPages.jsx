@@ -229,42 +229,42 @@ useEffect(() => { load(); }, [filter]);
 
 
       {mainTab === 'dispatch' && (
-      <>
-        {FILTERS.map(f => (
-          <button key={f} onClick={() => setFilter(f)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all capitalize
-              ${filter === f ? 'bg-[var(--surface2)] text-[var(--text)]' : 'text-[var(--text3)]'}`}>
-            {f.replace('_',' ')}
-          </button>
-        ))}
-      </div>
-
-      <div className="card overflow-x-auto">
-        {loading ? <Spinner /> : trips.length === 0 ? <Empty icon="ðŸ“‹" message="No trips found" /> :
-          <table className="tbl">
-            <thead><tr>
-              <th>Trip</th><th>Patient</th><th>Emergency</th><th>Hospital</th>
-              <th>Vehicle</th><th>Driver</th><th>Fare</th><th>Status</th><th>Date</th>
-            </tr></thead>
-            <tbody>
-              {trips.map(t => (
-                <tr key={t._id}>
-                  <td className="font-mono text-xs" style={{ color: 'var(--accent)' }}>{t.tripNumber || t._id.slice(-6)}</td>
-                  <td><div className="font-medium text-sm">{t.patientName}</div><div className="text-xs" style={{ color:'var(--text3)' }}>{t.patientPhone}</div></td>
-                  <td><span className="badge badge-blue text-xs capitalize">{t.emergencyType}</span></td>
-                  <td className="text-sm" style={{ color:'var(--text2)' }}>{t.dropHospital?.name}</td>
-                  <td className="font-mono text-xs" style={{ color:'var(--text2)' }}>{t.vehicle?.registrationNumber}</td>
-                  <td className="text-sm">{t.driver?.name || 'â€”'}</td>
-                  <td className="font-bold font-mono" style={{ color:'var(--accent)' }}>{rupee(t.grandTotal || t.baseFare)}</td>
-                  <td><StatusBadge status={t.status} /></td>
-                  <td className="text-xs font-mono" style={{ color:'var(--text3)' }}>{new Date(t.createdAt).toLocaleDateString('en-IN')}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        }
-      </div>
-      </> )}
+        <>
+          <div className="flex gap-1 flex-wrap mb-5 p-1 rounded-xl" style={{ background: "var(--surface)", width: "fit-content" }}>
+            {FILTERS.map(f => (
+              <button key={f} onClick={() => setFilter(f)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all capitalize ${filter === f ? 'bg-[var(--surface2)] text-[var(--text)]' : 'text-[var(--text3)]'}`}>
+                {f.replace('_',' ')}
+              </button>
+            ))}
+          </div>
+          <div className="card overflow-x-auto">
+            {loading ? <Spinner /> : trips.length === 0 ? <Empty icon="📋" message="No trips found" /> :
+              <table className="tbl">
+                <thead><tr>
+                  <th>Trip</th><th>Patient</th><th>Emergency</th><th>Hospital</th>
+                  <th>Vehicle</th><th>Driver</th><th>Fare</th><th>Status</th><th>Date</th>
+                </tr></thead>
+                <tbody>
+                  {trips.map(t => (
+                    <tr key={t._id}>
+                      <td className="font-mono text-xs" style={{ color: 'var(--accent)' }}>{t.tripNumber || t._id.slice(-6)}</td>
+                      <td><div className="font-medium text-sm">{t.patientName}</div><div className="text-xs" style={{ color:'var(--text3)' }}>{t.patientPhone}</div></td>
+                      <td><span className="badge badge-blue text-xs capitalize">{t.emergencyType}</span></td>
+                      <td className="text-sm" style={{ color:'var(--text2)' }}>{t.dropHospital?.name}</td>
+                      <td className="font-mono text-xs" style={{ color:'var(--text2)' }}>{t.vehicle?.registrationNumber}</td>
+                      <td className="text-sm">{t.driver?.name || '—'}</td>
+                      <td className="font-bold font-mono" style={{ color:'var(--accent)' }}>{rupee(t.grandTotal || t.baseFare)}</td>
+                      <td><StatusBadge status={t.status} /></td>
+                      <td className="text-xs font-mono" style={{ color:'var(--text3)' }}>{new Date(t.createdAt).toLocaleDateString('en-IN')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            }
+          </div>
+        </>
+      )}
       {mainTab === 'booking' && (
         <div>
           {btLoading ? <Spinner /> : bookingTrips.length === 0 ? <Empty icon="📋" message="No booking trips" /> :
@@ -277,10 +277,10 @@ useEffect(() => { load(); }, [filter]);
                       <div className="text-xs" style={{color:'var(--text3)'}}>{t.driver?.phone}</div>
                     </div>
                     <span className={`badge text-xs ${t.isCompleted ? 'badge-green' : t.isCancelled ? 'badge-red' : 'badge-amber'}`}>
-                      {t.isCompleted ? '✅ Completed' : t.isCancelled ? '❌ Cancelled' : '🔄 Active'}
+                      {t.isCompleted ? 'Completed' : t.isCancelled ? 'Cancelled' : 'Active'}
                     </span>
                   </div>
-                  {t.totalDutyHours && <div className="text-xs" style={{color:'var(--accent)'}}>⏱ {t.totalDutyHours} hrs</div>}
+                  {t.totalDutyHours && <div className="text-xs" style={{color:'var(--accent)'}}>Total: {t.totalDutyHours} hrs</div>}
                 </div>
               ))}
             </div>
@@ -294,7 +294,7 @@ useEffect(() => { load(); }, [filter]);
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // src/pages/BillingPage.jsx//
- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ──────────────────────────────────────────────────────────────
 export function BillingPage() {
   const [tab,      setTab]      = useState('bills');
   const [bills,    setBills]    = useState([]);
