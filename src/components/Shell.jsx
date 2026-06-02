@@ -15,8 +15,8 @@ const NAV = [
   { label: 'Trips',       to: '/trips',      icon: FileText,        roles: ['owner','telecaller'] },
   { label: 'Billing',     to: '/billing',    icon: Receipt,     roles: ['owner','telecaller'] },
   { label: 'Leads',       to: '/leads',      icon: Target,          roles: ['owner','telecaller'] },
-  { label: 'Finance',     to: '/finance',    icon: TrendingUp,      roles: ['owner'] },
-  { label: 'Salaries',    to: '/salary',     icon: Users,           roles: ['owner'] },
+  { label: 'Finance',     to: '/finance',    icon: TrendingUp,      roles: ['owner'] },{ label: 'Salaries',    to: '/salary',     icon: Users,           roles: ['owner'] },
+  { label: 'Staff',       to: '/staff',      icon: Users,           roles: ['owner'] },
   { label: 'Compliance',  to: '/compliance', icon: ShieldCheck,     roles: ['owner'] },
   { label: 'Building2s',   to: '/Building2s',  icon: Building2,        roles: ['owner'] },
 ];

@@ -19,6 +19,7 @@ import FinancePage     from './pages/FinancePage';
 import SalaryPage      from './pages/SalaryPage';
 import LeadsPage       from './pages/LeadsPage';
 import CompliancePage  from './pages/CompliancePage';
+import StaffPage       from './pages/Staff';
 import HospitalsPage   from './pages/HospitalsPage';
 
 // Driver mobile app pages
@@ -84,6 +85,11 @@ export default function App() {
                 </ProtectedRoute>
               } />
               <Route path="leads"      element={<LeadsPage />} />
+              <Route path="staff"      element={
+                <ProtectedRoute roles={['owner']}>
+                  <StaffPage />
+                </ProtectedRoute>
+              } />
               <Route path="compliance" element={
                 <ProtectedRoute roles={['owner']}>
                   <CompliancePage />
