@@ -229,7 +229,7 @@ useEffect(() => { load(); }, [filter]);
         </button>
       </div>
       {mainTab === 'dispatch' && (
-      <div className="flex gap-1 flex-wrap mb-5 p-1 rounded-xl" style={{ background: "var(--surface)", width: "fit-content" }}>
+      <>
         {FILTERS.map(f => (
           <button key={f} onClick={() => setFilter(f)}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all capitalize
@@ -264,8 +264,8 @@ useEffect(() => { load(); }, [filter]);
           </table>
         }
       </div>
-      </div>
-      )}
+      </> )}
+      {mainTab === 'booking' && (
         <div>
           {btLoading ? <Spinner /> : bookingTrips.length === 0 ? <Empty icon="📋" message="No booking trips" /> :
             <div className="space-y-4">
