@@ -265,7 +265,7 @@ useEffect(() => { load(); }, [filter]);
         }
       </div>
       </div>
-      </>)
+      )}
         <div>
           {btLoading ? <Spinner /> : bookingTrips.length === 0 ? <Empty icon="📋" message="No booking trips" /> :
             <div className="space-y-4">
