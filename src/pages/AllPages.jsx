@@ -177,16 +177,16 @@ useEffect(() => { load(); }, [filter]);
     } finally { setLoading(false); }
   };
 
-  const loadBookingTrips = async () => {
-    setBtLoading(true);
-    try {
-      const { data } = await api.get('/booking-trips');
-      setBookingTrips(data.trips || []);
-    } catch(e) { toast.error('Failed to load booking trips'); }
-    finally { setBtLoading(false); }
-  };
 
-  useEffect(() => { if(mainTab === 'booking') loadBookingTrips(); }, [mainTab]);
+
+
+
+
+
+
+
+
+
 
   const fmt = (date) => {
     if (!date) return '';
