@@ -219,15 +219,15 @@ useEffect(() => { load(); }, [filter]);
 
       {/* Main Tabs */}
       <div className="flex gap-2 mb-5">
-        <button onClick={() => setMainTab('dispatch')}
-          className={`px-4 py-2 rounded-xl text-sm font-semibold ${mainTab==='dispatch' ? 'bg-[var(--accent)] text-[var(--ink)]' : 'bg-[var(--surface2)] text-[var(--text2)]'}`}>
-          ðŸš‘ Dispatch Trips
-        </button>
-        <button onClick={() => setMainTab('booking')}
-          className={`px-4 py-2 rounded-xl text-sm font-semibold ${mainTab==='booking' ? 'bg-[var(--accent)] text-[var(--ink)]' : 'bg-[var(--surface2)] text-[var(--text2)]'}`}>
-          ðŸ“‹ Booking Trips
-        </button>
+        <button onClick={() => setMainTab('dispatch')} className={`px-4 py-2 rounded-xl text-sm font-semibold ${mainTab==='dispatch' ? 'bg-[var(--accent)] text-[var(--ink)]' : 'bg-[var(--surface2)] text-[var(--text2)]'}`}>Dispatch Trips</button>
+        <button onClick={() => setMainTab('booking')} className={`px-4 py-2 rounded-xl text-sm font-semibold ${mainTab==='booking' ? 'bg-[var(--accent)] text-[var(--ink)]' : 'bg-[var(--surface2)] text-[var(--text2)]'}`}>Booking Trips</button>
       </div>
+
+
+
+
+
+
       {mainTab === 'dispatch' && (
       <>
         {FILTERS.map(f => (
