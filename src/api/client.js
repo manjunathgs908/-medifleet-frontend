@@ -3,7 +3,7 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 
 const api = axios.create({
- baseURL: 'https://medifleet-backend.onrender.com/api',
+ baseURL: 'https://api.savelife.health/api',
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -42,7 +42,7 @@ api.interceptors.response.use(
         const refreshToken = localStorage.getItem('refreshToken');
         if (!refreshToken) throw new Error('No refresh token');
 
-        const { data } = await axios.post('https://medifleet-backend.onrender.com/api/auth/refresh', { refreshToken });
+        const { data } = await axios.post('https://api.savelife.health/api/auth/refresh', { refreshToken });
         const newToken = data.accessToken;
 
         localStorage.setItem('accessToken', newToken);

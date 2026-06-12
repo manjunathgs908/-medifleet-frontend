@@ -10,6 +10,6 @@ export default defineConfig({
     }
   },
   define: {
-    'import.meta.env.VITE_API_URL': JSON.stringify('https://medifleet-backend.onrender.com')
+    'import.meta.env.VITE_API_URL': JSON.stringify('https://api.savelife.health')
   }
 });
