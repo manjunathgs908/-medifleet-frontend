@@ -121,3 +121,10 @@ input, select, textarea {
   50%       { opacity: .4; transform: scale(.85); }
 }
 .pulse-dot { animation: pulseDot 2s infinite; }
+/* Fix: keep Leaflet map below modals (z-index conflict) */
+.leaflet-container,
+.leaflet-pane,
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 0 !important;
+}
