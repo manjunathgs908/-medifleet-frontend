@@ -23,6 +23,7 @@ export default function DispatchPage() {
   const [loading,   setLoading]   = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [billModal, setBillModal]   = useState(null);
+  const [assigning, setAssigning]   = useState(null); // tripId currently being assigned
   const intervalRef = useRef();
 
   const totalFare = Number(form.baseFare) + (Number(form.distanceKm) * Number(form.perKmRate));
@@ -55,7 +56,7 @@ export default function DispatchPage() {
 
   const dispatch = async (e) => {
     e.preventDefault();
-    if (!form.patientName || !form.patientPhone || !form.pickupAddress || !form.dropHospitalId) {
+    if (!form.patientName || !form.patientPhone || !form.pickupAddress ||!form.dropHospitalId) {
       toast.error('Fill all required fields'); return;
     }
     setSubmitting(true);
@@ -81,6 +82,17 @@ export default function DispatchPage() {
     await tripsApi.cancel(tripId, 'Cancelled by dispatcher');
     toast.success('Trip cancelled');
     await loadLiveBoard();
+  };
+
+  const assignDriver = async (tripId, vehicleId) => {
+    if (!vehicleId) return;
+    setAssigning(tripId);
+    try {
+      await tripsApi.assign(tripId, vehicleId);
+      toast.success('🚑 Driver assigned!');
+      await loadLiveBoard();
+    } catch { /* axios interceptor shows error */ }
+    finally { setAssigning(null); }
   };
 
   const elapsed = (iso) => {
@@ -111,7 +123,7 @@ export default function DispatchPage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>Patient Name *</label>
-              <input className="inp" value={form.patientName} onChange={e => set('patientName', e.target.value)} placeholder="Full name" required />
+              <input className="inp" value={form.patientName} onChange={e=> set('patientName', e.target.value)} placeholder="Full name" required />
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>Phone *</label>
@@ -121,7 +133,7 @@ export default function DispatchPage() {
 
           <div>
             <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>Pickup Address *</label>
-            <input className="inp" value={form.pickupAddress} onChange={e => set('pickupAddress', e.target.value)} placeholder="Street, Area, Landmark" required />
+            <input className="inp" value={form.pickupAddress} onChange={e=> set('pickupAddress', e.target.value)} placeholder="Street, Area, Landmark" required />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -151,7 +163,7 @@ export default function DispatchPage() {
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>₹ per km</label>
-              <input className="inp" type="number" value={form.perKmRate} onChange={e => set('perKmRate', e.target.value)} />
+              <input className="inp" type="number" value={form.perKmRate}onChange={e => set('perKmRate', e.target.value)} />
             </div>
           </div>
 
@@ -168,7 +180,7 @@ export default function DispatchPage() {
 
           <div className="flex gap-3 pt-1">
             <Btn type="submit" disabled={submitting} className="flex-1">
-              {submitting ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
+              {submitting ? <RefreshCw size={14} className="animate-spin"/> : <Send size={14} />}
               Dispatch Ambulance
             </Btn>
             <Btn type="button" variant="ghost" onClick={() => setForm({ patientName:'', patientPhone:'', pickupAddress:'', dropHospitalId:'', emergencyType:'general', baseFare:1500, distanceKm:12, perKmRate:25 })}>
@@ -210,12 +222,35 @@ export default function DispatchPage() {
                       <div className="text-xs mb-2" style={{ color: 'var(--text2)' }}>
                         🏥 {t.dropHospital?.name} · {t.emergencyType}
                       </div>
-                      <div className="flex justify-between items-center">
-                        <div className="text-xs font-mono" style={{ color: 'var(--amber)' }}>
-                          🚑 {t.vehicle?.registrationNumber} · {t.driver?.name}
+
+                      {/* ── Assign Vehicle/Driver (only if not yet assigned) ── */}
+                      {!t.vehicle ? (
+                        <div className="mb-2.5">
+                          <select
+                            className="inp text-xs py-1.5 w-full"
+                            disabled={assigning === t._id}
+                            value=""
+                            onChange={(e) => assignDriver(t._id, e.target.value)}
+                          >
+                            <option value="">
+                              {assigning === t._id ? 'Assigning...' : '🚑 Assign Vehicle / Driver'}
+                            </option>
+                            {vehicles.map(v => (
+                              <option key={v._id} value={v._id}>
+                                {v.registrationNumber} · {v.assignedDriver?.name || 'No driver'}
+                              </option>
+                            ))}
+                          </select>
                         </div>
-                        <div className="text-[10px]" style={{ color: 'var(--text3)' }}>{elapsed(t.createdAt)}</div>
-                      </div>
+                      ) : (
+                        <div className="flex justify-between items-center">
+                          <div className="text-xs font-mono" style={{ color: 'var(--amber)' }}>
+                            🚑 {t.vehicle?.registrationNumber} · {t.driver?.name}
+                          </div>
+                          <div className="text-[10px]" style={{ color: 'var(--text3)' }}>{elapsed(t.createdAt)}</div>
+                        </div>
+                      )}
+
                       <div className="flex gap-2 mt-2.5">
                         <button onClick={() => complete(t._id)}
                           className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-semibold transition-all"
@@ -258,7 +293,7 @@ export default function DispatchPage() {
             ))}
             <div className="flex justify-between py-2 text-base font-bold">
               <span>Total</span>
-              <span className="font-mono" style={{ color: 'var(--accent)' }}>{rupee(billModal.grandTotal)}</span>
+              <span className="font-mono" style={{ color: 'var(--accent)'}}>{rupee(billModal.grandTotal)}</span>
             </div>
             <div className="flex gap-2 pt-2">
               <Btn variant="primary" className="flex-1" onClick={() => window.print()}>🖨️ Print</Btn>
