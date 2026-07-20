@@ -3,7 +3,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { tripsApi, vehiclesApi, hospitalsApi } from '../api/client';
 import { PageHeader, StatusBadge, Btn, Modal, rupee, Spinner } from '../components/ui';
 import toast from 'react-hot-toast';
-import { Send, RefreshCw, CheckCircle, XCircle, MapPin, Phone } from 'lucide-react';
+import { Send, RefreshCw, CheckCircle, XCircle, MapPin, Phone, Bell, BellOff, X } from 'lucide-react';
+
+const MAX_RINGS = 12; // ~12s of ringing if never dismissed
 
 const EMERGENCY_TYPES = [
   { value:'cardiac',      label:'🫀 Cardiac Emergency' },
@@ -24,15 +26,90 @@ export default function DispatchPage() {
   const [submitting, setSubmitting] = useState(false);
   const [billModal, setBillModal]   = useState(null);
   const [assigning, setAssigning]   = useState(null); // tripId currently being assigned
-  const intervalRef = useRef();
+  const [soundEnabled, setSoundEnabled] = useState(false);
+  const [newBookings, setNewBookings]   = useState([]); // freshly-arrived trips awaiting acknowledgment
+  const intervalRef      = useRef();
+  const knownTripIdsRef  = useRef(null); // null = baseline not yet captured (skip alert on first load)
+  const audioCtxRef      = useRef(null);
+  const ringTimerRef     = useRef(null);
+  const soundEnabledRef  = useRef(false); // mirrors soundEnabled for the setInterval closure
 
   const totalFare = Number(form.baseFare) + (Number(form.distanceKm) * Number(form.perKmRate));
+
+  useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
 
   useEffect(() => {
     loadInitialData();
     intervalRef.current = setInterval(loadLiveBoard, 20000);
-    return () => clearInterval(intervalRef.current);
+    return () => {
+      clearInterval(intervalRef.current);
+      stopRinging();
+      audioCtxRef.current?.close();
+    };
   }, []);
+
+  // ── Alert sound (Web Audio API — synthesized, no asset file, keeps
+  // playing in a backgrounded tab once unlocked by a user gesture) ──
+  const playChime = () => {
+    const ctx = audioCtxRef.current;
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    [[880, 0], [660, 0.18]].forEach(([freq, delay]) => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, now + delay);
+      gain.gain.linearRampToValueAtTime(0.3, now + delay + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.16);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + delay);
+      osc.stop(now + delay + 0.18);
+    });
+  };
+
+  const startRinging = () => {
+    if (!soundEnabledRef.current || !audioCtxRef.current || ringTimerRef.current) return;
+    let count = 0;
+    playChime();
+    count++;
+    ringTimerRef.current = setInterval(() => {
+      if (count >= MAX_RINGS) { stopRinging(); return; }
+      playChime();
+      count++;
+    }, 1000);
+  };
+
+  const stopRinging = () => {
+    if (ringTimerRef.current) { clearInterval(ringTimerRef.current); ringTimerRef.current = null; }
+  };
+
+  const enableSound = () => {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!audioCtxRef.current) audioCtxRef.current = new Ctx();
+      if (audioCtxRef.current.state === 'suspended') audioCtxRef.current.resume();
+      setSoundEnabled(true);
+      playChime(); // audible confirmation that the unlock worked
+      toast.success('🔔 Sound alerts enabled for this session');
+    } catch {
+      toast.error('Could not enable audio in this browser');
+    }
+  };
+
+  const dismissBooking = (id) => {
+    setNewBookings(prev => {
+      const next = prev.filter(b => b._id !== id);
+      if (next.length === 0) stopRinging();
+      return next;
+    });
+  };
+
+  const dismissAllBookings = () => {
+    setNewBookings([]);
+    stopRinging();
+  };
 
   const loadInitialData = async () => {
     setLoading(true);
@@ -47,7 +124,22 @@ export default function DispatchPage() {
   const loadLiveBoard = async () => {
     try {
       const { data } = await tripsApi.getLive();
-      setLiveTrips(data.liveTrips || []);
+      const trips = data.liveTrips || [];
+      const currentIds = new Set(trips.map(t => t._id));
+
+      if (knownTripIdsRef.current === null) {
+        // First load — just record the baseline, don't alert for pre-existing bookings.
+        knownTripIdsRef.current = currentIds;
+      } else {
+        const freshlyArrived = trips.filter(t => !knownTripIdsRef.current.has(t._id));
+        if (freshlyArrived.length) {
+          setNewBookings(prev => [...prev, ...freshlyArrived]);
+          startRinging();
+        }
+        knownTripIdsRef.current = currentIds;
+      }
+
+      setLiveTrips(trips);
       setVehicles(data.availableVehicles || []);
     } catch { /* silent */ }
   };
@@ -106,13 +198,65 @@ export default function DispatchPage() {
         title="Dispatch Center"
         subtitle="Book emergency · Live fleet board · Assign ambulance"
         action={
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold"
-            style={{ background: 'rgba(0,212,170,.1)', color: 'var(--accent)' }}>
-            <span className="w-2 h-2 rounded-full pulse-dot" style={{ background: 'var(--accent)' }} />
-            {vehicles.length} Available
+          <div className="flex items-center gap-2">
+            <button
+              onClick={enableSound}
+              disabled={soundEnabled}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+              style={soundEnabled
+                ? { background: 'rgba(0,212,170,.1)', color: 'var(--accent)', cursor: 'default' }
+                : { background: 'rgba(255,77,109,.1)', color: 'var(--red)', border: '1px solid rgba(255,77,109,.25)', cursor: 'pointer' }}
+              title={soundEnabled ? 'Sound alerts are on for this session' : 'Click to unlock audible new-booking alerts'}
+            >
+              {soundEnabled ? <Bell size={13} /> : <BellOff size={13} />}
+              {soundEnabled ? 'Alerts On' : 'Enable sound alerts'}
+            </button>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold"
+              style={{ background: 'rgba(0,212,170,.1)', color: 'var(--accent)' }}>
+              <span className="w-2 h-2 rounded-full pulse-dot" style={{ background: 'var(--accent)' }} />
+              {vehicles.length} Available
+            </div>
           </div>
         }
       />
+
+      {/* ── New Booking Alert Banner ── */}
+      {newBookings.length > 0 && (
+        <div className="fixed top-4 right-4 z-50 space-y-2 w-full max-w-sm">
+          {newBookings.length > 1 && (
+            <button onClick={dismissAllBookings}
+              className="w-full text-center text-[11px] font-semibold py-1 rounded-lg"
+              style={{ background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border2)' }}>
+              Dismiss all ({newBookings.length})
+            </button>
+          )}
+          {newBookings.map(b => (
+            <div key={b._id} className="rounded-xl p-4 shadow-lg banner-pop"
+              style={{ background: 'var(--surface)', border: '1px solid var(--red)', boxShadow: '0 0 0 1px rgba(255,77,109,.25), 0 8px 24px rgba(255,77,109,.25)' }}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="font-bold font-display text-sm" style={{ color: 'var(--red)' }}>
+                  🚑 New Booking!
+                </div>
+                <button onClick={() => dismissBooking(b._id)} style={{ color: 'var(--text3)' }}>
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="text-sm font-semibold mt-1.5">{b.patientName}</div>
+              <div className="text-xs flex items-center gap-1 mt-0.5" style={{ color: 'var(--text2)' }}>
+                <Phone size={10} /> {b.patientPhone}
+              </div>
+              <div className="text-xs flex items-start gap-1 mt-1" style={{ color: 'var(--text2)' }}>
+                <MapPin size={10} className="mt-0.5 flex-shrink-0" /> {b.pickup?.address}
+              </div>
+              <button onClick={() => dismissBooking(b._id)}
+                className="w-full mt-2.5 py-1.5 rounded-lg text-xs font-semibold"
+                style={{ background: 'rgba(255,77,109,.08)', color: 'var(--red)', border: '1px solid rgba(255,77,109,.2)' }}>
+                Dismiss
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
 

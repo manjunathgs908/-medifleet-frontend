@@ -128,3 +128,11 @@ input, select, textarea {
 .leaflet-bottom {
   z-index: 0 !important;
 }
+
+/* ── New booking alert banner ─────────────────────────── */
+.banner-pop { animation: bannerPop .3s cubic-bezier(.34,1.56,.64,1); }
+
+@keyframes bannerPop {
+  from { opacity: 0; transform: translateX(24px) scale(.96); }
+  to   { opacity: 1; transform: translateX(0)    scale(1);   }
+}
