@@ -159,6 +159,8 @@ const STATUS_MAP = {
   spam       : { c: 'gray',  label: 'Spam' },
   draft      : { c: 'gray',  label: 'Draft' },
   approved   : { c: 'blue',  label: 'Approved' },
+  submitted  : { c: 'blue',  label: 'Submitted' },
+  rejected   : { c: 'red',   label: 'Rejected' },
   overdue    : { c: 'red',   label: 'Overdue' },
   sent       : { c: 'amber', label: 'Sent' },
   active     : { c: 'green', label: 'Active' },

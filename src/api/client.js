@@ -165,3 +165,13 @@ export const hospitalsApi = {
   create : (data) => api.post('/hospitals', data),
   update : (id,d) => api.put(`/hospitals/${id}`, d),
 };
+
+// Owners — KYC review (Owner model, distinct from the CRM's own User
+// staff; these hit /api/owners, gated by protect+authorize('owner') on
+// the backend, same role as this CRM session, not the fleet-Owner's own
+// app login).
+export const ownersApi = {
+  getAll : ()          => api.get('/owners'),
+  approve: (id)        => api.put(`/owners/${id}/approve`),
+  reject : (id, reason) => api.put(`/owners/${id}/reject`, { reason }),
+};

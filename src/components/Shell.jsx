@@ -4,7 +4,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Radio, Truck, FileText, Receipt,
-  TrendingUp, Users, Target, ShieldCheck, Building2,
+  TrendingUp, Users, Target, ShieldCheck, Building2, UserCheck,
   LogOut, Menu, X, Bell, ChevronRight
 } from 'lucide-react';
 
@@ -18,6 +18,7 @@ const NAV = [
   { label: 'Finance',     to: '/finance',    icon: TrendingUp,      roles: ['owner'] },{ label: 'Salaries',    to: '/salary',     icon: Users,           roles: ['owner'] },
   { label: 'Staff',       to: '/staff',      icon: Users,           roles: ['owner'] },
   { label: 'Advances',    to: '/advances',   icon: Users,           roles: ['owner'] },  { label: 'Compliance',  to: '/compliance', icon: ShieldCheck,     roles: ['owner'] },
+  { label: 'Owners',      to: '/owners',     icon: UserCheck,       roles: ['owner'] },
   { label: 'Building2s',   to: '/Building2s',  icon: Building2,        roles: ['owner'] },
 ];
 

@@ -22,6 +22,7 @@ import CompliancePage  from './pages/CompliancePage';
 import StaffPage       from './pages/Staff';
 import AdvancePage     from './pages/AdvancePage';
 import HospitalsPage   from './pages/HospitalsPage';
+import OwnersPage      from './pages/OwnersPage';
 
 // Driver mobile app pages
 import DriverApp       from './pages/driver/DriverApp';
@@ -104,6 +105,11 @@ export default function App() {
               <Route path="hospitals"  element={
                 <ProtectedRoute roles={['owner']}>
                   <HospitalsPage />
+                </ProtectedRoute>
+              } />
+              <Route path="owners"     element={
+                <ProtectedRoute roles={['owner']}>
+                  <OwnersPage />
                 </ProtectedRoute>
               } />
               <Route path="*"          element={<Navigate to="/" replace />} />
