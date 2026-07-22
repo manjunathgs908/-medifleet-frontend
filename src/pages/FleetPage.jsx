@@ -1,6 +1,6 @@
 // src/pages/FleetPage.jsx
 import React, { useState, useEffect } from 'react';
-import { vehiclesApi, authApi } from '../api/client';
+import { vehiclesApi, ambulancesApi, authApi } from '../api/client';
 import { PageHeader, StatusBadge, Btn, Modal, StatCard, Spinner, Empty } from '../components/ui';
 import toast from 'react-hot-toast';
 import { Plus, Gauge } from 'lucide-react';
@@ -26,8 +26,9 @@ const STATUS_ICONS = {
 };
 
 export default function FleetPage() {
-  const [vehicles, setVehicles] = useState([]);
-  const [drivers,  setDrivers]  = useState([]);
+  const [vehicles,   setVehicles]   = useState([]);
+  const [ambulances, setAmbulances] = useState([]);
+  const [drivers,    setDrivers]    = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [modal,    setModal]    = useState(false);
   const [form,     setForm]     = useState({ registrationNumber:'', model:'', type:'BLS', assignedDriver:'' });
@@ -41,8 +42,13 @@ export default function FleetPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const [v, d] = await Promise.all([vehiclesApi.getAll(), authApi.getUsers({ role: 'driver' })]);
+      const [v, a, d] = await Promise.all([
+        vehiclesApi.getAll(),
+        ambulancesApi.getAdminList(),
+        authApi.getUsers({ role: 'driver' }),
+      ]);
       setVehicles(v.data.vehicles||[]);
+      setAmbulances(a.data.ambulances||[]);
       setDrivers(d.data.users||[]);
     } finally { setLoading(false); }
   };
@@ -66,11 +72,25 @@ export default function FleetPage() {
     load();
   };
 
+  // Ambulances are the mobile app's Ambulance/Assignment/Shift system —
+  // an owner or driver goes on duty there via 'Drive an Ambulance', which
+  // never touches the legacy Vehicle collection. Adapted into the same
+  // shape as a vehicle (status <- displayStatus, 'off' -> 'offline') so
+  // the existing card markup and counts can render both side by side.
+  const fleetItems = [
+    ...vehicles.map(v => ({ ...v, source: 'vehicle' })),
+    ...ambulances.map(a => ({
+      ...a,
+      status: a.displayStatus === 'off' ? 'offline' : a.displayStatus,
+      source: 'ambulance',
+    })),
+  ];
+
   const counts = {
-    available:   vehicles.filter(v => v.status === 'available').length,
-    on_trip:     vehicles.filter(v => v.status === 'on_trip').length,
-    offline:     vehicles.filter(v => v.status === 'offline').length,
-    maintenance: vehicles.filter(v => v.status === 'maintenance').length,
+    available:   fleetItems.filter(v => v.status === 'available').length,
+    on_trip:     fleetItems.filter(v => v.status === 'on_trip').length,
+    offline:     fleetItems.filter(v => v.status === 'offline').length,
+    maintenance: fleetItems.filter(v => v.status === 'maintenance').length,
   };
 
   const trackedDrivers = drivers.filter(d => d.availability?.lat && d.availability?.lng);
@@ -127,9 +147,9 @@ export default function FleetPage() {
         )}
       </div>
 
-      {vehicles.length === 0 ? <Empty icon="🚑" message="No vehicles in fleet" /> :
+      {fleetItems.length === 0 ? <Empty icon="🚑" message="No vehicles in fleet" /> :
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {vehicles.map(v => {
+          {fleetItems.map(v => {
             const accentColor = v.status === 'available' ? 'var(--accent)' : v.status === 'on_trip' ? 'var(--amber)' : 'var(--text3)';
             const expiring = v.expiring || [];
             return (
@@ -139,7 +159,9 @@ export default function FleetPage() {
                   <div>
                     <div className="font-mono text-xs mb-0.5" style={{ color: 'var(--accent)' }}>{v._id?.slice(-6).toUpperCase()}</div>
                     <div className="font-bold">{v.registrationNumber}</div>
-                    <div className="text-xs mt-0.5" style={{ color: 'var(--text2)' }}>{v.model} · {v.type}</div>
+                    <div className="text-xs mt-0.5" style={{ color: 'var(--text2)' }}>
+                      {v.source === 'ambulance' ? '🧑‍✈️ Own Fleet' : `${v.model} · ${v.type}`}
+                    </div>
                   </div>
                   <StatusBadge status={v.status} />
                 </div>
@@ -155,10 +177,12 @@ export default function FleetPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 mb-3 text-xs" style={{ color: 'var(--text2)' }}>
-                  <div className="flex items-center gap-1"><Gauge size={11}/> {v.odometer?.toLocaleString('en-IN')} km</div>
-                  <div>✅ {v.trips || 0} trips</div>
-                </div>
+                {v.source !== 'ambulance' && (
+                  <div className="grid grid-cols-2 gap-2 mb-3 text-xs" style={{ color: 'var(--text2)' }}>
+                    <div className="flex items-center gap-1"><Gauge size={11}/> {v.odometer?.toLocaleString('en-IN')} km</div>
+                    <div>✅ {v.trips || 0} trips</div>
+                  </div>
+                )}
 
                 {expiring.length > 0 && (
                   <div className="mb-3 rounded-lg p-2 text-xs"
@@ -167,13 +191,22 @@ export default function FleetPage() {
                   </div>
                 )}
 
-                <select value={v.status} onChange={e => changeStatus(v._id, e.target.value)}
-                  className="inp text-xs py-1.5 w-full">
-                  <option value="available">Available</option>
-                  <option value="on_trip">On Trip</option>
-                  <option value="offline">Offline</option>
-                  <option value="maintenance">Maintenance</option>
-                </select>
+                {/* Ambulance status is driven by the owner/driver's own
+                    on-duty toggle in the mobile app, not editable from
+                    the CRM — show it read-only instead of a dropdown. */}
+                {v.source === 'ambulance' ? (
+                  <div className="text-xs py-1.5 text-center rounded-lg" style={{ background: 'var(--surface2)', color: 'var(--text3)' }}>
+                    Status set from mobile app
+                  </div>
+                ) : (
+                  <select value={v.status} onChange={e => changeStatus(v._id, e.target.value)}
+                    className="inp text-xs py-1.5 w-full">
+                    <option value="available">Available</option>
+                    <option value="on_trip">On Trip</option>
+                    <option value="offline">Offline</option>
+                    <option value="maintenance">Maintenance</option>
+                  </select>
+                )}
               </div>
             );
           })}

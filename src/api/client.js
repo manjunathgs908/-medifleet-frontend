@@ -93,7 +93,9 @@ export const tripsApi = {
   getLive     : ()       => api.get('/trips/live'),
   getById     : (id)     => api.get(`/trips/${id}`),
   create      : (data)   => api.post('/trips', data),
-  assign      : (id, vehicleId) => api.put(`/trips/${id}/assign`, { vehicleId }),
+  // target: { vehicleId } (legacy) or { ambulanceId } (owner/driver on
+  // duty via the mobile app) — backend accepts either.
+  assign      : (id, target) => api.put(`/trips/${id}/assign`, target),
   complete    : (id, data) => api.put(`/trips/${id}/complete`, data),
   cancel      : (id, reason)   => api.put(`/trips/${id}/cancel`, { reason }),
   updateStatus: (id, status)   => api.put(`/trips/${id}/status`, { status }),
@@ -110,6 +112,13 @@ export const vehiclesApi = {
   addServiceLog : (id, data)     => api.post(`/vehicles/${id}/service-log`, data),
   getServiceLogs: (id)           => api.get(`/vehicles/${id}/service-logs`),
   compliance    : ()             => api.get('/vehicles/compliance-dashboard'),
+};
+
+// Ambulances — CRM-admin read of the mobile app's Ambulance/Assignment/
+// Shift system, so an owner (or driver) on duty there shows up
+// alongside legacy Vehicle records. Read-only from the CRM's side.
+export const ambulancesApi = {
+  getAdminList: () => api.get('/ambulances/admin'),
 };
 
 // Billing

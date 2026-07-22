@@ -1,6 +1,6 @@
 // src/pages/DispatchPage.jsx
 import React, { useState, useEffect, useRef } from 'react';
-import { tripsApi, vehiclesApi, hospitalsApi } from '../api/client';
+import { tripsApi, hospitalsApi } from '../api/client';
 import { PageHeader, StatusBadge, Btn, Modal, rupee, Spinner } from '../components/ui';
 import toast from 'react-hot-toast';
 import { Send, RefreshCw, CheckCircle, XCircle, MapPin, Phone, Bell, BellOff, X } from 'lucide-react';
@@ -114,9 +114,12 @@ export default function DispatchPage() {
   const loadInitialData = async () => {
     setLoading(true);
     try {
-      const [h, v] = await Promise.all([hospitalsApi.getAll(), vehiclesApi.getAll({ status: 'available' })]);
-      setHospitals(h.data.hospitals||[]);
-      setVehicles(v.data.vehicles||[]);
+      const { data } = await hospitalsApi.getAll();
+      setHospitals(data.hospitals || []);
+      // vehicles comes from loadLiveBoard's merged (Vehicle + on-duty
+      // Ambulance) list below — no separate vehiclesApi call needed,
+      // it would only be immediately overwritten and lacks the
+      // source tag the assign dropdown relies on.
       await loadLiveBoard();
     } finally { setLoading(false); }
   };
@@ -176,11 +179,15 @@ export default function DispatchPage() {
     await loadLiveBoard();
   };
 
-  const assignDriver = async (tripId, vehicleId) => {
-    if (!vehicleId) return;
+  // id is a merged-list entry's _id; source tells us whether it came
+  // from the legacy Vehicle collection or an on-duty Ambulance (owner/
+  // driver via the mobile app) — see tripController.getLiveBoard's
+  // merged availableVehicles.
+  const assignDriver = async (tripId, id, source) => {
+    if (!id) return;
     setAssigning(tripId);
     try {
-      await tripsApi.assign(tripId, vehicleId);
+      await tripsApi.assign(tripId, source === 'ambulance' ? { ambulanceId: id } : { vehicleId: id });
       toast.success('🚑 Driver assigned!');
       await loadLiveBoard();
     } catch { /* axios interceptor shows error */ }
@@ -367,21 +374,27 @@ export default function DispatchPage() {
                         🏥 {t.dropHospital?.name} · {t.emergencyType}
                       </div>
 
-                      {/* ── Assign Vehicle/Driver (only if not yet assigned) ── */}
-                      {!t.vehicle ? (
+                      {/* ── Assign Vehicle/Driver (only if not yet assigned) —
+                          keyed on driver, not vehicle: an ambulance-sourced
+                          assignment (owner/driver on duty via the mobile
+                          app) never sets trip.vehicle at all. ── */}
+                      {!t.driver ? (
                         <div className="mb-2.5">
                           <select
                             className="inp text-xs py-1.5 w-full"
                             disabled={assigning === t._id}
                             value=""
-                            onChange={(e) => assignDriver(t._id, e.target.value)}
+                            onChange={(e) => {
+                              const [id, source] = e.target.value.split('|');
+                              assignDriver(t._id, id, source);
+                            }}
                           >
                             <option value="">
                               {assigning === t._id ? 'Assigning...' : '🚑 Assign Vehicle / Driver'}
                             </option>
                             {vehicles.map(v => (
-                              <option key={v._id} value={v._id}>
-                                {v.registrationNumber} · {v.assignedDriver?.name || 'No driver'}
+                              <option key={v._id} value={`${v._id}|${v.source}`}>
+                                {v.source === 'ambulance' ? '🧑‍✈️ ' : ''}{v.registrationNumber} · {v.assignedDriver?.name || 'No driver'}
                               </option>
                             ))}
                           </select>
@@ -389,7 +402,7 @@ export default function DispatchPage() {
                       ) : (
                         <div className="flex justify-between items-center">
                           <div className="text-xs font-mono" style={{ color: 'var(--amber)' }}>
-                            🚑 {t.vehicle?.registrationNumber} · {t.driver?.name}
+                            🚑 {t.vehicle?.registrationNumber || t.ambulance?.registrationNumber} · {t.driver?.name}
                           </div>
                           <div className="text-[10px]" style={{ color: 'var(--text3)' }}>{elapsed(t.createdAt)}</div>
                         </div>
