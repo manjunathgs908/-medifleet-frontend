@@ -22,7 +22,7 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
-  // ── Phone + Password login (Owner / Telecaller) ───────────
+  // ── Phone + Password login (Owner) ────────────────────────
   const loginPassword = useCallback(async (phone, password) => {
     const { data } = await api.post('/auth/login', { phone, password });
     _persistSession(data);

@@ -9,7 +9,7 @@ import Shell from './components/Shell';
 // Auth
 import LoginPage from './pages/LoginPage';
 
-// Owner / Telecaller pages
+// Owner pages (telecaller role removed for now — planned to come back later)
 import DashboardPage   from './pages/DashboardPage';
 import DispatchPage    from './pages/DispatchPage';
 import FleetPage       from './pages/FleetPage';
@@ -66,9 +66,9 @@ export default function App() {
         </ProtectedRoute>
       } />
 
-      {/* Admin shell — Owner & Telecaller */}
+      {/* Admin shell — Owner only for now */}
       <Route path="/*" element={
-        <ProtectedRoute roles={['owner', 'telecaller']}>
+        <ProtectedRoute roles={['owner']}>
           <Shell>
             <Routes>
               <Route index element={<DashboardPage />} />

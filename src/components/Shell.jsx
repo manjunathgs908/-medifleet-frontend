@@ -9,12 +9,12 @@ import {
 } from 'lucide-react';
 
 const NAV = [
-  { label: 'Dashboard',   to: '/',           icon: LayoutDashboard, roles: ['owner','telecaller'] },
-  { label: 'Dispatch',    to: '/dispatch',   icon: Radio,           roles: ['owner','telecaller'] },
-  { label: 'Fleet',       to: '/fleet',      icon: Truck,           roles: ['owner','telecaller'] },
-  { label: 'Trips',       to: '/trips',      icon: FileText,        roles: ['owner','telecaller'] },
-  { label: 'Billing',     to: '/billing',    icon: Receipt,     roles: ['owner','telecaller'] },
-  { label: 'Leads',       to: '/leads',      icon: Target,          roles: ['owner','telecaller'] },
+  { label: 'Dashboard',   to: '/',           icon: LayoutDashboard, roles: ['owner'] },
+  { label: 'Dispatch',    to: '/dispatch',   icon: Radio,           roles: ['owner'] },
+  { label: 'Fleet',       to: '/fleet',      icon: Truck,           roles: ['owner'] },
+  { label: 'Trips',       to: '/trips',      icon: FileText,        roles: ['owner'] },
+  { label: 'Billing',     to: '/billing',    icon: Receipt,     roles: ['owner'] },
+  { label: 'Leads',       to: '/leads',      icon: Target,          roles: ['owner'] },
   { label: 'Finance',     to: '/finance',    icon: TrendingUp,      roles: ['owner'] },{ label: 'Salaries',    to: '/salary',     icon: Users,           roles: ['owner'] },
   { label: 'Staff',       to: '/staff',      icon: Users,           roles: ['owner'] },
   { label: 'Advances',    to: '/advances',   icon: Users,           roles: ['owner'] },  { label: 'Compliance',  to: '/compliance', icon: ShieldCheck,     roles: ['owner'] },
