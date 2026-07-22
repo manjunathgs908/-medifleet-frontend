@@ -29,19 +29,6 @@ export const AuthProvider = ({ children }) => {
     return data;
   }, []);
 
-  // ── OTP — step 1: request ─────────────────────────────────
-  const sendOtp = useCallback(async (phone) => {
-    const { data } = await api.post('/auth/send-otp', { phone });
-    return data;
-  }, []);
-
-  // ── OTP — step 2: verify ──────────────────────────────────
-  const verifyOtp = useCallback(async (phone, otp) => {
-    const { data } = await api.post('/auth/verify-otp', { phone, otp });
-    _persistSession(data);
-    return data;
-  }, []);
-
   // ── Logout ─────────────────────────────────────────────────
   const logout = useCallback(async () => {
     try { await api.post('/auth/logout'); } catch { /* ignore */ }
@@ -63,7 +50,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, loginPassword, sendOtp, verifyOtp, logout }}>
+    <AuthContext.Provider value={{ user, loading, loginPassword, logout }}>
       {children}
     </AuthContext.Provider>
   );

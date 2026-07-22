@@ -3,17 +3,17 @@ import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowRight, Smartphone, Lock, RefreshCw } from 'lucide-react';
+import { ArrowRight, RefreshCw } from 'lucide-react';
 
+// Admin-only login — drivers use the mobile app (medifleet-app), never
+// this CRM, so there's no OTP tab here anymore. Single phone+password
+// form, no tab switcher (there's nothing left to switch between).
 export default function LoginPage() {
-  const { loginPassword, sendOtp, verifyOtp } = useAuth();
+  const { loginPassword } = useAuth();
   const navigate = useNavigate();
 
-  const [mode,     setMode]     = useState('password'); // 'password' | 'otp'
   const [phone,    setPhone]    = useState('');
   const [password, setPassword] = useState('');
-  const [otp,      setOtp]      = useState('');
-  const [otpSent,  setOtpSent]  = useState(false);
   const [loading,  setLoading]  = useState(false);
 
   const handlePasswordLogin = async (e) => {
@@ -23,28 +23,6 @@ export default function LoginPage() {
       await loginPassword(phone, password);
       toast.success('Welcome back!');
       navigate('/');
-    } finally { setLoading(false); }
-  };
-
-  const handleSendOtp = async (e) => {
-    e.preventDefault();
-    if (!phone || phone.length !== 10) { toast.error('Enter a valid 10-digit number'); return; }
-    setLoading(true);
-    try {
-      const res = await sendOtp(phone);
-      setOtpSent(true);
-      toast.success('OTP sent to ' + phone);
-      if (res.otp) toast(`Dev mode — OTP: ${res.otp}`, { icon: '🔐', duration: 8000 });
-    } finally { setLoading(false); }
-  };
-
-  const handleVerifyOtp = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await verifyOtp(phone, otp);
-      toast.success('Logged in!');
-      navigate('/driver');
     } finally { setLoading(false); }
   };
 
@@ -77,95 +55,30 @@ export default function LoginPage() {
 
         {/* Card */}
         <div className="rounded-2xl p-6" style={{ background: 'var(--ink2)', border: '1px solid var(--border2)' }}>
-
-          {/* Mode toggle */}
-          <div className="flex gap-1 p-1 rounded-xl mb-6" style={{ background: 'var(--ink3)' }}>
-            <button onClick={() => { setMode('password'); setOtpSent(false); }}
-              className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5
-                ${mode === 'password' ? 'bg-[var(--surface2)] text-[var(--text)]' : 'text-[var(--text3)]'}`}>
-              <Lock size={12} /> Admin Login
-            </button>
-            <button onClick={() => setMode('otp')}
-              className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5
-                ${mode === 'otp' ? 'bg-[var(--surface2)] text-[var(--text)]' : 'text-[var(--text3)]'}`}>
-              <Smartphone size={12} /> Driver OTP
-            </button>
-          </div>
-
-          {/* Password form */}
-          {mode === 'password' && (
-            <form onSubmit={handlePasswordLogin} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wide"
-                  style={{ color: 'var(--text2)' }}>Phone Number</label>
-                <input value={phone} onChange={e => setPhone(e.target.value)}
-                  placeholder="10-digit mobile number" maxLength={10}
-                  className="inp" required />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wide"
-                  style={{ color: 'var(--text2)' }}>Password</label>
-                <input value={password} onChange={e => setPassword(e.target.value)}
-                  type="password" placeholder="Your password"
-                  className="inp" required />
-              </div>
-              <button type="submit" disabled={loading}
-                className="w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all"
-                style={{ background: 'var(--accent)', color: 'var(--ink)' }}>
-                {loading
-                  ? <RefreshCw size={15} className="animate-spin" />
-                  : <><span>Sign In</span><ArrowRight size={15} /></>
-                }
-              </button>
-            </form>
-          )}
-
-          {/* OTP form */}
-          {mode === 'otp' && (
+          <form onSubmit={handlePasswordLogin} className="space-y-4">
             <div>
-              {!otpSent ? (
-                <form onSubmit={handleSendOtp} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wide"
-                      style={{ color: 'var(--text2)' }}>Driver Phone</label>
-                    <input value={phone} onChange={e => setPhone(e.target.value)}
-                      placeholder="10-digit mobile number" maxLength={10}
-                      className="inp" required />
-                  </div>
-                  <button type="submit" disabled={loading}
-                    className="w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all"
-                    style={{ background: 'var(--accent)', color: 'var(--ink)' }}>
-                    {loading ? <RefreshCw size={15} className="animate-spin" /> : <><span>Send OTP</span><ArrowRight size={15} /></>}
-                  </button>
-                </form>
-              ) : (
-                <form onSubmit={handleVerifyOtp} className="space-y-4">
-                  <p className="text-sm" style={{ color: 'var(--text2)' }}>
-                    OTP sent to <span style={{ color: 'var(--accent)' }}>+91 {phone}</span>
-                  </p>
-                  <div>
-                    <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wide"
-                      style={{ color: 'var(--text2)' }}>Enter 6-digit OTP</label>
-                    <input value={otp} onChange={e => setOtp(e.target.value)}
-                      placeholder="_ _ _ _ _ _" maxLength={6}
-                      className="inp text-center text-xl tracking-widest font-mono" required />
-                  </div>
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => setOtpSent(false)}
-                      className="flex-1 py-2.5 rounded-xl text-sm font-semibold"
-                      style={{ background: 'var(--surface2)', color: 'var(--text2)' }}>
-                      Back
-                    </button>
-                    <button type="submit" disabled={loading}
-                      className="flex-1 py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2"
-                      style={{ background: 'var(--accent)', color: 'var(--ink)' }}>
-                      {loading ? <RefreshCw size={15} className="animate-spin" /> : 'Verify & Login'}
-                    </button>
-                  </div>
-                </form>
-              )}
+              <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wide"
+                style={{ color: 'var(--text2)' }}>Phone Number</label>
+              <input value={phone} onChange={e => setPhone(e.target.value)}
+                placeholder="10-digit mobile number" maxLength={10}
+                className="inp" required />
             </div>
-          )}
+            <div>
+              <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wide"
+                style={{ color: 'var(--text2)' }}>Password</label>
+              <input value={password} onChange={e => setPassword(e.target.value)}
+                type="password" placeholder="Your password"
+                className="inp" required />
+            </div>
+            <button type="submit" disabled={loading}
+              className="w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all"
+              style={{ background: 'var(--accent)', color: 'var(--ink)' }}>
+              {loading
+                ? <RefreshCw size={15} className="animate-spin" />
+                : <><span>Sign In</span><ArrowRight size={15} /></>
+              }
+            </button>
+          </form>
         </div>
 
         <p className="text-center text-xs mt-4" style={{ color: 'var(--text3)' }}>
