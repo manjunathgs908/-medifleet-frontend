@@ -240,9 +240,22 @@ export default function Shell({ children }) {
       {/* SOS acknowledgment banner — top-LEFT, deliberately opposite corner
           from DispatchPage's own top-right "New Booking" banner, so the two
           can never visually stack on top of each other if both fire while
-          an owner is on /dispatch. */}
+          an owner is on /dispatch.
+          Position must clear two fixed/sticky siblings that would otherwise
+          cover it: the desktop sidebar (`w-56` = 224px wide, `fixed
+          left-0 top-0`, z-50) and the header (`py-3` + its tallest row
+          content ≈ 52px tall, `sticky top-0`, z-40). left-4 alone put it
+          under the sidebar's 224px-wide column at every vertical position;
+          top-4 alone put it under the header. md:left-60 (240px = sidebar
+          width + 1rem gap) clears the sidebar on desktop, left-4 is safe on
+          mobile since the sidebar there is `hidden md:block` (only a
+          transient overlay when manually opened). top-16 (64px) clears the
+          ~52px header with margin. z-[60] is strictly above both the
+          sidebar/mobile-overlay (z-50) and header (z-40) — needed because
+          the sidebar div is later in the DOM and was painting over the
+          banner at their old equal z-50, independent of position. */}
       {newSosAlerts.length > 0 && (
-        <div className="fixed top-4 left-4 z-50 space-y-2 w-full max-w-sm">
+        <div className="fixed top-16 left-4 md:left-60 z-[60] space-y-2 w-full max-w-sm">
           {newSosAlerts.length > 1 && (
             <button onClick={dismissAllSosAlerts}
               className="w-full text-center text-[11px] font-semibold py-1 rounded-lg"
