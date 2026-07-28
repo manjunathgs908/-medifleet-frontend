@@ -175,6 +175,12 @@ export const hospitalsApi = {
   update : (id,d) => api.put(`/hospitals/${id}`, d),
 };
 
+// SOS / emergency alerts — driver-triggered, resolved by CRM ops.
+export const sosApi = {
+  getAll : ()   => api.get('/sos'),
+  resolve: (id) => api.patch(`/sos/${id}/resolve`),
+};
+
 // Owners — KYC review (Owner model, distinct from the CRM's own User
 // staff; these hit /api/owners, gated by protect+authorize('owner') on
 // the backend, same role as this CRM session, not the fleet-Owner's own
