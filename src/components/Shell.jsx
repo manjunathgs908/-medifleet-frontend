@@ -90,16 +90,29 @@ export default function Shell({ children }) {
     if (sosRingTimerRef.current) { clearInterval(sosRingTimerRef.current); sosRingTimerRef.current = null; }
   };
 
-  const enableSosSound = () => {
+  // Doubles as both the initial gesture-unlock AND a repeatable test-tone
+  // button (per-request: the owner needs a way to confirm sound works
+  // without waiting for a real SOS). First click creates+unlocks+enables;
+  // every click after that just re-plays the tone. resume() is awaited
+  // here (DispatchPage's equivalent doesn't) — not proven to be the actual
+  // cause of the silent-siren bug (see investigation), but scheduling audio
+  // before resume() has genuinely finished is a real, if narrow, footgun,
+  // and awaiting it costs nothing.
+  const enableSosSound = async () => {
     try {
       const Ctx = window.AudioContext || window.webkitAudioContext;
+      const firstEnable = !sosSoundEnabled;
       if (!sosAudioCtxRef.current) sosAudioCtxRef.current = new Ctx();
-      if (sosAudioCtxRef.current.state === 'suspended') sosAudioCtxRef.current.resume();
-      setSosSoundEnabled(true);
-      playSosSiren(); // audible confirmation that the unlock worked
-      toast.success('🚨 SOS sound alerts enabled for this session');
+      if (sosAudioCtxRef.current.state === 'suspended') await sosAudioCtxRef.current.resume();
+      if (firstEnable) {
+        setSosSoundEnabled(true);
+        toast.success('🚨 SOS sound alerts enabled for this session');
+      } else {
+        toast.success('🔊 Test tone played');
+      }
+      playSosSiren(); // audible confirmation / on-demand test tone
     } catch {
-      toast.error('Could not enable audio in this browser');
+      toast.error('Could not play audio in this browser');
     }
   };
 
@@ -323,16 +336,19 @@ export default function Shell({ children }) {
 
           <div className="ml-auto flex items-center gap-3">
             {/* SOS sound unlock — same gesture-unlock pattern as DispatchPage's
-                own "Enable sound alerts" button, own AudioContext instance. */}
+                own "Enable sound alerts" button, own AudioContext instance.
+                Stays clickable after enabling (no `disabled`) so it doubles
+                as a repeatable test-tone button — an owner can confirm audio
+                actually works at the start of a shift without waiting for a
+                real SOS. */}
             {user?.role === 'owner' && (
               <button
                 onClick={enableSosSound}
-                disabled={sosSoundEnabled}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
                 style={sosSoundEnabled
-                  ? { background: 'rgba(0,212,170,.1)', color: 'var(--accent)', cursor: 'default' }
+                  ? { background: 'rgba(0,212,170,.1)', color: 'var(--accent)', cursor: 'pointer' }
                   : { background: 'rgba(255,77,109,.1)', color: 'var(--red)', border: '1px solid rgba(255,77,109,.25)', cursor: 'pointer' }}
-                title={sosSoundEnabled ? 'SOS sound alerts are on for this session' : 'Click to unlock audible SOS alerts'}
+                title={sosSoundEnabled ? 'Click to play a test tone' : 'Click to unlock audible SOS alerts'}
               >
                 {sosSoundEnabled ? <Bell size={13} /> : <BellOff size={13} />}
                 <span className="hidden sm:inline">{sosSoundEnabled ? 'SOS Sound On' : 'Enable SOS sound'}</span>
