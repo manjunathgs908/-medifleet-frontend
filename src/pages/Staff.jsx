@@ -6,6 +6,8 @@ const Staff = () => {
   const [staff, setStaff] = useState([]);
   const [showAdd, setShowAdd] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [editingPosting, setEditingPosting] = useState(null); // staff row being edited, or null
+  const [postingForm, setPostingForm] = useState({ postingName: '', postingLat: '', postingLng: '' });
   const [form, setForm] = useState({
     name: '', phone: '', password: '', role: 'driver',
     driverType: 'shift_driver', baseSalary: 15000, perTripBonus: 100,
@@ -62,6 +64,28 @@ const Staff = () => {
       toast.success('Updated!');
       loadStaff();
     } catch { toast.error('Update failed'); }
+  };
+
+  const openPostingEdit = (s) => {
+    setPostingForm({
+      postingName: s.postingName || '',
+      postingLat : s.postingLat != null ? String(s.postingLat) : '',
+      postingLng : s.postingLng != null ? String(s.postingLng) : '',
+    });
+    setEditingPosting(s);
+  };
+
+  // Same updateUser call Driver Type's inline select already uses --
+  // sends postingLat/postingLng as null (not omitted) when the input is
+  // empty, so clearing a field in the modal actually clears it, not just
+  // leaves the old value untouched.
+  const savePosting = async () => {
+    await handleUpdate(editingPosting._id, {
+      postingName: postingForm.postingName,
+      postingLat : postingForm.postingLat === '' ? null : Number(postingForm.postingLat),
+      postingLng : postingForm.postingLng === '' ? null : Number(postingForm.postingLng),
+    });
+    setEditingPosting(null);
   };
 
   const handleDeactivate = async (id) => {
@@ -138,6 +162,27 @@ const Staff = () => {
         </div>
       )}
 
+      {/* Posting Edit Modal -- same hand-rolled style as the Add Staff
+          modal above, for consistency within this file. */}
+      {editingPosting && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="rounded-2xl p-6 w-full max-w-md" style={{ background: 'var(--surface)' }}>
+            <h2 className="text-lg font-bold mb-4">Edit Posting -- {editingPosting.name}</h2>
+            <div className="space-y-3">
+              <input className="inp w-full" placeholder="Posting Name (e.g. City Hospital ER)" value={postingForm.postingName} onChange={e => setPostingForm({...postingForm, postingName: e.target.value})} />
+              <div className="grid grid-cols-2 gap-3">
+                <input className="inp" placeholder="Posting Latitude" type="number" value={postingForm.postingLat} onChange={e => setPostingForm({...postingForm, postingLat: e.target.value})} />
+                <input className="inp" placeholder="Posting Longitude" type="number" value={postingForm.postingLng} onChange={e => setPostingForm({...postingForm, postingLng: e.target.value})} />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-4">
+              <button onClick={() => setEditingPosting(null)} className="flex-1 py-2 rounded-xl text-sm" style={{ background: 'var(--surface2)' }}>Cancel</button>
+              <button onClick={savePosting} className="flex-1 py-2 rounded-xl font-semibold text-sm" style={{ background: 'var(--accent)', color: 'var(--ink)' }}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Staff Table */}
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
@@ -173,10 +218,26 @@ const Staff = () => {
                 </td>
                 <td className="p-4 font-mono">₹{s.baseSalary?.toLocaleString('en-IN') || 0}</td>
                 <td className="p-4 text-sm">
-                  {s.role === 'driver' ? (s.shiftHours ? `${s.shiftHours}h` : <span style={{ color: 'var(--red)' }}>Not set</span>) : '—'}
+                  {s.role === 'driver' && (
+                    <select className="inp text-xs py-1 px-2" value={s.shiftHours || ''}
+                      onChange={e => handleUpdate(s._id, { shiftHours: e.target.value ? Number(e.target.value) : null })}>
+                      <option value="">Not set</option>
+                      <option value="8">8 hours</option>
+                      <option value="12">12 hours</option>
+                      <option value="24">24 hours</option>
+                    </select>
+                  )}
                 </td>
                 <td className="p-4 text-sm" style={{ color: 'var(--text2)' }}>
-                  {s.role === 'driver' ? (s.postingName || (s.shiftHours ? <span style={{ color: 'var(--red)' }}>Not set</span> : '—')) : '—'}
+                  {s.role === 'driver' && (
+                    <div className="flex items-center gap-2">
+                      <span>{s.postingName || <span style={{ color: 'var(--red)' }}>Not set</span>}</span>
+                      <button onClick={() => openPostingEdit(s)} className="text-xs px-2 py-1 rounded-lg"
+                        style={{ background: 'var(--surface2)', color: 'var(--text2)' }}>
+                        Edit
+                      </button>
+                    </div>
+                  )}
                 </td>
                 <td className="p-4">
                   <span className={`badge text-xs ${s.isActive ? 'badge-green' : 'badge-red'}`}>
