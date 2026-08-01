@@ -8,7 +8,8 @@ const Staff = () => {
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     name: '', phone: '', password: '', role: 'driver',
-    driverType: 'shift_driver', baseSalary: 15000, perTripBonus: 100
+    driverType: 'shift_driver', baseSalary: 15000, perTripBonus: 100,
+    shiftHours: '', postingName: '', postingLat: '', postingLng: ''
   });
 
   useEffect(() => { loadStaff(); }, []);
@@ -26,10 +27,29 @@ const Staff = () => {
     }
     setLoading(true);
     try {
-      await authApi.register(form);
+      const { data } = await authApi.register(form);
+
+      // register() only persists a fixed field list (see
+      // authController.js) -- shiftHours/postingName/postingLat/postingLng
+      // aren't in it and would be silently dropped here. The edit path
+      // (PUT /auth/users/:id) has no such whitelist, so it's reused as an
+      // immediate follow-up instead of touching the backend's create path.
+      const postingFields = {};
+      if (form.shiftHours) postingFields.shiftHours = Number(form.shiftHours);
+      if (form.postingName) postingFields.postingName = form.postingName;
+      if (form.postingLat) postingFields.postingLat = Number(form.postingLat);
+      if (form.postingLng) postingFields.postingLng = Number(form.postingLng);
+      if (form.role === 'driver' && data.user?.id && Object.keys(postingFields).length) {
+        await authApi.updateUser(data.user.id, postingFields);
+      }
+
       toast.success('Staff added!');
       setShowAdd(false);
-      setForm({ name:'', phone:'', password:'', role:'driver', driverType:'shift_driver', baseSalary:15000, perTripBonus:100 });
+      setForm({
+        name:'', phone:'', password:'', role:'driver', driverType:'shift_driver',
+        baseSalary:15000, perTripBonus:100,
+        shiftHours:'', postingName:'', postingLat:'', postingLng:'',
+      });
       loadStaff();
     } catch(e) {
       toast.error(e.response?.data?.message || 'Error');
@@ -89,6 +109,22 @@ const Staff = () => {
                     <input className="inp" placeholder="Base Salary" type="number" value={form.baseSalary} onChange={e => setForm({...form, baseSalary: Number(e.target.value)})} />
                     <input className="inp" placeholder="Per Trip Bonus" type="number" value={form.perTripBonus} onChange={e => setForm({...form, perTripBonus: Number(e.target.value)})} />
                   </div>
+                  {/* Fixed corporate posting -- SaveLife's own drivers only
+                      (see User.owner). Static per-driver property, not a
+                      schedule. No pre-selected shiftHours default -- an
+                      owner must explicitly choose it, same "don't guess"
+                      intent as the backend field having no schema default. */}
+                  <select className="inp w-full" value={form.shiftHours} onChange={e => setForm({...form, shiftHours: e.target.value})}>
+                    <option value="">Shift Hours -- not set</option>
+                    <option value="8">8 hours</option>
+                    <option value="12">12 hours</option>
+                    <option value="24">24 hours</option>
+                  </select>
+                  <input className="inp w-full" placeholder="Posting Name (e.g. City Hospital ER)" value={form.postingName} onChange={e => setForm({...form, postingName: e.target.value})} />
+                  <div className="grid grid-cols-2 gap-3">
+                    <input className="inp" placeholder="Posting Latitude" type="number" value={form.postingLat} onChange={e => setForm({...form, postingLat: e.target.value})} />
+                    <input className="inp" placeholder="Posting Longitude" type="number" value={form.postingLng} onChange={e => setForm({...form, postingLng: e.target.value})} />
+                  </div>
                 </>
               )}
             </div>
@@ -112,6 +148,8 @@ const Staff = () => {
               <th className="text-left p-4 text-xs uppercase tracking-wide" style={{ color: 'var(--text3)' }}>Role</th>
               <th className="text-left p-4 text-xs uppercase tracking-wide" style={{ color: 'var(--text3)' }}>Driver Type</th>
               <th className="text-left p-4 text-xs uppercase tracking-wide" style={{ color: 'var(--text3)' }}>Salary</th>
+              <th className="text-left p-4 text-xs uppercase tracking-wide" style={{ color: 'var(--text3)' }}>Shift Hours</th>
+              <th className="text-left p-4 text-xs uppercase tracking-wide" style={{ color: 'var(--text3)' }}>Posting</th>
               <th className="text-left p-4 text-xs uppercase tracking-wide" style={{ color: 'var(--text3)' }}>Status</th>
               <th className="text-left p-4 text-xs uppercase tracking-wide" style={{ color: 'var(--text3)' }}>Action</th>
             </tr>
@@ -134,6 +172,12 @@ const Staff = () => {
                   )}
                 </td>
                 <td className="p-4 font-mono">₹{s.baseSalary?.toLocaleString('en-IN') || 0}</td>
+                <td className="p-4 text-sm">
+                  {s.role === 'driver' ? (s.shiftHours ? `${s.shiftHours}h` : <span style={{ color: 'var(--red)' }}>Not set</span>) : '—'}
+                </td>
+                <td className="p-4 text-sm" style={{ color: 'var(--text2)' }}>
+                  {s.role === 'driver' ? (s.postingName || (s.shiftHours ? <span style={{ color: 'var(--red)' }}>Not set</span> : '—')) : '—'}
+                </td>
                 <td className="p-4">
                   <span className={`badge text-xs ${s.isActive ? 'badge-green' : 'badge-red'}`}>
                     {s.isActive ? 'Active' : 'Inactive'}
