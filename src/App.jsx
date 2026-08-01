@@ -24,6 +24,7 @@ import AdvancePage     from './pages/AdvancePage';
 import HospitalsPage   from './pages/HospitalsPage';
 import OwnersPage      from './pages/OwnersPage';
 import SosAlertsPage   from './pages/SosAlertsPage';
+import TripAlertsPage  from './pages/TripAlertsPage';
 
 // Driver mobile app pages
 import DriverApp       from './pages/driver/DriverApp';
@@ -116,6 +117,11 @@ export default function App() {
               <Route path="sos"        element={
                 <ProtectedRoute roles={['owner']}>
                   <SosAlertsPage />
+                </ProtectedRoute>
+              } />
+              <Route path="trip-alerts" element={
+                <ProtectedRoute roles={['owner']}>
+                  <TripAlertsPage />
                 </ProtectedRoute>
               } />
               <Route path="*"          element={<Navigate to="/" replace />} />

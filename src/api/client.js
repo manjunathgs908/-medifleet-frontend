@@ -181,6 +181,16 @@ export const sosApi = {
   resolve: (id) => api.patch(`/sos/${id}/resolve`),
 };
 
+// Trip call events — telemetry for the dispatch push -> driver response
+// pipeline (medifleet-backend's TripCallEvent, added alongside the
+// self-managed Telecom ConnectionService work). type omitted returns
+// everything (persisted events + the live NO_RESPONSE snapshot); type:
+// 'NO_RESPONSE' alone returns just the live snapshot, cheaply, for the
+// nav badge.
+export const tripCallEventsApi = {
+  getAll: (params) => api.get('/trip-call-events', { params }),
+};
+
 // Owners — KYC review (Owner model, distinct from the CRM's own User
 // staff; these hit /api/owners, gated by protect+authorize('owner') on
 // the backend, same role as this CRM session, not the fleet-Owner's own

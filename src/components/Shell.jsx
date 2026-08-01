@@ -2,15 +2,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { sosApi } from '../api/client';
+import { sosApi, tripCallEventsApi } from '../api/client';
 import toast from 'react-hot-toast';
 import {
   LayoutDashboard, Radio, Truck, FileText, Receipt,
   TrendingUp, Users, Target, ShieldCheck, Building2, UserCheck,
-  LogOut, Menu, X, Bell, BellOff, ChevronRight, AlertTriangle
+  LogOut, Menu, X, Bell, BellOff, ChevronRight, AlertTriangle, PhoneMissed
 } from 'lucide-react';
 
 const SOS_POLL_MS = 30000;
+const NO_RESPONSE_POLL_MS = 30000;
 
 const NAV = [
   { label: 'Dashboard',   to: '/',           icon: LayoutDashboard, roles: ['owner'] },
@@ -19,6 +20,7 @@ const NAV = [
   { label: 'Trips',       to: '/trips',      icon: FileText,        roles: ['owner'] },
   { label: 'Billing',     to: '/billing',    icon: Receipt,     roles: ['owner'] },
   { label: 'SOS Alerts',  to: '/sos',        icon: AlertTriangle,   roles: ['owner'], badgeKey: 'sos' },
+  { label: 'Trip Alerts', to: '/trip-alerts', icon: PhoneMissed,    roles: ['owner'], badgeKey: 'noResponse' },
   { label: 'Leads',       to: '/leads',      icon: Target,          roles: ['owner'] },
   { label: 'Finance',     to: '/finance',    icon: TrendingUp,      roles: ['owner'] },{ label: 'Salaries',    to: '/salary',     icon: Users,           roles: ['owner'] },
   { label: 'Staff',       to: '/staff',      icon: Users,           roles: ['owner'] },
@@ -34,6 +36,8 @@ export default function Shell({ children }) {
   const [clock,    setClock]    = useState(new Date());
   const [sosCount, setSosCount] = useState(0);
   const sosIntervalRef = useRef();
+  const [noResponseCount, setNoResponseCount] = useState(0);
+  const noResponseIntervalRef = useRef();
 
   // Audible SOS alert — same Web Audio API approach as DispatchPage.jsx's
   // playChime/startRinging (own AudioContext, gesture-unlocked, ref-mirrored
@@ -164,7 +168,24 @@ export default function Shell({ children }) {
     };
   }, [user?.role]);
 
+  // Live "stuck right now" count for the Trip Alerts nav badge — no sound,
+  // just a number, unlike SOS above. type: 'NO_RESPONSE' hits the cheap
+  // live-snapshot-only path in getEvents (no persisted-events query at all).
+  useEffect(() => {
+    if (user?.role !== 'owner') return;
+    const loadNoResponse = async () => {
+      try {
+        const { data } = await tripCallEventsApi.getAll({ type: 'NO_RESPONSE' });
+        setNoResponseCount((data.events || []).length);
+      } catch { /* badge just stays at its last known value */ }
+    };
+    loadNoResponse();
+    noResponseIntervalRef.current = setInterval(loadNoResponse, NO_RESPONSE_POLL_MS);
+    return () => clearInterval(noResponseIntervalRef.current);
+  }, [user?.role]);
+
   const visibleNav = NAV.filter(n => n.roles.includes(user?.role));
+  const badgeCounts = { sos: sosCount, noResponse: noResponseCount };
 
   const Sidebar = ({ mobile = false }) => (
     <aside
@@ -208,10 +229,10 @@ export default function Shell({ children }) {
           >
             <Icon size={15} />
             {label}
-            {badgeKey === 'sos' && sosCount > 0 && (
+            {badgeKey && badgeCounts[badgeKey] > 0 && (
               <span className="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold"
                 style={{ background: 'var(--red)', color: '#fff', minWidth: 18, textAlign: 'center' }}>
-                {sosCount}
+                {badgeCounts[badgeKey]}
               </span>
             )}
           </NavLink>
