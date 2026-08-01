@@ -191,6 +191,12 @@ export const tripCallEventsApi = {
   getAll: (params) => api.get('/trip-call-events', { params }),
 };
 
+// Fixed-posting geofence events (medifleet-backend's GeofenceEvent) —
+// warning/recording only, no salary or notification tied to these yet.
+export const geofenceEventsApi = {
+  getAll: (params) => api.get('/geofence-events', { params }),
+};
+
 // Owners — KYC review (Owner model, distinct from the CRM's own User
 // staff; these hit /api/owners, gated by protect+authorize('owner') on
 // the backend, same role as this CRM session, not the fleet-Owner's own
