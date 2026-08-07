@@ -26,6 +26,7 @@ import OwnersPage      from './pages/OwnersPage';
 import SosAlertsPage   from './pages/SosAlertsPage';
 import TripAlertsPage  from './pages/TripAlertsPage';
 import PostingAlertsPage from './pages/PostingAlertsPage';
+import WhatsappLeadsPage from './pages/WhatsappLeadsPage';
 
 // Driver mobile app pages
 import DriverApp       from './pages/driver/DriverApp';
@@ -128,6 +129,11 @@ export default function App() {
               <Route path="posting-alerts" element={
                 <ProtectedRoute roles={['owner']}>
                   <PostingAlertsPage />
+                </ProtectedRoute>
+              } />
+              <Route path="whatsapp-leads" element={
+                <ProtectedRoute roles={['owner']}>
+                  <WhatsappLeadsPage />
                 </ProtectedRoute>
               } />
               <Route path="*"          element={<Navigate to="/" replace />} />

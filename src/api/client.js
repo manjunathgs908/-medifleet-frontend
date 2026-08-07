@@ -206,3 +206,12 @@ export const ownersApi = {
   approve: (id)        => api.put(`/owners/${id}/approve`),
   reject : (id, reason) => api.put(`/owners/${id}/reject`, { reason }),
 };
+
+// WhatsApp leads — customers who asked for a service with no working
+// backendCode (see whatsappServiceCatalog.js on the backend), or hit a
+// pricing failure, via the WhatsApp booking bot. Separate from leadsApi
+// (the ads-specific Lead model) — status is only new/contacted/closed.
+export const whatsappLeadsApi = {
+  getAll      : (params)      => api.get('/whatsapp-leads', { params }),
+  updateStatus: (id, status)  => api.patch(`/whatsapp-leads/${id}/status`, { status }),
+};
