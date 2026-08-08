@@ -17,6 +17,25 @@ const EMERGENCY_TYPES = [
   { value:'critical',     label:'🚨 Critical' },
 ];
 
+// ── Trip line formatting ──
+// A card shows only what the API actually returned: WhatsApp bookings
+// carry dropAddress with no dropHospital, and a booking has no fare or
+// distance until it is quoted. Every piece is optional and disappears
+// when absent — never "undefined", "NaN", or a stranded "·".
+const dotJoin = (...parts) => parts.filter(Boolean).join(' · ');
+const numOr   = (v) => (v === '' || v === null || v === undefined || !Number.isFinite(Number(v)) ? null : Number(v));
+
+const dropLine = (t) => {
+  const drop = t.dropHospital?.name || t.dropAddress;
+  return drop ? `🏥 ${drop}` : '';
+};
+
+const fareLine = (t) => {
+  const km   = numOr(t.distanceKm);
+  const fare = numOr(t.estimatedFare);
+  return dotJoin(km !== null && `${km} km`, fare !== null && rupee(fare));
+};
+
 export default function DispatchPage() {
   const [form,      setForm]      = useState({ patientName:'', patientPhone:'', pickupAddress:'', dropHospitalId:'', emergencyType:'general', baseFare:1500, distanceKm:12, perKmRate:25 });
   const [hospitals, setHospitals] = useState([]);
@@ -255,6 +274,12 @@ export default function DispatchPage() {
               <div className="text-xs flex items-start gap-1 mt-1" style={{ color: 'var(--text2)' }}>
                 <MapPin size={10} className="mt-0.5 flex-shrink-0" /> {b.pickup?.address}
               </div>
+              {dropLine(b) && (
+                <div className="text-xs mt-1" style={{ color: 'var(--text2)' }}>{dropLine(b)}</div>
+              )}
+              {fareLine(b) && (
+                <div className="text-xs mt-1" style={{ color: 'var(--text2)' }}>{fareLine(b)}</div>
+              )}
               <button onClick={() => dismissBooking(b._id)}
                 className="w-full mt-2.5 py-1.5 rounded-lg text-xs font-semibold"
                 style={{ background: 'rgba(255,77,109,.08)', color: 'var(--red)', border: '1px solid rgba(255,77,109,.2)' }}>
@@ -371,7 +396,8 @@ export default function DispatchPage() {
                         <MapPin size={10} className="mt-0.5 flex-shrink-0" /> {t.pickup?.address}
                       </div>
                       <div className="text-xs mb-2" style={{ color: 'var(--text2)' }}>
-                        🏥 {t.dropHospital?.name} · {t.emergencyType}
+                        <div>{dotJoin(dropLine(t), t.emergencyType)}</div>
+                        {fareLine(t) && <div>{fareLine(t)}</div>}
                       </div>
 
                       {/* ── Assign Vehicle/Driver (only if not yet assigned) —
