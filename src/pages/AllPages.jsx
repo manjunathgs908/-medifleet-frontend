@@ -1,12 +1,17 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { tripsApi, billingApi, hospitalsApi, financeApi, salaryApi, leadsApi, vehiclesApi, authApi } from '../api/client';
 import api from '../api/client';
 import { PageHeader, StatusBadge, Btn, Modal, StatCard, Tabs, Spinner, Empty, rupee } from '../components/ui';
 import toast from 'react-hot-toast';
+import {
+  FileText, Receipt, FileStack, Wallet, Landmark, Users, Target,
+  Megaphone, Search, PhoneIncoming, PenLine, Footprints, MessageCircle,
+  Mail, Building2,
+} from 'lucide-react';
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────
 // src/pages/TripsPage.jsx
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────
 export function TripsPage() {
  const [trips,   setTrips]   = useState([]);
   const [loading, setLoading] = useState(true);
@@ -77,7 +82,7 @@ useEffect(() => { load(); }, [filter]);
 
   return (
     <div className="page-enter">
-     <PageHeader title="Trip Records" subtitle="All bookings Â· Status Â· Bills" />
+     <PageHeader title="Trip Records" subtitle="All bookings · Status · Bills" />
 
       {/* Main Tabs */}
       <div className="flex gap-2 mb-5">
@@ -107,7 +112,7 @@ useEffect(() => { load(); }, [filter]);
       )}
 
       <div className="card overflow-x-auto">
-            {loading ? <Spinner /> : trips.length === 0 ? <Empty icon="📋" message="No trips found" /> :
+            {loading ? <Spinner /> : trips.length === 0 ? <Empty icon={<FileText size={36} />} message="No trips found" /> :
               <table className="tbl">
                 <thead><tr>
                   <th>Trip</th><th>Patient</th><th>Emergency</th><th>Hospital</th>
@@ -135,7 +140,7 @@ useEffect(() => { load(); }, [filter]);
       )}
       {mainTab === 'booking' && (
         <div>
-          {btLoading ? <Spinner /> : bookingTrips.length === 0 ? <Empty icon="📋" message="No booking trips" /> :
+          {btLoading ? <Spinner /> : bookingTrips.length === 0 ? <Empty icon={<FileText size={36} />} message="No booking trips" /> :
             <div className="space-y-4">
               {bookingTrips.map(t => (
                 <div key={t._id} className="card p-4 rounded-2xl">
@@ -160,7 +165,7 @@ useEffect(() => { load(); }, [filter]);
 }
 
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ──────────────────────────────────────────────────────────────
 // src/pages/BillingPage.jsx//
 // ──────────────────────────────────────────────────────────────
 export function BillingPage() {
@@ -198,13 +203,13 @@ export function BillingPage() {
 
   return (
     <div className="page-enter">
-      <PageHeader title="Billing & Invoices" subtitle="Trip bills Â· Monthly hospital invoices" />
+      <PageHeader title="Billing & Invoices" subtitle="Trip bills · Monthly hospital invoices" />
       <Tabs tabs={[{key:'bills',label:'Trip Bills'},{key:'invoices',label:'Hospital Invoices'}]}
         active={tab} onChange={setTab} />
 
       {tab === 'bills' && (
         <div className="card overflow-x-auto">
-          {loading ? <Spinner /> : bills.length === 0 ? <Empty icon="ðŸ§¾" message="No bills yet" /> :
+          {loading ? <Spinner /> : bills.length === 0 ? <Empty icon={<Receipt size={36} />} message="No bills yet" /> :
             <table className="tbl">
               <thead><tr><th>Bill No.</th><th>Patient</th><th>Hospital</th><th>Date</th><th>Amount</th><th>Status</th></tr></thead>
               <tbody>
@@ -253,7 +258,7 @@ export function BillingPage() {
           </div>
           <div className="md:col-span-2 card overflow-x-auto">
             <h3 className="font-bold font-display mb-4">Invoice History</h3>
-            {invoices.length === 0 ? <Empty icon="ðŸ“„" message="No invoices yet" /> :
+            {invoices.length === 0 ? <Empty icon={<FileStack size={36} />} message="No invoices yet" /> :
               <table className="tbl">
                 <thead><tr><th>Invoice</th><th>Hospital</th><th>Period</th><th>Trips</th><th>Net Payable</th><th>Status</th></tr></thead>
                 <tbody>
@@ -278,9 +283,9 @@ export function BillingPage() {
 }
 
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────
 // src/pages/FinancePage.jsx
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────
 export function FinancePage() {
   const [entries,  setEntries]  = useState([]);
   const [loans,    setLoans]    = useState([]);
@@ -308,7 +313,7 @@ export function FinancePage() {
 
   return (
     <div className="page-enter">
-      <PageHeader title="Finance" subtitle="Income Â· Expenses Â· Loans & EMI"
+      <PageHeader title="Finance" subtitle="Income · Expenses · Loans & EMI"
         action={<Btn onClick={()=>setAddModal(true)}><span>+</span> Add Entry</Btn>} />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <StatCard label="Total Expenses" value={rupee(totalExpenses)} color="red" />
@@ -320,7 +325,7 @@ export function FinancePage() {
 
       {tab === 'ledger' && (
         <div className="card overflow-x-auto">
-          {loading ? <Spinner /> : entries.length===0 ? <Empty icon="ðŸ’°" message="No entries" /> :
+          {loading ? <Spinner /> : entries.length===0 ? <Empty icon={<Wallet size={36} />} message="No entries" /> :
             <table className="tbl">
               <thead><tr><th>Date</th><th>Type</th><th>Category</th><th>Description</th><th>Amount</th></tr></thead>
               <tbody>
@@ -331,7 +336,7 @@ export function FinancePage() {
                     <td><span className="badge badge-gray text-[10px] capitalize">{e.category?.replace('_',' ')}</span></td>
                     <td className="text-sm" style={{color:'var(--text2)'}}>{e.description}</td>
                     <td className="font-bold font-mono" style={{color:e.type==='income'?'var(--accent)':'var(--red)'}}>
-                      {e.type==='income'?'+':'âˆ’'}{rupee(e.amount)}
+                      {e.type==='income'?'+':'−'}{rupee(e.amount)}
                     </td>
                   </tr>
                 ))}
@@ -343,7 +348,7 @@ export function FinancePage() {
 
       {tab === 'loans' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {loading ? <Spinner /> : loans.length===0 ? <Empty icon="ðŸ¦" message="No loans recorded" /> :
+          {loading ? <Spinner /> : loans.length===0 ? <Empty icon={<Landmark size={36} />} message="No loans recorded" /> :
             loans.map(l => {
               const pct = Math.round(l.paidInstallments/l.tenureMonths*100);
               const outstanding = l.emiAmount*(l.tenureMonths-l.paidInstallments);
@@ -409,7 +414,7 @@ export function FinancePage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{color:'var(--text2)'}}>Amount (â‚¹)</label>
+              <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{color:'var(--text2)'}}>Amount (₹)</label>
               <input className="inp" type="number" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))} />
             </div>
             <div>
@@ -428,9 +433,9 @@ export function FinancePage() {
 }
 
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────
 // src/pages/SalaryPage.jsx
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────
 export function SalaryPage() {
   const now = new Date();
   const [records, setRecords] = useState([]);
@@ -465,8 +470,8 @@ export function SalaryPage() {
 
   return (
     <div className="page-enter">
-      <PageHeader title="Driver Salaries" subtitle="Base + trip bonus Â· Auto calculate Â· Payslips"
-        action={<Btn onClick={calc}>âš¡ Calculate All</Btn>} />
+      <PageHeader title="Driver Salaries" subtitle="Base + trip bonus · Auto calculate · Payslips"
+        action={<Btn onClick={calc}>⚡ Calculate All</Btn>} />
 
       <div className="flex gap-3 mb-5">
         <select className="inp" style={{width:'auto',padding:'8px 12px'}} value={month} onChange={e=>setMonth(Number(e.target.value))}>
@@ -485,7 +490,7 @@ export function SalaryPage() {
       )}
 
       <div className="card overflow-x-auto">
-        {loading ? <Spinner /> : records.length===0 ? <Empty icon="ðŸ‘¨â€ðŸ’¼" message="No salary records â€” click Calculate All" /> :
+        {loading ? <Spinner /> : records.length===0 ? <Empty icon={<Users size={36} />} message="No salary records — click Calculate All" /> :
           <table className="tbl">
             <thead><tr><th>Driver</th><th>Base</th><th>Trips</th><th>Trip Bonus</th><th>Deductions</th><th>Net Salary</th><th>Status</th><th>Action</th></tr></thead>
             <tbody>
@@ -495,7 +500,7 @@ export function SalaryPage() {
                   <td className="font-mono text-sm">{rupee(r.earnedBase)}</td>
                   <td className="text-center"><span className="badge badge-blue">{r.completedTrips}</span></td>
                   <td className="font-mono text-sm" style={{color:'var(--accent)'}}>{rupee(r.tripBonusAmount)}</td>
-                  <td className="font-mono text-sm" style={{color:'var(--red)'}}>{r.deductions>0?'âˆ’'+rupee(r.deductions):'â€”'}</td>
+                  <td className="font-mono text-sm" style={{color:'var(--red)'}}>{r.deductions>0?'−'+rupee(r.deductions):'—'}</td>
                   <td className="font-bold font-mono" style={{color:'var(--accent)'}}>{rupee(r.netSalary)}</td>
                   <td><StatusBadge status={r.status} /></td>
                   <td>
@@ -526,8 +531,8 @@ export function SalaryPage() {
               </div>
             </div>
             {[['Fixed Base (pro-rated)',rupee(modal.earnedBase)],
-              [`Trip Bonus (${modal.completedTrips} Ã— â‚¹${modal.perTripBonus})`,rupee(modal.tripBonusAmount)],
-              ['Deductions','âˆ’'+rupee(modal.deductions)]].map(([l,v])=>(
+              [`Trip Bonus (${modal.completedTrips} × ₹${modal.perTripBonus})`,rupee(modal.tripBonusAmount)],
+              ['Deductions','−'+rupee(modal.deductions)]].map(([l,v])=>(
               <div key={l} className="flex justify-between text-sm py-2" style={{borderBottom:'1px solid var(--border)'}}>
                 <span style={{color:'var(--text2)'}}>{l}</span><span className="font-mono">{v}</span>
               </div>
@@ -536,7 +541,7 @@ export function SalaryPage() {
               <span>Net Salary</span>
               <span className="font-mono" style={{color:'var(--accent)'}}>{rupee(modal.netSalary)}</span>
             </div>
-            <Btn className="w-full" onClick={()=>window.print()}>ðŸ–¨ï¸ Print Payslip</Btn>
+            <Btn className="w-full" onClick={()=>window.print()}>🖨️ Print Payslip</Btn>
           </div>
         )}
       </Modal>
@@ -545,9 +550,9 @@ export function SalaryPage() {
 }
 
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────
 // src/pages/LeadsPage.jsx
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────
 export function LeadsPage() {
   const [leads,   setLeads]   = useState([]);
   const [loading, setLoading] = useState(true);
@@ -582,14 +587,22 @@ export function LeadsPage() {
     }
   };
 
-  const SRC_ICONS = { facebook_ad:'ðŸ“˜', google_ad:'ðŸŽ¯', inbound_call:'ðŸ“ž', manual:'âœï¸', walk_in:'ðŸš¶', referral:'ðŸ‘¥' };
+  const SRC_ICONS = {
+    facebook_ad: <Megaphone size={14} />,
+    google_ad: <Search size={14} />,
+    inbound_call: <PhoneIncoming size={14} />,
+    manual: <PenLine size={14} />,
+    walk_in: <Footprints size={14} />,
+    referral: <Users size={14} />,
+    whatsapp: <MessageCircle size={14} />,
+  };
   const FILTERS = ['all','new','contacted','converted','lost'];
 
   const fmtDate = (d) => { const dt = d ? new Date(d) : null; return dt && !isNaN(dt) ? dt.toLocaleDateString('en-IN') : '-'; };
 
   return (
     <div className="page-enter">
-      <PageHeader title="Leads Dashboard" subtitle="FB Ads Â· Google Ads Â· Inbound Calls" />
+      <PageHeader title="Leads Dashboard" subtitle="FB Ads · Google Ads · Inbound Calls · WhatsApp" />
 
       <div className="flex gap-1 flex-wrap mb-5 p-1 rounded-xl" style={{background:'var(--surface)',width:'fit-content'}}>
         {FILTERS.map(f=>(
@@ -606,24 +619,24 @@ export function LeadsPage() {
       )}
 
       <div className="card overflow-x-auto">
-        {loading ? <Spinner /> : leads.length===0 ? <Empty icon="ðŸŽ¯" message="No leads found" /> :
+        {loading ? <Spinner /> : leads.length===0 ? <Empty icon={<Target size={36} />} message="No leads found" /> :
           <table className="tbl">
             <thead><tr><th>Source</th><th>Name</th><th>Phone</th><th>Message</th><th>Campaign</th><th>Status</th><th>Received</th><th>Action</th></tr></thead>
             <tbody>
               {leads.map(l => (
                 <tr key={l._id}>
-                  <td><span title={l.source}>{SRC_ICONS[l.source]||'ðŸ“©'}</span> <span className="text-xs" style={{color:'var(--text3)'}}>{l.source?.replace('_',' ')||'-'}</span></td>
+                  <td><span title={l.source}>{SRC_ICONS[l.source]||<Mail size={14} />}</span> <span className="text-xs" style={{color:'var(--text3)'}}>{l.source?.replace('_',' ')||'-'}</span></td>
                   <td><div className="font-medium text-sm">{l.patientName||'Unknown'}</div></td>
                   <td className="font-mono text-xs">{l.phone||'-'}</td>
-                  <td className="text-xs max-w-xs truncate" style={{color:'var(--text2)'}}>{l.message||'â€”'}</td>
-                  <td className="text-xs" style={{color:'var(--text3)'}}>{l.adName||l.formName||'â€”'}</td>
+                  <td className="text-xs max-w-xs truncate" style={{color:'var(--text2)'}}>{l.message||'—'}</td>
+                  <td className="text-xs" style={{color:'var(--text3)'}}>{l.adName||l.formName||'—'}</td>
                   <td><StatusBadge status={l.status}/></td>
                   <td className="text-xs font-mono" style={{color:'var(--text3)'}}>{fmtDate(l.receivedAt)}</td>
                   <td>
                     <div className="flex gap-1">
                       {l.status==='new'       && <Btn size="sm" variant="blue"  onClick={()=>update(l._id,'contacted')}>Contact</Btn>}
                       {l.status==='contacted' && <Btn size="sm"                 onClick={()=>update(l._id,'converted')}>Convert</Btn>}
-                      {!['lost','spam'].includes(l.status) && <Btn size="sm" variant="ghost" onClick={()=>update(l._id,'lost')}>âœ•</Btn>}
+                      {!['lost','spam'].includes(l.status) && <Btn size="sm" variant="ghost" onClick={()=>update(l._id,'lost')}>✕</Btn>}
                     </div>
                   </td>
                 </tr>
@@ -637,9 +650,9 @@ export function LeadsPage() {
 }
 
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────
 // src/pages/CompliancePage.jsx
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────
 export function CompliancePage() {
   const [report,  setReport]  = useState(null);
   const [loading, setLoading] = useState(true);
@@ -688,33 +701,33 @@ export function CompliancePage() {
 
   return (
     <div className="page-enter">
-      <PageHeader title="Fleet Compliance" subtitle="Document expiry alerts Â· 15-day warnings"
+      <PageHeader title="Fleet Compliance" subtitle="Document expiry alerts · 15-day warnings"
         action={<Btn onClick={triggerCheck} variant="amber">Run Alert Check</Btn>} />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <StatCard label="Expired"       value={s.expiredCount   || 0} color="red"   />
-        <StatCard label="Critical (â‰¤15d)" value={s.criticalCount || 0} color="amber" />
-        <StatCard label="Warning (â‰¤30d)" value={s.warningCount  || 0} color="blue"  />
+        <StatCard label="Critical (≤15d)" value={s.criticalCount || 0} color="amber" />
+        <StatCard label="Warning (≤30d)" value={s.warningCount  || 0} color="blue"  />
         <StatCard label="Healthy"        value={s.healthyVehicles|| 0} color="green" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         <div className="card">
-          <h3 className="font-bold font-display mb-3 text-sm" style={{color:'var(--red)'}}>ðŸš¨ Expired Documents</h3>
+          <h3 className="font-bold font-display mb-3 text-sm" style={{color:'var(--red)'}}>🚨 Expired Documents</h3>
           {(report?.report?.expired||[]).length===0
-            ? <div className="text-xs py-4 text-center" style={{color:'var(--text3)'}}>None ðŸŽ‰</div>
+            ? <div className="text-xs py-4 text-center" style={{color:'var(--text3)'}}>None 🎉</div>
             : (report.report.expired||[]).map((d,i)=><IssueRow key={i} item={d} severity="expired"/>)}
         </div>
         <div className="card">
-          <h3 className="font-bold font-display mb-3 text-sm" style={{color:'var(--amber)'}}>âš ï¸ Expiring in 15 days</h3>
+          <h3 className="font-bold font-display mb-3 text-sm" style={{color:'var(--amber)'}}>⚠️ Expiring in 15 days</h3>
           {(report?.report?.expiringSoon||[]).length===0
-            ? <div className="text-xs py-4 text-center" style={{color:'var(--text3)'}}>None ðŸŽ‰</div>
+            ? <div className="text-xs py-4 text-center" style={{color:'var(--text3)'}}>None 🎉</div>
             : (report.report.expiringSoon||[]).map((d,i)=><IssueRow key={i} item={d} severity="critical"/>)}
         </div>
         <div className="card">
-          <h3 className="font-bold font-display mb-3 text-sm" style={{color:'var(--blue)'}}>ðŸ“‹ Expiring in 30 days</h3>
+          <h3 className="font-bold font-display mb-3 text-sm" style={{color:'var(--blue)'}}>📋 Expiring in 30 days</h3>
           {(report?.report?.expiring30||[]).length===0
-            ? <div className="text-xs py-4 text-center" style={{color:'var(--text3)'}}>None ðŸŽ‰</div>
+            ? <div className="text-xs py-4 text-center" style={{color:'var(--text3)'}}>None 🎉</div>
             : (report.report.expiring30||[]).map((d,i)=><IssueRow key={i} item={d} severity="warning"/>)}
         </div>
       </div>
@@ -723,9 +736,9 @@ export function CompliancePage() {
 }
 
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────
 // src/pages/HospitalsPage.jsx
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────
 export function HospitalsPage() {
   const [hospitals, setHospitals] = useState([]);
   const [loading,   setLoading]   = useState(true);
@@ -747,10 +760,10 @@ export function HospitalsPage() {
 
   return (
     <div className="page-enter">
-      <PageHeader title="Hospitals" subtitle="Master list Â· Tie-up contracts"
+      <PageHeader title="Hospitals" subtitle="Master list · Tie-up contracts"
         action={<Btn onClick={()=>setModal(true)}><span>+</span> Add Hospital</Btn>} />
 
-      {loading ? <Spinner /> : hospitals.length===0 ? <Empty icon="ðŸ¥" message="No hospitals yet" /> :
+      {loading ? <Spinner /> : hospitals.length===0 ? <Empty icon={<Building2 size={36} />} message="No hospitals yet" /> :
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {hospitals.map(h=>(
             <div key={h._id} className="card">
@@ -761,10 +774,10 @@ export function HospitalsPage() {
                 </div>
                 {h.tieUp?.isActive && <span className="badge badge-green text-[10px]">Tie-up</span>}
               </div>
-              <div className="text-xs" style={{color:'var(--text3)'}}>ðŸ“ž {h.phone} Â· âœ‰ï¸ {h.email}</div>
+              <div className="text-xs" style={{color:'var(--text3)'}}>📞 {h.phone} · ✉️ {h.email}</div>
               {h.tieUp?.isActive && (
                 <div className="mt-2 rounded-lg p-2 text-xs" style={{background:'rgba(0,212,170,.07)',border:'1px solid rgba(0,212,170,.15)'}}>
-                  {h.tieUp.discountPercent}% discount Â· {h.tieUp.creditDays}d credit
+                  {h.tieUp.discountPercent}% discount · {h.tieUp.creditDays}d credit
                 </div>
               )}
             </div>
