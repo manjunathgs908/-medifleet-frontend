@@ -26,9 +26,13 @@ const CHIPS = [
   { key: 'completed', label: 'Completed' },
 ];
 
+// Mutually exclusive: every conversation is exactly one of live/dropped/
+// completed (Total is the whole set, not a fourth partition) -- a
+// still-live conversation must never also count as dropped just because
+// it hasn't completed yet.
 function matchesChip(row, chip) {
   if (chip === 'live')      return row.isLive;
-  if (chip === 'dropped')   return !row.completed;
+  if (chip === 'dropped')   return !row.completed && !row.isLive;
   if (chip === 'completed') return row.completed;
   return true; // total
 }
@@ -57,7 +61,6 @@ function StatusDot({ row }) {
 
 export default function WhatsappConversationsPage() {
   const [conversations, setConversations] = useState([]);
-  const [counts,       setCounts]       = useState({ total: 0, completed: 0, dropped: 0, live: 0 });
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState(null);
   const [loadedOnce,   setLoadedOnce]   = useState(false);
@@ -80,12 +83,16 @@ export default function WhatsappConversationsPage() {
     if (!silent) setLoading(true);
     try {
       const { data } = await whatsappConversationsApi.getAll({ days, status: 'all' });
+      // Counts are derived client-side from this same array (see the
+      // `counts` useMemo below) rather than read from data.counts -- the
+      // API's counts.dropped still uses "not completed" (includes live
+      // conversations), which doesn't match the mutually-exclusive
+      // live/dropped/completed split this page needs.
       setConversations(data.conversations || []);
-      setCounts(data.counts || { total: 0, completed: 0, dropped: 0, live: 0 });
       setError(null);
       setLoadedOnce(true);
     } catch (e) {
-      // Deliberately does NOT clear conversations/counts here -- a failed
+      // Deliberately does NOT clear conversations here -- a failed
       // fetch must never be indistinguishable from "no conversations".
       // Last-known-good data (if any) stays on screen under the error banner.
       setError(e.response?.data?.message || e.message || 'Could not load WhatsApp conversations.');
@@ -98,6 +105,20 @@ export default function WhatsappConversationsPage() {
     () => conversations.filter((c) => matchesChip(c, chip)),
     [conversations, chip]
   );
+
+  // Same three checks as matchesChip, applied once per conversation instead
+  // of re-filtering the array four times. Total + live + dropped +
+  // completed won't reconcile as a simple sum -- Total is the whole set,
+  // the other three partition it.
+  const counts = useMemo(() => {
+    const result = { total: conversations.length, live: 0, dropped: 0, completed: 0 };
+    for (const c of conversations) {
+      if (c.isLive) result.live += 1;
+      if (!c.completed && !c.isLive) result.dropped += 1;
+      if (c.completed) result.completed += 1;
+    }
+    return result;
+  }, [conversations]);
 
   const chipLabel = CHIPS.find((c) => c.key === chip)?.label.toLowerCase();
   const dayLabel = `${days} day${days === 1 ? '' : 's'}`;
