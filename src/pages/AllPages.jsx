@@ -100,7 +100,13 @@ useEffect(() => { load(); }, [filter]);
               </button>
             ))}
           </div>
-          <div className="card overflow-x-auto">
+          {error && (
+        <div className="card mb-4" style={{ borderColor: 'rgba(255,77,109,.35)' }}>
+          <div className="text-sm" style={{ color: 'var(--red)' }}>Error: {error}</div>
+        </div>
+      )}
+
+      <div className="card overflow-x-auto">
             {loading ? <Spinner /> : trips.length === 0 ? <Empty icon="📋" message="No trips found" /> :
               <table className="tbl">
                 <thead><tr>
@@ -545,10 +551,8 @@ export function SalaryPage() {
 export function LeadsPage() {
   const [leads,   setLeads]   = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState(null);
   const [filter,  setFilter]  = useState('new');
-
-  
-  
 
   useEffect(() => { load(); }, [filter]);
 
@@ -556,18 +560,32 @@ export function LeadsPage() {
     setLoading(true);
     try {
       const { data } = await leadsApi.getAll(filter!=='all'?{status:filter}:{});
-      setLeads(data.leads);
+      setLeads(data.leads || []);
+      setError(null);
+    } catch (e) {
+      // Previously this had no catch at all -- any thrown error left
+      // `leads` at its last value with zero visible trace, which on first
+      // load is `[]` -- indistinguishable from "no leads" even when the
+      // backend genuinely returned data. Does NOT clear `leads` on
+      // failure -- a failed refetch must never look like "no leads" either.
+      setError(e.response?.data?.message || e.message || 'Could not load leads.');
     } finally { setLoading(false); }
   };
 
   const update = async (id, status) => {
-    await leadsApi.update(id, { status });
-    toast.success('Lead updated');
-    load();
+    try {
+      await leadsApi.update(id, { status });
+      toast.success('Lead updated');
+      load();
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Could not update this lead');
+    }
   };
 
   const SRC_ICONS = { facebook_ad:'ðŸ“˜', google_ad:'ðŸŽ¯', inbound_call:'ðŸ“ž', manual:'âœï¸', walk_in:'ðŸš¶', referral:'ðŸ‘¥' };
   const FILTERS = ['all','new','contacted','converted','lost'];
+
+  const fmtDate = (d) => { const dt = d ? new Date(d) : null; return dt && !isNaN(dt) ? dt.toLocaleDateString('en-IN') : '-'; };
 
   return (
     <div className="page-enter">
@@ -581,6 +599,12 @@ export function LeadsPage() {
         ))}
       </div>
 
+      {error && (
+        <div className="card mb-4" style={{ borderColor: 'rgba(255,77,109,.35)' }}>
+          <div className="text-sm" style={{ color: 'var(--red)' }}>Error: {error}</div>
+        </div>
+      )}
+
       <div className="card overflow-x-auto">
         {loading ? <Spinner /> : leads.length===0 ? <Empty icon="ðŸŽ¯" message="No leads found" /> :
           <table className="tbl">
@@ -588,13 +612,13 @@ export function LeadsPage() {
             <tbody>
               {leads.map(l => (
                 <tr key={l._id}>
-                  <td><span title={l.source}>{SRC_ICONS[l.source]||'ðŸ“©'}</span> <span className="text-xs" style={{color:'var(--text3)'}}>{l.source?.replace('_',' ')}</span></td>
+                  <td><span title={l.source}>{SRC_ICONS[l.source]||'ðŸ“©'}</span> <span className="text-xs" style={{color:'var(--text3)'}}>{l.source?.replace('_',' ')||'-'}</span></td>
                   <td><div className="font-medium text-sm">{l.patientName||'Unknown'}</div></td>
-                  <td className="font-mono text-xs">{l.phone}</td>
+                  <td className="font-mono text-xs">{l.phone||'-'}</td>
                   <td className="text-xs max-w-xs truncate" style={{color:'var(--text2)'}}>{l.message||'â€”'}</td>
                   <td className="text-xs" style={{color:'var(--text3)'}}>{l.adName||l.formName||'â€”'}</td>
                   <td><StatusBadge status={l.status}/></td>
-                  <td className="text-xs font-mono" style={{color:'var(--text3)'}}>{new Date(l.receivedAt).toLocaleDateString('en-IN')}</td>
+                  <td className="text-xs font-mono" style={{color:'var(--text3)'}}>{fmtDate(l.receivedAt)}</td>
                   <td>
                     <div className="flex gap-1">
                       {l.status==='new'       && <Btn size="sm" variant="blue"  onClick={()=>update(l._id,'contacted')}>Contact</Btn>}
