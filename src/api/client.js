@@ -215,3 +215,13 @@ export const whatsappLeadsApi = {
   getAll      : (params)      => api.get('/whatsapp-leads', { params }),
   updateStatus: (id, status)  => api.patch(`/whatsapp-leads/${id}/status`, { status }),
 };
+
+// WhatsApp conversations — every distinct phone active in the booking bot's
+// funnel window (medifleet-backend's routes/whatsappRoutes.js /conversations),
+// whether they're still live, dropped off mid-flow, or completed a booking.
+// Separate from whatsappLeadsApi above (WhatsAppLead — only the
+// no-backendCode/pricing-failure dead-ends) and from /funnel (aggregate
+// step counts, not one row per conversation).
+export const whatsappConversationsApi = {
+  getAll: (params) => api.get('/whatsapp/conversations', { params }),
+};

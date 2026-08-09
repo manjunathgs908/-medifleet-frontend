@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 import {
   LayoutDashboard, Radio, Truck, FileText, Receipt,
   TrendingUp, Users, Target, ShieldCheck, Building2, UserCheck,
-  LogOut, Menu, X, Bell, BellOff, ChevronRight, AlertTriangle, PhoneMissed, MapPin, MessageCircle
+  LogOut, Menu, X, Bell, BellOff, ChevronRight, AlertTriangle, PhoneMissed, MapPin, MessageCircle, MessageSquare
 } from 'lucide-react';
 
 const SOS_POLL_MS = 30000;
@@ -23,6 +23,7 @@ const NAV = [
   { label: 'Trip Alerts', to: '/trip-alerts', icon: PhoneMissed,    roles: ['owner'], badgeKey: 'noResponse' },
   { label: 'Posting Alerts', to: '/posting-alerts', icon: MapPin,   roles: ['owner'] },
   { label: 'WhatsApp Leads', to: '/whatsapp-leads', icon: MessageCircle, roles: ['owner'] },
+  { label: 'WhatsApp Chats', to: '/whatsapp-conversations', icon: MessageSquare, roles: ['owner'] },
   { label: 'Leads',       to: '/leads',      icon: Target,          roles: ['owner'] },
   { label: 'Finance',     to: '/finance',    icon: TrendingUp,      roles: ['owner'] },{ label: 'Salaries',    to: '/salary',     icon: Users,           roles: ['owner'] },
   { label: 'Staff',       to: '/staff',      icon: Users,           roles: ['owner'] },

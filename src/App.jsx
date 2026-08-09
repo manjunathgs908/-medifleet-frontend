@@ -27,6 +27,7 @@ import SosAlertsPage   from './pages/SosAlertsPage';
 import TripAlertsPage  from './pages/TripAlertsPage';
 import PostingAlertsPage from './pages/PostingAlertsPage';
 import WhatsappLeadsPage from './pages/WhatsappLeadsPage';
+import WhatsappConversationsPage from './pages/WhatsappConversationsPage';
 
 // Driver mobile app pages
 import DriverApp       from './pages/driver/DriverApp';
@@ -134,6 +135,11 @@ export default function App() {
               <Route path="whatsapp-leads" element={
                 <ProtectedRoute roles={['owner']}>
                   <WhatsappLeadsPage />
+                </ProtectedRoute>
+              } />
+              <Route path="whatsapp-conversations" element={
+                <ProtectedRoute roles={['owner']}>
+                  <WhatsappConversationsPage />
                 </ProtectedRoute>
               } />
               <Route path="*"          element={<Navigate to="/" replace />} />
