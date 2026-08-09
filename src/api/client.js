@@ -223,5 +223,15 @@ export const whatsappLeadsApi = {
 // no-backendCode/pricing-failure dead-ends) and from /funnel (aggregate
 // step counts, not one row per conversation).
 export const whatsappConversationsApi = {
-  getAll: (params) => api.get('/whatsapp/conversations', { params }),
+  getAll    : (params) => api.get('/whatsapp/conversations', { params }),
+  // Logs an ops call-back outcome (medifleet-backend's POST /call-outcome) —
+  // body: { phone, outcome, followUpAt?, note?, tripId? }.
+  logOutcome: (body)   => api.post('/whatsapp/call-outcome', body),
+};
+
+// Full permanent call/conversation/trip history for one customer, phone-
+// normalised on the backend (medifleet-backend's GET /customer/:phone) —
+// no date limit, unlike whatsappConversationsApi.getAll above.
+export const whatsappCustomerApi = {
+  get: (phone) => api.get(`/whatsapp/customer/${encodeURIComponent(phone)}`),
 };
