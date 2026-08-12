@@ -2,7 +2,15 @@
   "permissions": {
     "allow": [
       "PowerShell(npm run build)",
-      "PowerShell(git add .)"
+      "PowerShell(git add .)",
+      "PowerShell(git push)",
+      "PowerShell(npx vercel --prod)",
+      "PowerShell(git check-ignore -v dist/index.html)",
+      "PowerShell(if \\(-not $?\\) { \"NOT IGNORED\" })",
+      "PowerShell(git check-ignore -v node_modules/react/package.json; if \\(-not $?\\) { \"node_modules NOT IGNORED\" }; \"--- tracked under node_modules: ---\"; \\(git ls-files node_modules | Measure-Object -Line\\).Lines)",
+      "PowerShell(\"--- status ---\")",
+      "PowerShell(\"--- dist still on disk: ---\")",
+      "PowerShell(git add .gitignore)"
     ]
   }
 }
