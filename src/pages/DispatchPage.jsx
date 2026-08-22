@@ -1,11 +1,34 @@
 // src/pages/DispatchPage.jsx
-import React, { useState, useEffect, useRef } from 'react';
-import { tripsApi, hospitalsApi } from '../api/client';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { tripsApi, hospitalsApi, pricingApi } from '../api/client';
+import AddressAutocomplete from '../components/AddressAutocomplete';
+import RoutePreviewMap from '../components/RoutePreviewMap';
 import { PageHeader, StatusBadge, Badge, Btn, Modal, rupee, Spinner } from '../components/ui';
 import toast from 'react-hot-toast';
 import { Send, RefreshCw, CheckCircle, XCircle, MapPin, Phone, Bell, BellOff, X } from 'lucide-react';
 
 const MAX_RINGS = 12; // ~12s of ringing if never dismissed
+
+// Every field the operator actually chooses. Distance, base fare, per-km rate
+// and total are deliberately absent: they are computed by the backend from
+// the route and the Pricing collection, never typed at the desk.
+const EMPTY_FORM = {
+  patientName   : '',
+  patientPhone  : '',
+  emergencyType : 'general',
+  dropHospitalId: '',
+  selectedType  : '',
+  tripType      : 'one_way',
+  acEnabled     : false,
+  scheduleType  : 'now',
+  scheduleDate  : '',
+};
+
+const fmtDuration = (sec) => {
+  if (!Number.isFinite(Number(sec))) return null;
+  const m = Math.round(Number(sec) / 60);
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${m % 60}m`;
+};
 
 const EMERGENCY_TYPES = [
   { value:'cardiac',      label:'🫀 Cardiac Emergency' },
@@ -93,7 +116,8 @@ const BookingSummary = ({ t }) => {
   // on a booking that never offered the choice.
   const hasAc     = typeof t.acEnabled === 'boolean';
   const isRound   = t.tripType === 'round_trip';
-  const money     = dotJoin(km !== null && `📏 ${km} km`, fare !== null && `💰 ${rupee(fare)}`);
+  const eta       = fmtDuration(t.estimatedDurationSec);
+  const money     = dotJoin(km !== null && `📏 ${km} km`, eta && `⏱️ ${eta}`, fare !== null && `💰 ${rupee(fare)}`);
   const hasBadges = ambulance || hasAc || tripType || schedule || emergency;
 
   return (
@@ -130,7 +154,15 @@ const BookingSummary = ({ t }) => {
 };
 
 export default function DispatchPage() {
-  const [form,      setForm]      = useState({ patientName:'', patientPhone:'', pickupAddress:'', dropHospitalId:'', emergencyType:'general', baseFare:1500, distanceKm:12, perKmRate:25 });
+  const [form,      setForm]      = useState(EMPTY_FORM);
+  // Resolved to coordinates by AddressAutocomplete — a bare typed string is
+  // never enough, because it can be neither routed nor priced.
+  const [pickup,    setPickup]    = useState(null); // { label, lat, lng }
+  const [drop,      setDrop]      = useState(null);
+  const [pricing,   setPricing]   = useState([]);   // the bookable-service source of truth
+  const [estimate,  setEstimate]  = useState(null); // backend quote: route + fare
+  const [estimating,   setEstimating]   = useState(false);
+  const [estimateError, setEstimateError] = useState('');
   const [hospitals, setHospitals] = useState([]);
   const [vehicles,  setVehicles]  = useState([]);
   const [liveTrips, setLiveTrips] = useState([]);
@@ -145,10 +177,62 @@ export default function DispatchPage() {
   const audioCtxRef      = useRef(null);
   const ringTimerRef     = useRef(null);
   const soundEnabledRef  = useRef(false); // mirrors soundEnabled for the setInterval closure
-
-  const totalFare = Number(form.baseFare) + (Number(form.distanceKm) * Number(form.perKmRate));
+  const estimateSeqRef   = useRef(0);     // drops out-of-order quote responses
 
   useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
+
+  // The dropdown is whatever the Pricing collection currently offers. A
+  // service with no active Pricing doc is not bookable — showing it would
+  // only let an operator reach "No active pricing found" at submit time.
+  const services = useMemo(
+    () => pricing
+      .filter(p => p.active !== false && p.serviceType)
+      .map(p => ({
+        id     : String(p.serviceType).toLowerCase(), // same ids savelife-web posts
+        label  : ambulanceTypeLabel(p.serviceType),
+        acPerKm: Number(p.acPerKm) || 0,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label)),
+    [pricing],
+  );
+
+  const activeService = services.find(s => s.id === form.selectedType) || null;
+  const acAvailable   = !!activeService?.acPerKm;
+  const fare          = estimate?.fare || null;
+
+  // Re-quote whenever anything the price depends on changes. Debounced
+  // because pickup/drop/options often change in quick succession, and every
+  // call costs a Google Directions request.
+  useEffect(() => {
+    if (!pickup || !drop) { setEstimate(null); setEstimateError(''); setEstimating(false); return; }
+
+    const seq = ++estimateSeqRef.current;
+    setEstimating(true);
+    setEstimateError('');
+
+    const timer = setTimeout(async () => {
+      try {
+        const { data } = await tripsApi.estimate({
+          pickupLat: pickup.lat, pickupLng: pickup.lng,
+          dropLat  : drop.lat,   dropLng  : drop.lng,
+          selectedType: form.selectedType || undefined,
+          tripType    : form.tripType,
+          acEnabled   : form.acEnabled,
+        });
+        if (seq !== estimateSeqRef.current) return;
+        setEstimate(data);
+        setEstimateError(data.fareError || '');
+      } catch (err) {
+        if (seq !== estimateSeqRef.current) return;
+        setEstimate(null);
+        setEstimateError(err.response?.data?.message || 'Could not calculate route and fare.');
+      } finally {
+        if (seq === estimateSeqRef.current) setEstimating(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [pickup, drop, form.selectedType, form.tripType, form.acEnabled]);
 
   useEffect(() => {
     loadInitialData();
@@ -226,8 +310,11 @@ export default function DispatchPage() {
   const loadInitialData = async () => {
     setLoading(true);
     try {
-      const { data } = await hospitalsApi.getAll();
-      setHospitals(data.hospitals || []);
+      const [hosp, price] = await Promise.allSettled([hospitalsApi.getAll(), pricingApi.getAll()]);
+      if (hosp.value)  setHospitals(hosp.value.data.hospitals || []);
+      // A pricing outage must not take the whole dispatch board down — the
+      // live trips and the assign flow still work without the booking form.
+      if (price.value) setPricing(price.value.data.pricing || []);
       // vehicles comes from loadLiveBoard's merged (Vehicle + on-duty
       // Ambulance) list below — no separate vehiclesApi call needed,
       // it would only be immediately overwritten and lacks the
@@ -261,16 +348,54 @@ export default function DispatchPage() {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
+  const resetForm = () => {
+    setForm(EMPTY_FORM);
+    setPickup(null);
+    setDrop(null);
+    setEstimate(null);
+    setEstimateError('');
+  };
+
+  // Selecting a service that has no AC rate must also drop an AC choice made
+  // against the previous one, or the operator sees "AC Included" on a trip
+  // whose fare has no AC component.
+  const selectService = (id) => setForm(f => {
+    const svc = services.find(s => s.id === id);
+    return { ...f, selectedType: id, acEnabled: svc?.acPerKm ? f.acEnabled : false };
+  });
+
   const dispatch = async (e) => {
     e.preventDefault();
-    if (!form.patientName || !form.patientPhone || !form.pickupAddress ||!form.dropHospitalId) {
-      toast.error('Fill all required fields'); return;
-    }
+    if (!form.patientName.trim() || !form.patientPhone.trim()) { toast.error('Patient name and phone are required'); return; }
+    if (!pickup || !drop)      { toast.error('Pick both locations from the suggestions'); return; }
+    if (!form.selectedType)    { toast.error('Select an ambulance / service type'); return; }
+    if (form.scheduleType === 'later' && !form.scheduleDate) { toast.error('Choose a date and time for the scheduled booking'); return; }
+    if (!fare)                 { toast.error(estimateError || 'Waiting for the fare — try again in a moment'); return; }
+
     setSubmitting(true);
     try {
-      await tripsApi.create(form);
+      // Exactly the payload savelife-web posts, so a call-desk booking and a
+      // customer booking become the same Trip document. The backend re-verifies
+      // the distance and recomputes the fare for both — nothing here is trusted
+      // for money.
+      await tripsApi.create({
+        patientName  : form.patientName.trim(),
+        patientPhone : form.patientPhone.trim(),
+        emergencyType: form.emergencyType,
+        pickupLabel  : pickup.label, pickupLat: pickup.lat, pickupLng: pickup.lng,
+        dropLabel    : drop.label,   dropLat  : drop.lat,   dropLng  : drop.lng,
+        dropHospitalId: form.dropHospitalId || undefined,
+        dist         : estimate?.oneWayKm,
+        effectiveDist: estimate?.distanceKm,
+        selectedType : form.selectedType,
+        tripType     : form.tripType,
+        returnAddress: form.tripType === 'round_trip' ? pickup.label : null,
+        acEnabled    : form.acEnabled,
+        scheduleType : form.scheduleType,
+        scheduleDate : form.scheduleType === 'later' ? form.scheduleDate : null,
+      });
       toast.success('🚑 Ambulance dispatched!');
-      setForm({ patientName:'', patientPhone:'', pickupAddress:'', dropHospitalId:'', emergencyType:'general', baseFare:1500, distanceKm:12, perKmRate:25 });
+      resetForm();
       await loadLiveBoard();
     } finally { setSubmitting(false); }
   };
@@ -386,7 +511,7 @@ export default function DispatchPage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>Patient Name *</label>
-              <input className="inp" value={form.patientName} onChange={e=> set('patientName', e.target.value)} placeholder="Full name" required />
+              <input className="inp" value={form.patientName} onChange={e => set('patientName', e.target.value)} placeholder="Full name" required />
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>Phone *</label>
@@ -394,17 +519,27 @@ export default function DispatchPage() {
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>Pickup Address *</label>
-            <input className="inp" value={form.pickupAddress} onChange={e=> set('pickupAddress', e.target.value)} placeholder="Street, Area, Landmark" required />
+          <div className="grid grid-cols-2 gap-4">
+            <AddressAutocomplete
+              label="Pickup" required
+              value={pickup} onSelect={setPickup}
+              dotColor="#00d4aa"
+              placeholder="Where is the patient?"
+            />
+            <AddressAutocomplete
+              label="Drop / Destination" required
+              value={drop} onSelect={setDrop}
+              dotColor="#ff4d6d"
+              placeholder="Hospital, address or landmark"
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>Destination Hospital *</label>
-              <select className="inp" value={form.dropHospitalId} onChange={e => set('dropHospitalId', e.target.value)} required>
-                <option value="">-- Select Hospital --</option>
-                {hospitals.map(h => <option key={h._id} value={h._id}>{h.name}</option>)}
+              <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>Ambulance / Service *</label>
+              <select className="inp" value={form.selectedType} onChange={e => selectService(e.target.value)} required>
+                <option value="">{services.length ? '-- Select service --' : 'Loading services...'}</option>
+                {services.map(sv => <option key={sv.id} value={sv.id}>{sv.label}</option>)}
               </select>
             </div>
             <div>
@@ -415,38 +550,124 @@ export default function DispatchPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>Base Fare (₹)</label>
-              <input className="inp" type="number" value={form.baseFare} onChange={e => set('baseFare', e.target.value)} />
+              <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>Trip Type</label>
+              <select className="inp" value={form.tripType} onChange={e => set('tripType', e.target.value)}>
+                <option value="one_way">➡️ One Way</option>
+                <option value="round_trip">🔄 Round Trip / Up &amp; Down</option>
+              </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>Distance (km)</label>
-              <input className="inp" type="number" value={form.distanceKm} onChange={e => set('distanceKm', e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>₹ per km</label>
-              <input className="inp" type="number" value={form.perKmRate}onChange={e => set('perKmRate', e.target.value)} />
+              <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>Schedule</label>
+              <div className="flex gap-2">
+                <select className="inp" value={form.scheduleType} onChange={e => set('scheduleType', e.target.value)}>
+                  <option value="now">🕐 Right Now</option>
+                  <option value="later">📅 Scheduled</option>
+                </select>
+                {form.scheduleType === 'later' && (
+                  <input className="inp" type="datetime-local" value={form.scheduleDate} onChange={e => set('scheduleDate', e.target.value)} />
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Fare preview */}
-          <div className="rounded-xl px-4 py-3 flex items-center justify-between"
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>AC</label>
+              {/* Offered only where the selected service actually has an
+                  acPerKm rate — the price comes from that rate, never from
+                  anything set in this file. */}
+              <button
+                type="button"
+                disabled={!acAvailable}
+                onClick={() => set('acEnabled', !form.acEnabled)}
+                className="inp flex items-center justify-between text-left"
+                style={{ opacity: acAvailable ? 1 : 0.45, cursor: acAvailable ? 'pointer' : 'not-allowed' }}
+              >
+                <span>{!acAvailable ? 'Not available for this service' : form.acEnabled ? '❄️ AC Included' : 'Non-AC'}</span>
+                <span className="w-8 h-4 rounded-full relative transition-colors"
+                  style={{ background: form.acEnabled ? 'var(--accent)' : 'var(--border2)' }}>
+                  <span className="absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all"
+                    style={{ left: form.acEnabled ? 18 : 2 }} />
+                </span>
+              </button>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>Tie-up Hospital (optional)</label>
+              <select className="inp" value={form.dropHospitalId} onChange={e => set('dropHospitalId', e.target.value)}>
+                <option value="">-- None --</option>
+                {hospitals.map(h => <option key={h._id} value={h._id}>{h.name}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* ── Route preview ── */}
+          {(pickup || drop) && (
+            <RoutePreviewMap pickup={pickup} drop={drop} polyline={estimate?.polyline} height={240} />
+          )}
+
+          {/* ── Automatic quote ── */}
+          <div className="rounded-xl px-4 py-3"
             style={{ background: 'rgba(0,212,170,.06)', border: '1px solid rgba(0,212,170,.18)' }}>
-            <div className="text-xs" style={{ color: 'var(--text2)' }}>
-              Base {rupee(form.baseFare)} + {form.distanceKm}km × ₹{form.perKmRate} = &nbsp;
-            </div>
-            <div className="text-xl font-bold font-mono" style={{ color: 'var(--accent)' }}>
-              {rupee(totalFare)}
-            </div>
+            {!pickup || !drop ? (
+              <div className="text-xs" style={{ color: 'var(--text3)' }}>
+                Set pickup and drop — distance, duration and fare are calculated automatically.
+              </div>
+            ) : estimating ? (
+              <div className="text-xs flex items-center gap-2" style={{ color: 'var(--text2)' }}>
+                <RefreshCw size={12} className="animate-spin" /> Calculating route and fare...
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <div className="flex flex-wrap gap-1">
+                  {estimate?.distanceKm != null && <Badge color="blue">📏 {estimate.distanceKm.toFixed(1)} km</Badge>}
+                  {fmtDuration(estimate?.durationSec) && <Badge color="gray">⏱️ {fmtDuration(estimate.durationSec)}</Badge>}
+                  {form.tripType === 'round_trip' && estimate?.oneWayKm != null && (
+                    <Badge color="amber">🔄 {estimate.oneWayKm.toFixed(1)} km each way</Badge>
+                  )}
+                </div>
+
+                {estimateError && (
+                  <div className="text-xs" style={{ color: 'var(--red)' }}>⚠️ {estimateError}</div>
+                )}
+
+                {fare && (
+                  <>
+                    {[
+                      ['Base fare', rupee(fare.baseFare)],
+                      // compute() folds the AC add-on into additionalCharges and
+                      // this quote sends no other extras, so the value is the AC
+                      // charge whenever AC is on. Label follows the data.
+                      ...(fare.additionalCharges
+                        ? [[form.acEnabled ? 'AC charge' : 'Additional charges', rupee(fare.additionalCharges)]]
+                        : []),
+                      [`GST @ ${fare.gstRate}%`, rupee(fare.gstAmount)],
+                    ].map(([label, val]) => (
+                      <div key={label} className="flex justify-between text-xs" style={{ color: 'var(--text2)' }}>
+                        <span>{label}</span><span className="font-mono">{val}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between items-center pt-1.5" style={{ borderTop: '1px solid var(--border2)' }}>
+                      <span className="text-xs font-semibold" style={{ color: 'var(--text2)' }}>TOTAL</span>
+                      <span className="text-xl font-bold font-mono" style={{ color: 'var(--accent)' }}>{rupee(fare.grandTotal)}</span>
+                    </div>
+                  </>
+                )}
+
+                {!fare && !estimateError && (
+                  <div className="text-xs" style={{ color: 'var(--text3)' }}>Select a service to see the fare.</div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex gap-3 pt-1">
-            <Btn type="submit" disabled={submitting} className="flex-1">
+            <Btn type="submit" disabled={submitting || !fare} className="flex-1">
               {submitting ? <RefreshCw size={14} className="animate-spin"/> : <Send size={14} />}
               Dispatch Ambulance
             </Btn>
-            <Btn type="button" variant="ghost" onClick={() => setForm({ patientName:'', patientPhone:'', pickupAddress:'', dropHospitalId:'', emergencyType:'general', baseFare:1500, distanceKm:12, perKmRate:25 })}>
+            <Btn type="button" variant="ghost" onClick={resetForm}>
               Clear
             </Btn>
           </div>

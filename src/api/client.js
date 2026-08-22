@@ -93,12 +93,32 @@ export const tripsApi = {
   getLive     : ()       => api.get('/trips/live'),
   getById     : (id)     => api.get(`/trips/${id}`),
   create      : (data)   => api.post('/trips', data),
+  // Quote without booking. Runs the same verifyRoute + fareCalculator.compute
+  // path createTrip runs, so the figure shown to the operator is the figure
+  // the trip is created with. Never reimplement slab pricing client-side.
+  estimate    : (data)   => api.post('/trips/estimate', data),
   // target: { vehicleId } (legacy) or { ambulanceId } (owner/driver on
   // duty via the mobile app) — backend accepts either.
   assign      : (id, target) => api.put(`/trips/${id}/assign`, target),
   complete    : (id, data) => api.put(`/trips/${id}/complete`, data),
   cancel      : (id, reason)   => api.put(`/trips/${id}/cancel`, { reason }),
   updateStatus: (id, status)   => api.put(`/trips/${id}/status`, { status }),
+};
+
+// Pricing — the MongoDB `pricing` collection is the single source of truth
+// for which services are bookable at all. The CRM's service dropdown is
+// built from this, never from a hard-coded list, so a service added in the
+// DB shows up in dispatch without a frontend release.
+export const pricingApi = {
+  getAll: () => api.get('/pricing'),
+};
+
+// Google Places / Directions, proxied by the backend so the Maps key stays
+// server-side. Same endpoints the SaveLife website booking form uses.
+export const placesApi = {
+  autocomplete: (input)   => api.get('/places/autocomplete', { params: { input } }),
+  details     : (placeid) => api.get('/places/details', { params: { placeid } }),
+  reverse     : (lat, lng) => api.get('/places/reverse', { params: { lat, lng } }),
 };
 
 // Vehicles
