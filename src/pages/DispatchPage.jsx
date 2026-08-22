@@ -26,7 +26,9 @@ const EMPTY_FORM = {
 
 // Built from the trackingToken the backend stores on the trip — never
 // generated here. A link the CRM invented would not resolve.
-const TRACK_BASE = 'https://savelife.health/track';
+// www, matching the host the SMS and WhatsApp links use: an operator
+// reading a link out to a caller must not quote a different one.
+const TRACK_BASE = 'https://www.savelife.health/track';
 const trackUrl = (t) => (t.trackingToken ? `${TRACK_BASE}/${t.trackingToken}` : null);
 
 const fmtDuration = (sec) => {
