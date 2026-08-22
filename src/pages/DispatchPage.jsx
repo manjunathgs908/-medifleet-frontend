@@ -5,7 +5,7 @@ import AddressAutocomplete from '../components/AddressAutocomplete';
 import RoutePreviewMap from '../components/RoutePreviewMap';
 import { PageHeader, StatusBadge, Badge, Btn, Modal, rupee, Spinner } from '../components/ui';
 import toast from 'react-hot-toast';
-import { Send, RefreshCw, CheckCircle, XCircle, MapPin, Phone, Bell, BellOff, X } from 'lucide-react';
+import { Send, RefreshCw, CheckCircle, XCircle, MapPin, Phone, Bell, BellOff, X, Link2, ExternalLink } from 'lucide-react';
 
 const MAX_RINGS = 12; // ~12s of ringing if never dismissed
 
@@ -23,6 +23,11 @@ const EMPTY_FORM = {
   scheduleType  : 'now',
   scheduleDate  : '',
 };
+
+// Built from the trackingToken the backend stores on the trip — never
+// generated here. A link the CRM invented would not resolve.
+const TRACK_BASE = 'https://savelife.health/track';
+const trackUrl = (t) => (t.trackingToken ? `${TRACK_BASE}/${t.trackingToken}` : null);
 
 const fmtDuration = (sec) => {
   if (!Number.isFinite(Number(sec))) return null;
@@ -431,6 +436,20 @@ export default function DispatchPage() {
     finally { setAssigning(null); }
   };
 
+  // navigator.clipboard needs a secure context and can be refused; the
+  // toast shows the URL either way so the operator can still read it out
+  // or select it by hand.
+  const copyTrackingLink = async (t) => {
+    const url = trackUrl(t);
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Tracking link copied');
+    } catch {
+      toast(url, { duration: 8000 });
+    }
+  };
+
   const elapsed = (iso) => {
     const mins = Math.floor((Date.now() - new Date(iso)) / 60000);
     return mins < 60 ? `${mins}m ago` : `${Math.floor(mins/60)}h ${mins%60}m ago`;
@@ -735,6 +754,32 @@ export default function DispatchPage() {
                             🚑 {t.vehicle?.registrationNumber || t.ambulance?.registrationNumber} · {t.driver?.name}
                           </div>
                           <div className="text-[10px]" style={{ color: 'var(--text3)' }}>{elapsed(t.createdAt)}</div>
+                        </div>
+                      )}
+
+                      {/* Tracking link — only for trips that carry a token.
+                          Older trips predate the field; scripts/backfill-
+                          tracking-tokens.js gives them one. */}
+                      {trackUrl(t) && (
+                        <div className="flex gap-2 mt-2.5">
+                          <button
+                            type="button"
+                            onClick={() => copyTrackingLink(t)}
+                            className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                            style={{ background: 'rgba(59,158,255,.1)', color: 'var(--blue)', border: '1px solid rgba(59,158,255,.2)' }}
+                          >
+                            <Link2 size={11} /> Copy Tracking Link
+                          </button>
+                          <a
+                            href={trackUrl(t)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center"
+                            style={{ background: 'var(--surface)', color: 'var(--text2)', border: '1px solid var(--border2)' }}
+                            title="Open the customer's tracking page"
+                          >
+                            <ExternalLink size={11} />
+                          </a>
                         </div>
                       )}
 
