@@ -1,7 +1,7 @@
 // src/pages/DispatchPage.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { tripsApi, hospitalsApi } from '../api/client';
-import { PageHeader, StatusBadge, Btn, Modal, rupee, Spinner } from '../components/ui';
+import { PageHeader, StatusBadge, Badge, Btn, Modal, rupee, Spinner } from '../components/ui';
 import toast from 'react-hot-toast';
 import { Send, RefreshCw, CheckCircle, XCircle, MapPin, Phone, Bell, BellOff, X } from 'lucide-react';
 
@@ -25,15 +25,108 @@ const EMERGENCY_TYPES = [
 const dotJoin = (...parts) => parts.filter(Boolean).join(' · ');
 const numOr   = (v) => (v === '' || v === null || v === undefined || !Number.isFinite(Number(v)) ? null : Number(v));
 
-const dropLine = (t) => {
-  const drop = t.dropHospital?.name || t.dropAddress;
-  return drop ? `🏥 ${drop}` : '';
+// ── Website booking options ──
+// selectedType is the Pricing serviceType id and arrives in whichever case
+// the sending client used: savelife-web posts lowercase ('bls',
+// 'als_tempo'), while the backend's own catalog in
+// utils/ambulanceServiceTypes.js is uppercase. Normalising to uppercase
+// lets one map serve both. An id not listed here degrades to a readable
+// "Als Tempo" rather than leaking the raw token onto the dispatch board.
+const AMBULANCE_TYPE_LABELS = {
+  BLS             : 'BLS Ambulance — Maruti Eeco',
+  BLS_TEMPO       : 'BLS Ambulance — Tempo Traveller',
+  ALS_TEMPO       : 'ALS Ambulance — Tempo Traveller',
+  ACLS_TEMPO      : 'ACLS Ambulance — Tempo Traveller',
+  NICU_TEMPO      : 'NICU Ambulance — Tempo Traveller',
+  BODY_TEMPO      : 'Body Shifting Ambulance — Tempo Traveller',
+  BODY_MINI       : 'Body Shifting Mini — Maruti Eeco',
+  HEARSE          : 'Hearse',
+  HEARSE_BASIC    : 'Hearse — Basic',
+  HEARSE_STANDARD : 'Hearse — Standard',
+  HEARSE_LUXURY   : 'Hearse — Luxury',
+  FREEZER_BOX     : 'Freezer Box',
 };
 
-const fareLine = (t) => {
-  const km   = numOr(t.distanceKm);
-  const fare = numOr(t.estimatedFare);
-  return dotJoin(km !== null && `${km} km`, fare !== null && rupee(fare));
+const titleCase = (v) => String(v).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+const ambulanceTypeLabel = (v) =>
+  v ? (AMBULANCE_TYPE_LABELS[String(v).trim().toUpperCase()] || titleCase(v)) : '';
+
+const TRIP_TYPE_LABELS = { one_way: 'One Way', round_trip: 'Round Trip / Up & Down' };
+
+const fmtDateTime = (v) => {
+  if (!v) return '';
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('en-IN', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: true,
+  });
+};
+
+// scheduleDate is only persisted for scheduleType 'later', but a stray date
+// on a 'now' booking is still worth surfacing rather than swallowing.
+const scheduleLabel = (t) => {
+  const when = fmtDateTime(t.scheduleDate);
+  if (t.scheduleType === 'later') return when ? `Scheduled · ${when}` : 'Scheduled';
+  if (t.scheduleType === 'now')   return 'Right Now';
+  return when ? `Scheduled · ${when}` : '';
+};
+
+const EMERGENCY_LABELS = Object.fromEntries(EMERGENCY_TYPES.map((o) => [o.value, o.label]));
+
+// One implementation, rendered by both the new-booking popup and the Active
+// Trips card — the two showed different subsets before and drifted apart.
+// Every row and badge is independently optional: a CRM-desk or WhatsApp
+// booking carries none of the website's option fields and simply renders
+// fewer badges rather than "undefined".
+const BookingSummary = ({ t }) => {
+  const ambulance = ambulanceTypeLabel(t.selectedType);
+  const tripType  = TRIP_TYPE_LABELS[t.tripType] || '';
+  const schedule  = scheduleLabel(t);
+  const emergency = EMERGENCY_LABELS[t.emergencyType] || t.emergencyType || '';
+  const drop      = t.dropHospital?.name || t.dropAddress;
+  const km        = numOr(t.distanceKm);
+  const fare      = numOr(t.estimatedFare);
+  // Strict boolean test, not truthiness: acEnabled === false is a real
+  // answer ("Non-AC") and must not be collapsed into the field being absent
+  // on a booking that never offered the choice.
+  const hasAc     = typeof t.acEnabled === 'boolean';
+  const isRound   = t.tripType === 'round_trip';
+  const money     = dotJoin(km !== null && `📏 ${km} km`, fare !== null && `💰 ${rupee(fare)}`);
+  const hasBadges = ambulance || hasAc || tripType || schedule || emergency;
+
+  return (
+    <div className="space-y-1">
+      {hasBadges && (
+        <div className="flex flex-wrap gap-1 mb-1.5">
+          {ambulance && <Badge color="green">🚑 {ambulance}</Badge>}
+          {hasAc     && <Badge color={t.acEnabled ? 'blue' : 'gray'}>{t.acEnabled ? '❄️ AC Included' : 'Non-AC'}</Badge>}
+          {tripType  && <Badge color={isRound ? 'amber' : 'gray'}>{isRound ? '🔄' : '➡️'} {tripType}</Badge>}
+          {schedule  && <Badge color={t.scheduleType === 'later' ? 'amber' : 'gray'}>🕐 {schedule}</Badge>}
+          {emergency && <Badge color="gray">{emergency}</Badge>}
+        </div>
+      )}
+
+      {t.pickup?.address && (
+        <div className="text-xs flex items-start gap-1" style={{ color: 'var(--text2)' }}>
+          <MapPin size={10} className="mt-0.5 flex-shrink-0" /> {t.pickup.address}
+        </div>
+      )}
+
+      {drop && (
+        <div className="text-xs" style={{ color: 'var(--text2)' }}>🏥 {drop}</div>
+      )}
+
+      {isRound && t.returnAddress && (
+        <div className="text-xs" style={{ color: 'var(--text2)' }}>↩️ Return: {t.returnAddress}</div>
+      )}
+
+      {money && (
+        <div className="text-xs font-mono" style={{ color: 'var(--text2)' }}>{money}</div>
+      )}
+    </div>
+  );
 };
 
 export default function DispatchPage() {
@@ -271,15 +364,9 @@ export default function DispatchPage() {
               <div className="text-xs flex items-center gap-1 mt-0.5" style={{ color: 'var(--text2)' }}>
                 <Phone size={10} /> {b.patientPhone}
               </div>
-              <div className="text-xs flex items-start gap-1 mt-1" style={{ color: 'var(--text2)' }}>
-                <MapPin size={10} className="mt-0.5 flex-shrink-0" /> {b.pickup?.address}
+              <div className="mt-2">
+                <BookingSummary t={b} />
               </div>
-              {dropLine(b) && (
-                <div className="text-xs mt-1" style={{ color: 'var(--text2)' }}>{dropLine(b)}</div>
-              )}
-              {fareLine(b) && (
-                <div className="text-xs mt-1" style={{ color: 'var(--text2)' }}>{fareLine(b)}</div>
-              )}
               <button onClick={() => dismissBooking(b._id)}
                 className="w-full mt-2.5 py-1.5 rounded-lg text-xs font-semibold"
                 style={{ background: 'rgba(255,77,109,.08)', color: 'var(--red)', border: '1px solid rgba(255,77,109,.2)' }}>
@@ -392,12 +479,8 @@ export default function DispatchPage() {
                         </div>
                         <StatusBadge status={t.status} />
                       </div>
-                      <div className="text-xs flex items-start gap-1 mb-1" style={{ color: 'var(--text2)' }}>
-                        <MapPin size={10} className="mt-0.5 flex-shrink-0" /> {t.pickup?.address}
-                      </div>
-                      <div className="text-xs mb-2" style={{ color: 'var(--text2)' }}>
-                        <div>{dotJoin(dropLine(t), t.emergencyType)}</div>
-                        {fareLine(t) && <div>{fareLine(t)}</div>}
+                      <div className="mb-2.5">
+                        <BookingSummary t={t} />
                       </div>
 
                       {/* ── Assign Vehicle/Driver (only if not yet assigned) —
