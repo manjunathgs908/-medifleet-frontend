@@ -255,3 +255,21 @@ export const whatsappConversationsApi = {
 export const whatsappCustomerApi = {
   get: (phone) => api.get(`/whatsapp/customer/${encodeURIComponent(phone)}`),
 };
+
+// SEO draft pipeline (medifleet-backend routes/seo.js) — owner-only, and
+// nothing here touches savelife.health. Generation is deliberately slow:
+// the backend makes two Claude calls plus a similarity sweep, so `generate`
+// gets its own long timeout rather than the client default.
+//
+// The ANTHROPIC_API_KEY lives only in the backend's Render environment. It is
+// never sent to, stored in, or read by this app — the browser only ever sees
+// the generated draft that comes back.
+export const seoApi = {
+  generate  : (body)          => api.post('/seo/generate', body, { timeout: 180000 }),
+  getAll    : (params)        => api.get('/seo/articles', { params }),
+  getById   : (id)            => api.get(`/seo/articles/${id}`),
+  update    : (id, body)      => api.put(`/seo/articles/${id}`, body),
+  setStatus : (id, body)      => api.put(`/seo/articles/${id}/status`, body),
+  remove    : (id)            => api.delete(`/seo/articles/${id}`),
+  facts     : ()              => api.get('/seo/facts'),
+};

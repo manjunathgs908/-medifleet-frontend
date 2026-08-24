@@ -28,6 +28,7 @@ import TripAlertsPage  from './pages/TripAlertsPage';
 import PostingAlertsPage from './pages/PostingAlertsPage';
 import WhatsappLeadsPage from './pages/WhatsappLeadsPage';
 import WhatsappConversationsPage from './pages/WhatsappConversationsPage';
+import SeoStudioPage from './pages/SeoStudioPage';
 
 // Driver mobile app pages
 import DriverApp       from './pages/driver/DriverApp';
@@ -92,6 +93,11 @@ export default function App() {
                 </ProtectedRoute>
               } />
               <Route path="leads"      element={<LeadsPage />} />
+              <Route path="seo-studio" element={
+                <ProtectedRoute roles={['owner']}>
+                  <SeoStudioPage />
+                </ProtectedRoute>
+              } />
              <Route path="advances"   element={
                 <ProtectedRoute roles={['owner']}>
                   <AdvancePage />
