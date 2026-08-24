@@ -108,6 +108,14 @@ const ChecksPanel = ({ checks = {}, article }) => {
   const advisory = claims.filter((c) => SEVERITY_META[c.severity]?.blocking === false);
   const dropped = checks.droppedLinks || [];
 
+  // Phase 2 gates. liveSim and schemaErrors block approval in the backend;
+  // intentCollisions are advisory, because no threshold in this project
+  // decides when two pages are "too close in intent".
+  const liveSim = checks.livePageSimilarity || 0;
+  const liveIndexed = checks.livePagesIndexed ?? null;
+  const schemaErrors = checks.schemaErrors || [];
+  const collisions = checks.intentCollisions || [];
+
   // Fall back to measuring the strings when an older draft has no stored
   // lengths, so the row is never blank.
   const titleLen = checks.titleLength ?? (article?.title || '').length;
@@ -137,6 +145,22 @@ const ChecksPanel = ({ checks = {}, article }) => {
       ok: sim < SIMILARITY_BLOCK,
       label: 'Cannibalisation',
       detail: `${Math.round(sim * 100)}% similar to nearest existing draft${sim >= SIMILARITY_BLOCK ? ' — too close' : ''}`,
+    },
+    {
+      // The curated pages on savelife.health. These already rank, so a draft
+      // that duplicates one would compete with it rather than add anything.
+      ok: liveSim < SIMILARITY_BLOCK,
+      label: 'Live page overlap',
+      detail: liveIndexed === 0
+        ? 'No live pages indexed — this check did not run'
+        : `${Math.round(liveSim * 100)}% vs ${checks.similarToLivePage || 'nearest live page'}${liveSim >= SIMILARITY_BLOCK ? ' — too close' : ''}`,
+    },
+    {
+      ok: schemaErrors.length === 0,
+      label: 'Structured data',
+      detail: schemaErrors.length === 0
+        ? 'Valid'
+        : `${schemaErrors.length} error${schemaErrors.length === 1 ? '' : 's'}`,
     },
     {
       ok: !checks.duplicateSlug,
@@ -221,6 +245,43 @@ const ChecksPanel = ({ checks = {}, article }) => {
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {schemaErrors.length > 0 && (
+        <div className="mt-3 p-3 rounded-lg" style={{ background: 'rgba(255,77,109,.08)', border: '1px solid rgba(255,77,109,.25)' }}>
+          <div className="text-xs font-semibold mb-1.5" style={{ color: 'var(--red)' }}>
+            Structured data will not validate — {schemaErrors.length} error{schemaErrors.length === 1 ? '' : 's'}
+          </div>
+          <ul className="space-y-1">
+            {schemaErrors.map((e, i) => (
+              <li key={i} className="text-xs leading-relaxed" style={{ color: 'var(--text2)' }}>• {e}</li>
+            ))}
+          </ul>
+          <div className="text-xs mt-2" style={{ color: 'var(--text3)' }}>
+            The published page drops invalid nodes, so approving this would ship a page with no rich-result markup and no error anywhere.
+          </div>
+        </div>
+      )}
+
+      {collisions.length > 0 && (
+        <div className="mt-3 p-3 rounded-lg" style={{ background: 'rgba(59,158,255,.07)', border: '1px solid rgba(59,158,255,.2)' }}>
+          <div className="text-xs font-semibold mb-2" style={{ color: 'var(--blue)' }}>
+            Advisory — {collisions.length} page{collisions.length === 1 ? '' : 's'} in the same cluster target the same intent
+          </div>
+          <ul className="space-y-1.5">
+            {collisions.map((c, i) => (
+              <li key={i} className="text-xs leading-relaxed" style={{ color: 'var(--text2)' }}>
+                <span className="font-mono">{c.ref}</span>
+                <span style={{ color: 'var(--text3)' }}>
+                  {' '}· {c.cluster} · {c.searchIntent} · titles {Math.round((c.titleSimilarity || 0) * 100)}% alike
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="text-xs mt-2" style={{ color: 'var(--text3)' }}>
+            Does not block. Judge whether this page answers something the others do not — if it does not, reject it rather than splitting the same query across two URLs.
+          </div>
         </div>
       )}
 
