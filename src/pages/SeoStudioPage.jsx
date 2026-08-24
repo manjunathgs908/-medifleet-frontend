@@ -70,41 +70,90 @@ const GeneratingPanel = ({ seconds }) => {
   );
 };
 
+// Ranges the backend gate enforces (services/seoGenerator.js). Kept in step
+// with it deliberately: if these drift, the UI says pass while the API says
+// fail, which is worse than showing nothing.
+const TITLE_MIN = 55, TITLE_MAX = 60;
+const META_MIN = 150, META_MAX = 160;
+const SIMILARITY_BLOCK = 0.55;
+const MIN_WORDS = 700;
+
+// Claims arrive as { claim, severity, action }. Drafts generated before
+// severities existed stored plain strings; the backend normalises those on
+// read, but a cached row in this tab might still be the old shape.
+const normaliseClaim = (c) =>
+  typeof c === 'string'
+    ? { claim: c, severity: 'unsupported', action: 'rewrite' }
+    : { claim: c.claim, severity: c.severity || 'unsupported', action: c.action || 'rewrite' };
+
+const SEVERITY_META = {
+  fabricated:  { color: 'red',   label: 'Fabricated',  blocking: true },
+  unsupported: { color: 'amber', label: 'Unsupported', blocking: true },
+  phrasing:    { color: 'blue',  label: 'Phrasing',    blocking: false },
+};
+
+const ACTION_LABEL = {
+  source:  'Use the real figure from the fact sheet',
+  remove:  'Delete — nothing supports it',
+  rewrite: 'Reword so it stops asserting',
+};
+
 // The quality gates from SeoArticle.checks. Approval is blocked on these by
 // the backend, so they are rendered as hard pass/fail rather than hints.
 const ChecksPanel = ({ checks = {}, article }) => {
   const wc = checks.wordCount || 0;
   const sim = checks.similarityScore || 0;
-  const unverified = checks.unverifiedClaims || [];
+  const claims = (checks.unverifiedClaims || []).map(normaliseClaim);
+  const blocking = claims.filter((c) => SEVERITY_META[c.severity]?.blocking !== false);
+  const advisory = claims.filter((c) => SEVERITY_META[c.severity]?.blocking === false);
+  const dropped = checks.droppedLinks || [];
+
+  // Fall back to measuring the strings when an older draft has no stored
+  // lengths, so the row is never blank.
+  const titleLen = checks.titleLength ?? (article?.title || '').length;
+  const metaLen = checks.metaLength ?? (article?.metaDescription || '').length;
+  const titleOk = titleLen >= TITLE_MIN && titleLen <= TITLE_MAX;
+  const metaOk = metaLen >= META_MIN && metaLen <= META_MAX;
 
   const rows = [
     {
-      ok: unverified.length === 0,
-      icon: unverified.length === 0 ? CheckCircle2 : AlertTriangle,
+      ok: blocking.length === 0,
       label: 'Fact check',
-      detail: unverified.length === 0
-        ? 'No unverified claims'
-        : `${unverified.length} unverified claim${unverified.length === 1 ? '' : 's'}`,
+      detail: blocking.length === 0
+        ? (advisory.length ? `Clean — ${advisory.length} advisory note${advisory.length === 1 ? '' : 's'}` : 'No unverified claims')
+        : `${blocking.length} blocking claim${blocking.length === 1 ? '' : 's'}`,
     },
     {
-      ok: sim < 0.55,
-      icon: sim < 0.55 ? CheckCircle2 : AlertTriangle,
+      ok: titleOk,
+      label: 'Title length',
+      detail: `${titleLen} chars${titleOk ? '' : ` — must be ${TITLE_MIN}–${TITLE_MAX}`}`,
+    },
+    {
+      ok: metaOk,
+      label: 'Meta length',
+      detail: `${metaLen} chars${metaOk ? '' : ` — must be ${META_MIN}–${META_MAX}`}`,
+    },
+    {
+      ok: sim < SIMILARITY_BLOCK,
       label: 'Cannibalisation',
-      detail: `${Math.round(sim * 100)}% similar to nearest existing draft${sim >= 0.55 ? ' — too close' : ''}`,
+      detail: `${Math.round(sim * 100)}% similar to nearest existing draft${sim >= SIMILARITY_BLOCK ? ' — too close' : ''}`,
     },
     {
       ok: !checks.duplicateSlug,
-      icon: !checks.duplicateSlug ? CheckCircle2 : AlertTriangle,
       label: 'Slug',
       detail: checks.duplicateSlug ? 'Duplicate slug' : (article?.slug || 'unique'),
     },
     {
-      ok: wc >= 700,
-      icon: wc >= 700 ? CheckCircle2 : AlertTriangle,
-      label: 'Length',
-      detail: `${wc} words${wc < 700 ? ' — under the 700 minimum' : ''}`,
+      ok: wc >= MIN_WORDS,
+      label: 'Word count',
+      detail: `${wc} words${wc < MIN_WORDS ? ` — under the ${MIN_WORDS} minimum` : ''}`,
     },
-  ];
+    {
+      ok: (article?.internalLinks || []).length >= 2,
+      label: 'Internal links',
+      detail: `${(article?.internalLinks || []).length} valid${dropped.length ? ` · ${dropped.length} dropped` : ''}`,
+    },
+  ].map((r) => ({ ...r, icon: r.ok ? CheckCircle2 : AlertTriangle }));
 
   return (
     <div className="card mb-4">
@@ -131,18 +180,65 @@ const ChecksPanel = ({ checks = {}, article }) => {
         })}
       </div>
 
-      {unverified.length > 0 && (
+      {blocking.length > 0 && (
         <div className="mt-3 p-3 rounded-lg" style={{ background: 'rgba(255,77,109,.08)', border: '1px solid rgba(255,77,109,.25)' }}>
-          <div className="text-xs font-semibold mb-1.5" style={{ color: 'var(--red)' }}>
-            Claims the fact checker could not verify
+          <div className="text-xs font-semibold mb-2" style={{ color: 'var(--red)' }}>
+            Blocking — {blocking.length} claim{blocking.length === 1 ? '' : 's'} must be fixed before approval
+          </div>
+          <ul className="space-y-2">
+            {blocking.map((c, i) => {
+              const sev = SEVERITY_META[c.severity] || SEVERITY_META.unsupported;
+              return (
+                <li key={i}>
+                  <div className="flex items-start gap-2 flex-wrap">
+                    <Badge color={sev.color}>{sev.label}</Badge>
+                    <span className="text-xs leading-relaxed flex-1 min-w-0 break-words" style={{ color: 'var(--text2)' }}>
+                      “{c.claim}”
+                    </span>
+                  </div>
+                  <div className="text-xs mt-0.5 pl-1" style={{ color: 'var(--text3)' }}>
+                    → {ACTION_LABEL[c.action] || c.action}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {advisory.length > 0 && (
+        <div className="mt-3 p-3 rounded-lg" style={{ background: 'rgba(59,158,255,.07)', border: '1px solid rgba(59,158,255,.2)' }}>
+          <div className="text-xs font-semibold mb-2" style={{ color: 'var(--blue)' }}>
+            Advisory — {advisory.length} phrasing note{advisory.length === 1 ? '' : 's'} · does not block approval
+          </div>
+          <ul className="space-y-2">
+            {advisory.map((c, i) => (
+              <li key={i}>
+                <div className="text-xs leading-relaxed break-words" style={{ color: 'var(--text2)' }}>“{c.claim}”</div>
+                <div className="text-xs mt-0.5" style={{ color: 'var(--text3)' }}>
+                  → {ACTION_LABEL[c.action] || c.action}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {dropped.length > 0 && (
+        <div className="mt-3 p-3 rounded-lg" style={{ background: 'rgba(255,184,48,.08)', border: '1px solid rgba(255,184,48,.25)' }}>
+          <div className="text-xs font-semibold mb-1.5" style={{ color: 'var(--amber)' }}>
+            {dropped.length} generated link{dropped.length === 1 ? '' : 's'} dropped — not live on the site
           </div>
           <ul className="space-y-1">
-            {unverified.map((c, i) => (
-              <li key={i} className="text-xs leading-relaxed" style={{ color: 'var(--text2)' }}>• {c}</li>
+            {dropped.map((l, i) => (
+              <li key={i} className="text-xs leading-relaxed break-all" style={{ color: 'var(--text2)' }}>
+                • <span className="font-mono">{l.href}</span>
+                {l.label ? <span style={{ color: 'var(--text3)' }}> — {l.label}</span> : null}
+              </li>
             ))}
           </ul>
           <div className="text-xs mt-2" style={{ color: 'var(--text3)' }}>
-            Each one has to be removed or corrected before this draft can be approved.
+            The model proposed these but they do not exist. Either the page should be built, or the link was invented.
           </div>
         </div>
       )}
@@ -167,6 +263,10 @@ const DraftView = ({ article, onStatus, working }) => {
   if (!article) return null;
   const checks = article.checks || {};
   const gen = article.generation || {};
+  // The JSON-LD moved from `schema` to `jsonLd` (`schema` is a reserved name
+  // on a Mongoose document). The API still mirrors the old key, so this falls
+  // back rather than depending on which side deploys first.
+  const jsonLd = article.jsonLd ?? article.schema;
 
   const copy = (text, what) => {
     navigator.clipboard?.writeText(text).then(
@@ -227,8 +327,8 @@ const DraftView = ({ article, onStatus, working }) => {
       <div className="card mb-4">
         <SectionLabel>SEO metadata</SectionLabel>
         {[
-          { label: 'Title', value: article.title, lo: 55, hi: 60 },
-          { label: 'Meta description', value: article.metaDescription, lo: 150, hi: 160 },
+          { label: 'Title', value: article.title, lo: TITLE_MIN, hi: TITLE_MAX },
+          { label: 'Meta description', value: article.metaDescription, lo: META_MIN, hi: META_MAX },
         ].map(({ label, value, lo, hi }) => {
           const len = (value || '').length;
           const inRange = len >= lo && len <= hi;
@@ -237,8 +337,8 @@ const DraftView = ({ article, onStatus, working }) => {
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text2)' }}>{label}</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs" style={{ color: inRange ? 'var(--green)' : 'var(--amber)' }}>
-                    {len} chars {inRange ? '' : `(target ${lo}–${hi})`}
+                  <span className="text-xs" style={{ color: inRange ? 'var(--green)' : 'var(--red)' }}>
+                    {len} chars {inRange ? '· pass' : `· FAIL (must be ${lo}–${hi})`}
                   </span>
                   <button onClick={() => copy(value, label)} title="Copy"
                     className="opacity-60 hover:opacity-100 transition-opacity">
@@ -302,22 +402,22 @@ const DraftView = ({ article, onStatus, working }) => {
         </pre>
       </div>
 
-      {article.schema && (
+      {jsonLd && (
         <div className="card mb-4">
           <div className="flex items-center justify-between mb-2">
             <SectionLabel>Structured data</SectionLabel>
             <div className="flex items-center gap-2">
               <Badge color="blue">
-                {(Array.isArray(article.schema) ? article.schema : [article.schema])
+                {(Array.isArray(jsonLd) ? jsonLd : [jsonLd])
                   .map((s) => s?.['@type']).filter(Boolean).join(' · ') || 'schema'}
               </Badge>
-              <button onClick={() => copy(JSON.stringify(article.schema, null, 2), 'Schema')} title="Copy"
+              <button onClick={() => copy(JSON.stringify(jsonLd, null, 2), 'Schema')} title="Copy"
                 className="opacity-60 hover:opacity-100 transition-opacity"><Copy size={13} /></button>
             </div>
           </div>
           <pre className="text-xs p-3 rounded-lg max-h-72 overflow-auto font-mono"
             style={{ background: 'var(--surface2)', color: 'var(--text3)' }}>
-            {JSON.stringify(article.schema, null, 2)}
+            {JSON.stringify(jsonLd, null, 2)}
           </pre>
         </div>
       )}
