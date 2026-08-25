@@ -265,7 +265,7 @@ export const whatsappCustomerApi = {
 // never sent to, stored in, or read by this app — the browser only ever sees
 // the generated draft that comes back.
 export const seoApi = {
-  generate  : (body)          => api.post('/seo/generate', body, { timeout: 180000 }),
+  generate  : (body)          => api.post('/seo/generate', body, { timeout: 300000 }),
   getAll    : (params)        => api.get('/seo/articles', { params }),
   getById   : (id)            => api.get(`/seo/articles/${id}`),
   update    : (id, body)      => api.put(`/seo/articles/${id}`, body),
