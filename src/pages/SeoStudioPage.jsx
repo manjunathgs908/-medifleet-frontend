@@ -320,7 +320,7 @@ const ChecksPanel = ({ checks = {}, article }) => {
   );
 };
 
-const DraftView = ({ article, onStatus, working }) => {
+const DraftView = ({ article, onStatus, onRecheck, working }) => {
   if (!article) return null;
   const checks = article.checks || {};
   const gen = article.generation || {};
@@ -356,6 +356,9 @@ const DraftView = ({ article, onStatus, working }) => {
           <div className="flex gap-2 flex-wrap">
             <Btn size="sm" variant="ghost" disabled={working}
               onClick={() => onStatus(article._id, 'in_review')}>Mark In Review</Btn>
+            <Btn size="sm" variant="ghost" disabled={working}
+              title="Re-run all quality checks against the current text"
+              onClick={() => onRecheck(article._id)}>Recheck</Btn>
             <Btn size="sm" variant="blue" disabled={working || !checks.passed}
               title={checks.passed ? '' : 'Blocked: this draft has not passed its checks'}
               onClick={() => onStatus(article._id, 'approved')}>Approve</Btn>
@@ -585,6 +588,30 @@ export default function SeoStudioPage() {
     }
   };
 
+  // Re-run the gates over the current text. This is the only way an article
+  // edited after approval can get checks.passed back — nothing else sets it.
+  // A pass does NOT approve: the backend leaves status alone and a human
+  // still presses Approve, so the button below stays gated on checks.passed.
+  const recheck = async (id) => {
+    setWorking(true);
+    try {
+      const { data } = await seoApi.recheck(id);
+      setSelected(data.article);
+      // The backend says what happened in both cases — a pass explains that
+      // Approve is still required, a failure lists the exact gates. Longer
+      // toast on failure because that list is the actionable part.
+      if (data.passed) toast.success(data.message);
+      else toast.error(data.message, { duration: 10000 });
+      load();
+    } catch (err) {
+      // 422 = a rejected article, which cannot be rechecked back into
+      // contention. 503 = missing key or a Claude refusal.
+      toast.error(err.response?.data?.message || 'Recheck failed', { duration: 7000 });
+    } finally {
+      setWorking(false);
+    }
+  };
+
   return (
     <div>
       <PageHeader
@@ -632,7 +659,7 @@ export default function SeoStudioPage() {
               <XCircle size={13} /> Close
             </Btn>
           </div>
-          <DraftView article={selected} onStatus={changeStatus} working={working} />
+          <DraftView article={selected} onStatus={changeStatus} onRecheck={recheck} working={working} />
         </div>
       )}
 

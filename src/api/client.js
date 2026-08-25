@@ -270,6 +270,10 @@ export const seoApi = {
   getById   : (id)            => api.get(`/seo/articles/${id}`),
   update    : (id, body)      => api.put(`/seo/articles/${id}`, body),
   setStatus : (id, body)      => api.put(`/seo/articles/${id}/status`, body),
+  // Re-runs every quality gate over an article after a human edit. Slow for
+  // the same reason generate is — it makes a Claude fact-check call — so it
+  // needs the long timeout rather than the client default.
+  recheck   : (id)            => api.post(`/seo/articles/${id}/recheck`, {}, { timeout: 300000 }),
   remove    : (id)            => api.delete(`/seo/articles/${id}`),
   facts     : ()              => api.get('/seo/facts'),
 };
