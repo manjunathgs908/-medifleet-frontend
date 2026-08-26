@@ -327,10 +327,20 @@ const ChecksPanel = ({ checks = {}, article }) => {
   );
 };
 
-const DraftView = ({ article, onStatus, onRecheck, working }) => {
+const DraftView = ({ article, onStatus, onRecheck, onRepair, working }) => {
   if (!article) return null;
   const checks = article.checks || {};
   const gen = article.generation || {};
+
+  // What Repair can actually act on: the blocking claims the last recheck
+  // raised, and a meta description outside its length band. Same normaliser
+  // and same constants ChecksPanel uses, so the button and the checks panel
+  // can never disagree about whether there is something to fix.
+  const blockingCount = (checks.unverifiedClaims || [])
+    .map(normaliseClaim)
+    .filter((c) => SEVERITY_META[c.severity]?.blocking !== false).length;
+  const metaLen = checks.metaLength ?? (article.metaDescription || '').length;
+  const repairable = blockingCount > 0 || metaLen < META_MIN || metaLen > META_MAX;
   // The JSON-LD moved from `schema` to `jsonLd` (`schema` is a reserved name
   // on a Mongoose document). The API still mirrors the old key, so this falls
   // back rather than depending on which side deploys first.
@@ -366,6 +376,16 @@ const DraftView = ({ article, onStatus, onRecheck, working }) => {
             <Btn size="sm" variant="ghost" disabled={working}
               title="Re-run all quality checks against the current text"
               onClick={() => onRecheck(article._id)}>Recheck</Btn>
+            {/* Only when there is something for it to do. A passing article
+                has neither blocking claims nor a meta outside its range —
+                both are gate terms — so this never appears on approved work. */}
+            {repairable && (
+              <Btn size="sm" variant="ghost" disabled={working}
+                title="Rewrite the blocking claims and fix the meta description length. You must Recheck afterwards."
+                onClick={() => onRepair(article._id)}>
+                {working ? 'Repairing…' : 'Repair'}
+              </Btn>
+            )}
             <Btn size="sm" variant="blue" disabled={working || !checks.passed}
               title={checks.passed ? '' : 'Blocked: this draft has not passed its checks'}
               onClick={() => onStatus(article._id, 'approved')}>Approve</Btn>
@@ -373,6 +393,12 @@ const DraftView = ({ article, onStatus, onRecheck, working }) => {
               onClick={() => onStatus(article._id, 'rejected')}>Reject</Btn>
           </div>
         </div>
+
+        {repairable && (
+          <div className="text-xs -mt-1" style={{ color: 'var(--text3)' }}>
+            Repair fixes blocking fact-check claims and metadata. You must Recheck after repair.
+          </div>
+        )}
 
         <div className="grid gap-3 md:grid-cols-3">
           {[
@@ -619,6 +645,29 @@ export default function SeoStudioPage() {
     }
   };
 
+  // Rewrites the blocking claims the last recheck raised, plus a meta
+  // description outside its range. It does not re-run the checks: the backend
+  // sets checks.passed false and leaves it there, so Recheck is the next step
+  // and the notice under the buttons says so.
+  const repair = async (id) => {
+    setWorking(true);
+    try {
+      const { data } = await seoApi.repair(id);
+      setSelected(data.article);
+      // The backend reports honestly when a repair changed nothing, and that
+      // is not a success — show it as a warning rather than a tick.
+      if (data.repaired) toast.success(data.message, { duration: 9000 });
+      else toast(data.message, { icon: '⚠️', duration: 9000 });
+      load();
+    } catch (err) {
+      // 422 = nothing to repair, or a rejected article. 503 = missing key or
+      // a Claude refusal.
+      toast.error(err.response?.data?.message || 'Repair failed', { duration: 8000 });
+    } finally {
+      setWorking(false);
+    }
+  };
+
   return (
     <div>
       <PageHeader
@@ -666,7 +715,7 @@ export default function SeoStudioPage() {
               <XCircle size={13} /> Close
             </Btn>
           </div>
-          <DraftView article={selected} onStatus={changeStatus} onRecheck={recheck} working={working} />
+          <DraftView article={selected} onStatus={changeStatus} onRecheck={recheck} onRepair={repair} working={working} />
         </div>
       )}
 
