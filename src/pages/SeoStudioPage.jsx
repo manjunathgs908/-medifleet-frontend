@@ -1,15 +1,22 @@
 // src/pages/SeoStudioPage.jsx
 //
 // SEO Studio — the review surface for the backend's SEO draft pipeline
-// (medifleet-backend routes/seo.js). Two things this screen deliberately
-// does NOT do:
+// (medifleet-backend routes/seo.js).
 //
-//   1. It never publishes to savelife.health. `published` on this ladder
-//      records a human sign-off; the live site still renders from
-//      lib/seo*Pages.js in savelife-web. Wiring the two together is a later
-//      phase, so nothing here has an "publish to site" action.
-//   2. It never sees the ANTHROPIC_API_KEY. That lives only in the backend's
-//      Render environment. The browser sends a keyword and receives a draft.
+// APPROVE IS THE PUBLISH BUTTON. There is no separate publish step and none
+// is needed: SeoArticle.PUBLIC_STATUSES is ['approved', 'published'], so an
+// article that has passed its checks becomes publicly readable the moment it
+// is approved. savelife-web reads that API and renders it at /guides/[slug],
+// and it appears there within the site's revalidation window with no deploy.
+// `published` further along the ladder stamps publishedAt and records who
+// signed it off — it does not change what the public can already see.
+//
+// Approving is therefore a decision to put a page on a live medical site, not
+// a filing action. The checks below are what stands between a draft and that.
+//
+// This screen never sees the ANTHROPIC_API_KEY. That lives only in the
+// backend's Render environment. The browser sends a keyword and receives a
+// draft.
 //
 // The quality checks are shown, not hidden. A draft that failed its checks is
 // still saved and still visible, because a reviewer needs to see WHY it failed
@@ -616,7 +623,7 @@ export default function SeoStudioPage() {
     <div>
       <PageHeader
         title="SEO Studio"
-        subtitle="Generate and review SEO drafts. Nothing here publishes to savelife.health."
+        subtitle="Generate and review SEO drafts. Approving a draft that has passed its checks makes it live on savelife.health at /guides/[slug]."
         action={
           <Btn variant="ghost" size="sm" onClick={() => load()} disabled={loading}>
             <RefreshCw size={13} /> Refresh
