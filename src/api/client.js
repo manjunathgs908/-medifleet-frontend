@@ -278,6 +278,9 @@ export const seoApi = {
   // description outside its length band. One Claude call, so the same long
   // timeout as recheck and generate.
   repair    : (id)            => api.post(`/seo/articles/${id}/repair`, {}, { timeout: 300000 }),
+  // Repair -> recheck, up to twice. Four Claude calls at worst, so it gets
+  // the longest timeout of the three.
+  autoRepair: (id)            => api.post(`/seo/articles/${id}/auto-repair`, {}, { timeout: 600000 }),
   remove    : (id)            => api.delete(`/seo/articles/${id}`),
   facts     : ()              => api.get('/seo/facts'),
 };

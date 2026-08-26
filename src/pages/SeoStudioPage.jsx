@@ -82,6 +82,9 @@ const GeneratingPanel = ({ seconds }) => {
 // fail, which is worse than showing nothing.
 const TITLE_MIN = 55, TITLE_MAX = 60;
 const META_MIN = 150, META_MAX = 160;
+// Mirrors SEO_MAX_AUTO_REPAIR_ATTEMPTS in the backend. Display only — the
+// backend enforces the cap.
+const MAX_AUTO_ATTEMPTS = 2;
 const SIMILARITY_BLOCK = 0.55;
 const MIN_WORDS = 700;
 
@@ -327,7 +330,7 @@ const ChecksPanel = ({ checks = {}, article }) => {
   );
 };
 
-const DraftView = ({ article, onStatus, onRecheck, onRepair, working }) => {
+const DraftView = ({ article, onStatus, onRecheck, onRepair, onAutoRepair, autoState, working }) => {
   if (!article) return null;
   const checks = article.checks || {};
   const gen = article.generation || {};
@@ -341,6 +344,7 @@ const DraftView = ({ article, onStatus, onRecheck, onRepair, working }) => {
     .filter((c) => SEVERITY_META[c.severity]?.blocking !== false).length;
   const metaLen = checks.metaLength ?? (article.metaDescription || '').length;
   const repairable = blockingCount > 0 || metaLen < META_MIN || metaLen > META_MAX;
+  const auto = gen.autoRepair || {};
   // The JSON-LD moved from `schema` to `jsonLd` (`schema` is a reserved name
   // on a Mongoose document). The API still mirrors the old key, so this falls
   // back rather than depending on which side deploys first.
@@ -386,6 +390,13 @@ const DraftView = ({ article, onStatus, onRecheck, onRepair, working }) => {
                 {working ? 'Repairing…' : 'Repair'}
               </Btn>
             )}
+            {repairable && (
+              <Btn size="sm" variant="ghost" disabled={working}
+                title="Repair and Recheck automatically, up to twice. Never approves — a clean result still needs your Approve."
+                onClick={() => onAutoRepair(article._id)}>
+                {autoState || 'Auto-repair'}
+              </Btn>
+            )}
             <Btn size="sm" variant="blue" disabled={working || !checks.passed}
               title={checks.passed ? '' : 'Blocked: this draft has not passed its checks'}
               onClick={() => onStatus(article._id, 'approved')}>Approve</Btn>
@@ -397,6 +408,25 @@ const DraftView = ({ article, onStatus, onRecheck, onRepair, working }) => {
         {repairable && (
           <div className="text-xs -mt-1" style={{ color: 'var(--text3)' }}>
             Repair fixes blocking fact-check claims and metadata. You must Recheck after repair.
+            Auto-repair does both, up to twice, and still never approves.
+          </div>
+        )}
+
+        {/* What the last automatic run did. Kept visible after it finishes,
+            because "it stopped and why" is the part a reviewer acts on. */}
+        {auto?.attempts > 0 && (
+          <div className="rounded-lg p-3 text-xs" style={{ background: 'var(--surface2)' }}>
+            <div className="font-medium" style={{ color: 'var(--text1)' }}>
+              {auto.stoppedReason
+                ? `Repair stopped after ${auto.attempts}/${MAX_AUTO_ATTEMPTS} — manual review required`
+                : `Auto-repair passed after ${auto.attempts}/${MAX_AUTO_ATTEMPTS} — your Approve is still required`}
+            </div>
+            {auto.stoppedReason && (
+              <div className="mt-1" style={{ color: 'var(--text2)' }}>{auto.stoppedReason}</div>
+            )}
+            {(auto.timeline || []).map((t, i) => (
+              <div key={i} className="mt-0.5" style={{ color: 'var(--text3)' }}>• {t}</div>
+            ))}
           </div>
         )}
 
@@ -545,6 +575,10 @@ export default function SeoStudioPage() {
   const [generating, setGenerating] = useState(false);
   const [elapsed,    setElapsed]    = useState(0);
   const [working,    setWorking]    = useState(false);
+  // Label shown on the Auto-repair button while a run is in flight. The
+  // request is one round trip, so this cannot follow the backend's real
+  // progress — it says what stage is expected, not what has happened.
+  const [autoState,  setAutoState]  = useState(null);
 
   const [articles, setArticles] = useState([]);
   const [counts,   setCounts]   = useState({});
@@ -668,6 +702,27 @@ export default function SeoStudioPage() {
     }
   };
 
+  // Repair -> recheck, up to twice, entirely on the backend. It cannot
+  // approve: a clean result comes back with the article still in its existing
+  // status and Approve still gated on checks.passed.
+  const autoRepair = async (id) => {
+    setWorking(true);
+    setAutoState('Auto-repairing…');
+    try {
+      const { data } = await seoApi.autoRepair(id);
+      setSelected(data.article);
+      if (data.passed) toast.success(data.message, { duration: 10000 });
+      else toast(data.message, { icon: '⚠️', duration: 12000 });
+      load();
+    } catch (err) {
+      // 409 = another loop already holds this article.
+      toast.error(err.response?.data?.message || 'Auto-repair failed', { duration: 9000 });
+    } finally {
+      setWorking(false);
+      setAutoState(null);
+    }
+  };
+
   return (
     <div>
       <PageHeader
@@ -715,7 +770,15 @@ export default function SeoStudioPage() {
               <XCircle size={13} /> Close
             </Btn>
           </div>
-          <DraftView article={selected} onStatus={changeStatus} onRecheck={recheck} onRepair={repair} working={working} />
+          <DraftView
+            article={selected}
+            onStatus={changeStatus}
+            onRecheck={recheck}
+            onRepair={repair}
+            onAutoRepair={autoRepair}
+            autoState={autoState}
+            working={working}
+          />
         </div>
       )}
 
