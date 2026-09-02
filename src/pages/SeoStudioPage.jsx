@@ -95,6 +95,36 @@ const AUTO_POLL_MS = 2500;
 const SIMILARITY_BLOCK = 0.55;
 const MIN_WORDS = 700;
 
+// The statuses whose text may still be rewritten. approved and published are
+// live on savelife.health; an automatic rewrite of a page the public is
+// already reading is not something a button should offer.
+export const REPAIRABLE_STATUSES = ['draft', 'in_review'];
+
+/**
+ * Should Auto-repair be offered for this article?
+ *
+ * Deliberately NOT a guess at what the backend can fix. It used to be
+ * `blockingCount > 0 || meta out of band` — a copy of the backend's
+ * classifyFailures that then drifted three times. It never learned about the
+ * title gate, then about pricing, then about duplicate slugs, so an article
+ * failing on any of those showed no Auto-repair button at all: the one action
+ * that would have fixed it was hidden precisely when it was needed.
+ *
+ * The backend owns that decision and reports honestly when it cannot help.
+ * The only questions here are the ones the UI genuinely owns: is this article
+ * still editable, is it actually failing, and is a cycle already running.
+ *
+ * @param {object} article
+ * @param {{running?: boolean}} opts  running = an auto-repair cycle in flight
+ */
+export const canAutoRepair = (article, { running = false } = {}) => {
+  if (!article || running) return false;
+  if (!REPAIRABLE_STATUSES.includes(article.status)) return false;
+  // Strict: an article whose checks have never run (undefined) is failing as
+  // far as approval is concerned, so Auto-repair is still the right offer.
+  return article.checks?.passed !== true;
+};
+
 // Claims arrive as { claim, severity, action }. Drafts generated before
 // severities existed stored plain strings; the backend normalises those on
 // read, but a cached row in this tab might still be the old shape.
@@ -671,8 +701,15 @@ const DraftView = ({ article, onStatus, onRecheck, onRepair, onAutoRepair, onSav
                 {working ? 'Repairing…' : 'Repair'}
               </Btn>
             )}
-            {repairable && (
+            {/* Offered whenever a still-editable article is failing, whatever
+                it is failing on. Rendered-but-disabled during an operation
+                rather than hidden, so the run's progress label has somewhere
+                to live and the button does not vanish under the cursor; the
+                duplicate-click guard is the disable here, a ref in the page,
+                and a 409 from the backend's atomic lock. */}
+            {canAutoRepair(article) && (
               <Btn size="sm" variant="ghost" disabled={working}
+                data-testid="auto-repair"
                 title="Repair and Recheck automatically, up to twice. Never approves — a clean result still needs your Approve."
                 onClick={() => onAutoRepair(article._id)}>
                 {autoState || 'Auto-repair'}
@@ -686,10 +723,13 @@ const DraftView = ({ article, onStatus, onRecheck, onRepair, onAutoRepair, onSav
           </div>
         </div>
 
-        {repairable && (
+        {/* Keyed to Auto-repair, not to `repairable` — the note explains
+            Auto-repair, so it has to appear wherever that button does. */}
+        {canAutoRepair(article) && (
           <div className="text-xs -mt-1" style={{ color: 'var(--text3)' }}>
-            Repair fixes blocking fact-check claims and metadata. You must Recheck after repair.
-            Auto-repair does both, up to twice, and still never approves.
+            Auto-repair rewrites what a rewrite can fix — blocking claims, title and meta
+            length, published fares — then re-runs the checks, up to twice. It never approves.
+            {repairable && ' Repair does the rewrite only; you must Recheck afterwards.'}
           </div>
         )}
 
