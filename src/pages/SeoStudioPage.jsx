@@ -22,7 +22,7 @@
 // still saved and still visible, because a reviewer needs to see WHY it failed
 // rather than have it silently disappear — and the backend refuses to approve
 // it until the reason is gone.
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { seoApi } from '../api/client';
 import { PageHeader, Btn, Input, Select, Spinner, Empty, Badge, Tabs, SectionLabel } from '../components/ui';
 import {
@@ -85,6 +85,13 @@ const META_MIN = 150, META_MAX = 160;
 // Mirrors SEO_MAX_AUTO_REPAIR_ATTEMPTS in the backend. Display only — the
 // backend enforces the cap.
 const MAX_AUTO_ATTEMPTS = 2;
+// How often the article is re-read while an automatic cycle is running. A
+// cycle is ONE long request making up to four Claude calls, so the response
+// tells us nothing until it is over; the loop writes its phase to the article
+// as it advances and this is how that reaches the screen. Owner-only screen,
+// one article at a time, so the request cost is irrelevant next to being able
+// to see what is happening.
+const AUTO_POLL_MS = 2500;
 const SIMILARITY_BLOCK = 0.55;
 const MIN_WORDS = 700;
 
@@ -326,6 +333,139 @@ const ChecksPanel = ({ checks = {}, article }) => {
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+// What the automatic cycle is doing, or what it decided.
+//
+// The states are deliberately distinguishable at a glance, because they need
+// different things from the reviewer: a run in flight needs nothing, a pass
+// needs an Approve, and a stop needs somebody to read the draft. "Manual
+// review required" is never inferred from a phase alone -- it comes from the
+// backend having stopped and said why.
+const AUTO_STEPS = [
+  { key: 'repairing',  label: 'Repairing' },
+  { key: 'rechecking', label: 'Rechecking' },
+];
+
+const AutoProgress = ({ run }) => {
+  if (!run) return null;
+  const { running, phase, attempts = 0, maxAttempts, timeline = [], stoppedReason, auto } = run;
+  const cap = maxAttempts || MAX_AUTO_ATTEMPTS;
+  const passed = !running && phase === 'passed';
+  const stopped = !running && !passed;
+  const activeIdx = AUTO_STEPS.findIndex((s) => s.key === phase);
+
+  return (
+    <div className="card mb-3" style={{ borderColor: passed ? 'var(--accent)' : stopped ? 'var(--amber)' : 'var(--blue)' }}>
+      <div className="flex items-center gap-2 flex-wrap mb-2">
+        {running
+          ? (
+            // Same markup as GeneratingPanel's spinner. The shared Spinner
+            // component centres itself inside p-8, which is right for a page
+            // and wrong for a line of text.
+            <div
+              className="rounded-full border-2 border-t-transparent animate-spin"
+              style={{ width: 14, height: 14, borderColor: 'var(--blue)', borderTopColor: 'transparent' }}
+            />
+          )
+          : passed ? <CheckCircle2 size={15} style={{ color: 'var(--accent)' }} />
+                   : <AlertTriangle size={15} style={{ color: 'var(--amber)' }} />}
+        <span className="text-sm font-medium">
+          {running ? 'Automatic repair running' : passed ? 'Automatic repair passed' : 'Manual review required'}
+        </span>
+        {/* Zero attempts on a finished run is not a missing number: it means
+            the loop looked at the failures and refused to spend a repair on
+            them — a price, a duplicate slug, a cannibalisation score. Saying
+            "attempt 0/2" would read like a bug. */}
+        <Badge color={running ? 'blue' : passed ? 'green' : 'amber'}>
+          {!running && attempts === 0
+            ? 'no repair attempted'
+            : `attempt ${Math.max(attempts, running ? 1 : attempts)}/${cap}`}
+        </Badge>
+        {auto && <Badge color="gray">started automatically</Badge>}
+      </div>
+
+      {/* Repairing -> Rechecking, with the step in flight lit. Once the run is
+          over both are spent and the outcome line below carries the meaning. */}
+      <div className="flex items-center gap-2 flex-wrap text-xs mb-2">
+        {AUTO_STEPS.map((s, i) => (
+          <React.Fragment key={s.key}>
+            {i > 0 && <span style={{ color: 'var(--text3)' }}>&rarr;</span>}
+            <span
+              className="px-2 py-0.5 rounded-full"
+              style={{
+                background: running && i === activeIdx ? 'var(--blue)' : 'var(--surface2)',
+                color: running && i === activeIdx ? 'var(--ink)' : 'var(--text3)',
+              }}
+            >
+              {s.label}{running && i === activeIdx ? '\u2026' : ''}
+            </span>
+          </React.Fragment>
+        ))}
+        <span style={{ color: 'var(--text3)' }}>&rarr;</span>
+        <span
+          className="px-2 py-0.5 rounded-full"
+          style={{
+            background: passed ? 'var(--accent)' : stopped ? 'var(--amber)' : 'var(--surface2)',
+            color: passed || stopped ? 'var(--ink)' : 'var(--text3)',
+          }}
+        >
+          {passed ? 'Passed' : stopped ? 'Manual review' : 'Passed'}
+        </span>
+        {running && attempts > 1 && (
+          <span style={{ color: 'var(--text3)' }}>&middot; retrying after a failed recheck</span>
+        )}
+      </div>
+
+      {passed && (
+        <div className="text-xs" style={{ color: 'var(--text2)' }}>
+          The checks are clean. Nothing has been approved or published &mdash; press Approve when you are satisfied.
+        </div>
+      )}
+      {stopped && stoppedReason && (
+        <div className="text-xs" style={{ color: 'var(--text2)' }}>{stoppedReason}</div>
+      )}
+
+      {timeline.length > 0 && (
+        <div className="mt-2 rounded-lg p-2.5" style={{ background: 'var(--surface2)' }}>
+          {timeline.map((t, i) => (
+            <div key={i} className="text-xs" style={{ color: 'var(--text3)' }}>&bull; {t}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// An Anthropic-side failure, kept on screen rather than left in a toast that
+// has already gone. Every one of these is acted on somewhere other than this
+// page -- a billing console, an env var, or simply waiting -- so the operator
+// needs to be able to re-read it.
+const API_ERROR_TITLE = {
+  billing: 'Anthropic credits exhausted',
+  auth: 'Anthropic API key rejected',
+  rate_limit: 'Anthropic rate limit reached',
+  overloaded: 'Anthropic is overloaded',
+  upstream: 'Anthropic API failure',
+};
+
+const ApiErrorBanner = ({ error, onDismiss }) => {
+  if (!error) return null;
+  return (
+    <div className="card mb-3" style={{ borderColor: 'var(--red)' }}>
+      <div className="flex items-start gap-2">
+        <AlertTriangle size={15} style={{ color: 'var(--red)', flexShrink: 0, marginTop: 2 }} />
+        <div className="min-w-0">
+          <div className="text-sm font-medium">{API_ERROR_TITLE[error.code] || 'Anthropic API failure'}</div>
+          <div className="text-xs mt-1" style={{ color: 'var(--text2)' }}>{error.message}</div>
+          <div className="text-xs mt-1" style={{ color: 'var(--text3)' }}>
+            The article was not changed by the failed call.
+          </div>
+        </div>
+        <Btn size="sm" variant="ghost" className="ml-auto" onClick={onDismiss}>Dismiss</Btn>
+      </div>
     </div>
   );
 };
@@ -579,6 +719,20 @@ export default function SeoStudioPage() {
   // request is one round trip, so this cannot follow the backend's real
   // progress — it says what stage is expected, not what has happened.
   const [autoState,  setAutoState]  = useState(null);
+  // The live view of the running (or last) automatic cycle, fed by the poll
+  // below. Distinct from the article's own generation.autoRepair, which is
+  // only authoritative once the run is over.
+  const [autoRun,    setAutoRun]    = useState(null);
+  const [apiError,   setApiError]   = useState(null);
+  // Whether a failed generation goes straight into the loop. On by default:
+  // that is the whole point of the automation. Off is for when somebody wants
+  // to read the draft before spending more on it.
+  const [autoAfterGenerate, setAutoAfterGenerate] = useState(true);
+  // One cycle at a time. The backend refuses a second loop on the same
+  // article with a 409, but stopping it here avoids the wasted round trip and
+  // the flicker of two progress states fighting.
+  const autoCycle = useRef(false);
+  const pollRef = useRef(null);
 
   const [articles, setArticles] = useState([]);
   const [counts,   setCounts]   = useState({});
@@ -599,6 +753,24 @@ export default function SeoStudioPage() {
   };
 
   useEffect(() => { setLoading(true); load(filter); /* eslint-disable-next-line */ }, [filter]);
+
+  // A cycle left running when this page unmounts would keep polling forever.
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
+  // A failure the backend identified as Anthropic's owns a `code` (see
+  // claudeFailure in seoController.js). Those get the API's own sentence, a
+  // long toast and a banner that stays put, because the fix is somewhere else
+  // entirely -- a billing page, an env var, or just waiting -- and a
+  // four-second toast is not long enough to read a URL out of.
+  const showClaudeError = (err, fallback) => {
+    const d = err.response?.data || {};
+    if (d.code) {
+      setApiError({ code: d.code, message: d.message });
+      toast.error(d.message, { duration: 14000 });
+      return;
+    }
+    toast.error(d.message || fallback, { duration: 8000 });
+  };
 
   // Elapsed counter for the generation panel.
   useEffect(() => {
@@ -621,6 +793,12 @@ export default function SeoStudioPage() {
     if (!keyword.trim()) return toast.error('A keyword is required.');
     setGenerating(true);
     setSelected(null);
+    setAutoRun(null);
+    setApiError(null);
+    // Held outside the try so the automatic cycle can start AFTER the
+    // generating panel has gone and the draft is on screen -- the operator
+    // should be able to read what is being repaired while it is repaired.
+    let fresh = null;
     try {
       const { data } = await seoApi.generate({
         keyword: keyword.trim(),
@@ -628,15 +806,24 @@ export default function SeoStudioPage() {
         location: location.trim() || undefined,
         notes: notes.trim() || undefined,
       });
-      setSelected(data.article);
+      fresh = data.article;
+      setSelected(fresh);
       toast.success('Draft generated');
       load();
     } catch (err) {
-      // 503 = missing key or a Claude refusal; the backend sends a readable
-      // message for both rather than a stack trace.
-      toast.error(err.response?.data?.message || 'Generation failed', { duration: 6000 });
+      // 503 = missing key or a Claude refusal, 402 = an exhausted balance.
+      // The backend sends a readable message for all of them.
+      showClaudeError(err, 'Generation failed');
     } finally {
       setGenerating(false);
+    }
+
+    // The automation, and the only place it is triggered without a click. A
+    // draft that PASSED is left exactly as it is: it is waiting for a person,
+    // and there is nothing for a repair to do. A draft that failed goes into
+    // the existing loop, which still cannot approve it.
+    if (fresh && autoAfterGenerate && !fresh.checks?.passed) {
+      await runAutoRepair(fresh._id, { auto: true });
     }
   };
 
@@ -672,8 +859,8 @@ export default function SeoStudioPage() {
       load();
     } catch (err) {
       // 422 = a rejected article, which cannot be rechecked back into
-      // contention. 503 = missing key or a Claude refusal.
-      toast.error(err.response?.data?.message || 'Recheck failed', { duration: 7000 });
+      // contention. 503 = missing key or a Claude refusal, 402 = no credits.
+      showClaudeError(err, 'Recheck failed');
     } finally {
       setWorking(false);
     }
@@ -695,8 +882,8 @@ export default function SeoStudioPage() {
       load();
     } catch (err) {
       // 422 = nothing to repair, or a rejected article. 503 = missing key or
-      // a Claude refusal.
-      toast.error(err.response?.data?.message || 'Repair failed', { duration: 8000 });
+      // a Claude refusal, 402 = an exhausted balance.
+      showClaudeError(err, 'Repair failed');
     } finally {
       setWorking(false);
     }
@@ -705,23 +892,79 @@ export default function SeoStudioPage() {
   // Repair -> recheck, up to twice, entirely on the backend. It cannot
   // approve: a clean result comes back with the article still in its existing
   // status and Approve still gated on checks.passed.
-  const autoRepair = async (id) => {
+  //
+  // One request drives the whole loop, so nothing comes back until it is
+  // over. The progress on screen comes from polling the article, which the
+  // loop stamps with its phase as it advances. A poll that fails is ignored:
+  // a missed progress frame is not a failed run, and the response is still
+  // the authority on what happened.
+  const runAutoRepair = async (id, { auto = false } = {}) => {
+    if (autoCycle.current) {
+      toast('An automatic cycle is already running on this article.', { icon: '\u23f3' });
+      return;
+    }
+    autoCycle.current = true;
     setWorking(true);
-    setAutoState('Auto-repairing…');
+    setApiError(null);
+    setAutoState('Auto-repairing\u2026');
+    setAutoRun({ running: true, phase: 'repairing', attempts: 1, maxAttempts: MAX_AUTO_ATTEMPTS, timeline: [], auto });
+
+    pollRef.current = setInterval(async () => {
+      try {
+        const { data } = await seoApi.getById(id);
+        // The checks panel is refreshed too, so the blocking claims still
+        // outstanding update after each recheck rather than only at the end.
+        setSelected(data.article);
+        const a = data.article?.generation?.autoRepair;
+        if (a) {
+          setAutoRun((p) => (p ? {
+            ...p,
+            phase: a.phase || p.phase,
+            attempts: a.attempts || p.attempts,
+            maxAttempts: a.maxAttempts || p.maxAttempts,
+            timeline: a.timeline?.length ? a.timeline : p.timeline,
+          } : p));
+        }
+      } catch { /* a poll that fails is not a run that failed */ }
+    }, AUTO_POLL_MS);
+
     try {
       const { data } = await seoApi.autoRepair(id);
       setSelected(data.article);
+      setAutoRun({
+        running: false,
+        phase: data.passed ? 'passed' : 'stopped',
+        attempts: data.attempts,
+        maxAttempts: data.article?.generation?.autoRepair?.maxAttempts || MAX_AUTO_ATTEMPTS,
+        timeline: data.timeline || [],
+        stoppedReason: data.stoppedReason,
+        auto,
+      });
       if (data.passed) toast.success(data.message, { duration: 10000 });
-      else toast(data.message, { icon: '⚠️', duration: 12000 });
+      else toast(data.message, { icon: '\u26a0\ufe0f', duration: 12000 });
       load();
     } catch (err) {
-      // 409 = another loop already holds this article.
-      toast.error(err.response?.data?.message || 'Auto-repair failed', { duration: 9000 });
+      // 409 = another loop already holds this article. 402/401/429 = the API
+      // itself gave out, which is not a fact about the draft.
+      setAutoRun((p) => ({
+        ...(p || { attempts: 0, maxAttempts: MAX_AUTO_ATTEMPTS, timeline: [] }),
+        running: false,
+        phase: 'stopped',
+        stoppedReason: err.response?.data?.message || 'The automatic cycle failed.',
+      }));
+      showClaudeError(err, 'Auto-repair failed');
     } finally {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+      autoCycle.current = false;
       setWorking(false);
       setAutoState(null);
     }
   };
+
+  // The manual button. Same cycle, same guard -- it is a fallback for a run
+  // the operator wants to start again, not a second implementation.
+  const autoRepair = (id) => runAutoRepair(id, { auto: false });
 
   return (
     <div>
@@ -751,11 +994,25 @@ export default function SeoStudioPage() {
             onChange={(e) => setNotes(e.target.value)} disabled={generating} />
         </div>
         <div className="flex items-center gap-3 mt-4 flex-wrap">
-          <Btn onClick={generate} disabled={generating || !keyword.trim()}>
-            <Sparkles size={14} /> {generating ? 'Generating…' : 'Generate Draft'}
+          {/* `working` covers an automatic cycle in flight as well as a manual
+              recheck or repair. Generating during one would replace the draft on
+              screen while the loop is still writing to it. */}
+          <Btn onClick={generate} disabled={generating || working || !keyword.trim()}>
+            <Sparkles size={14} />
+            {generating ? 'Generating…' : working ? 'Busy…' : 'Generate Draft'}
           </Btn>
+          <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--text2)' }}>
+            <input
+              type="checkbox"
+              checked={autoAfterGenerate}
+              disabled={generating || working}
+              onChange={(e) => setAutoAfterGenerate(e.target.checked)}
+            />
+            Repair &amp; recheck automatically if the checks fail
+          </label>
           <span className="text-xs" style={{ color: 'var(--text3)' }}>
             Saves as a draft only. Rate limited to 5 generations a minute.
+            Automatic repair never approves or publishes.
           </span>
         </div>
       </div>
@@ -770,6 +1027,8 @@ export default function SeoStudioPage() {
               <XCircle size={13} /> Close
             </Btn>
           </div>
+          <ApiErrorBanner error={apiError} onDismiss={() => setApiError(null)} />
+          <AutoProgress run={autoRun} />
           <DraftView
             article={selected}
             onStatus={changeStatus}
