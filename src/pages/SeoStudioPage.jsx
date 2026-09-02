@@ -337,6 +337,137 @@ const ChecksPanel = ({ checks = {}, article }) => {
   );
 };
 
+// A plain editor for the three fields the gates actually measure.
+//
+// This is the FALLBACK, not the main road. Auto-repair is meant to handle the
+// ordinary failures; this exists because until now there was no way at all to
+// change a word of an article from the Studio, so anything auto-repair could
+// not fix was simply stuck. A reviewer who can see "title 51 chars, want
+// 55-60" should be able to fix 51 characters without a database client.
+//
+// It writes through the existing PUT /api/seo/articles/:id. It cannot approve
+// and cannot publish: those live on the status route, which this never calls.
+const ManualEditor = ({ article, onSave, working }) => {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState('');
+  const [meta, setMeta] = useState('');
+  const [body, setBody] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState(null);
+
+  // Re-seed from the article whenever it changes underneath — a repair, a
+  // recheck, or a different draft being opened. Skipped while the editor is
+  // open, because overwriting someone's half-finished edit with a poll result
+  // is worse than showing them slightly stale text.
+  useEffect(() => {
+    if (open) return;
+    setTitle(article.title || '');
+    setMeta(article.metaDescription || '');
+    setBody(article.content || '');
+  }, [open, article._id, article.title, article.metaDescription, article.content]);
+
+  const dirty = title !== (article.title || '')
+    || meta !== (article.metaDescription || '')
+    || body !== (article.content || '');
+
+  const cancel = () => {
+    setTitle(article.title || '');
+    setMeta(article.metaDescription || '');
+    setBody(article.content || '');
+    setOpen(false);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await onSave(article._id, { title, metaDescription: meta, content: body });
+      setSavedAt(new Date());
+      setOpen(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // The band a field is measured against, shown live so a reviewer can land
+  // inside it while typing instead of saving and finding out afterwards.
+  const Counter = ({ n, lo, hi }) => {
+    const ok = n >= lo && n <= hi;
+    return (
+      <span className="text-xs ml-2" style={{ color: ok ? 'var(--accent)' : 'var(--amber)' }}>
+        {n} / {lo}–{hi}{ok ? ' ✓' : ''}
+      </span>
+    );
+  };
+
+  if (!open) {
+    return (
+      <div className="card mb-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <Btn size="sm" variant="ghost" disabled={working} onClick={() => setOpen(true)}>
+            Edit title, meta &amp; body
+          </Btn>
+          <span className="text-xs" style={{ color: 'var(--text3)' }}>
+            Manual fallback for anything auto-repair cannot fix. Editing never approves or publishes.
+          </span>
+          {savedAt && (
+            <span className="text-xs" style={{ color: 'var(--amber)' }}>
+              Saved — the checks below still describe the previous text. Run Recheck.
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card mb-3" style={{ borderColor: 'var(--blue)' }}>
+      <SectionLabel>Manual edit</SectionLabel>
+
+      <label className="block text-xs mt-2 mb-1" style={{ color: 'var(--text2)' }}>
+        Title <Counter n={title.length} lo={TITLE_MIN} hi={TITLE_MAX} />
+      </label>
+      <input
+        className="w-full rounded-lg px-3 py-2 text-sm"
+        style={{ background: 'var(--surface2)', color: 'var(--text)', border: '1px solid var(--border2)' }}
+        value={title} onChange={(e) => setTitle(e.target.value)} disabled={saving}
+      />
+
+      <label className="block text-xs mt-3 mb-1" style={{ color: 'var(--text2)' }}>
+        Meta description <Counter n={meta.length} lo={META_MIN} hi={META_MAX} />
+      </label>
+      <textarea
+        rows={3}
+        className="w-full rounded-lg px-3 py-2 text-sm"
+        style={{ background: 'var(--surface2)', color: 'var(--text)', border: '1px solid var(--border2)' }}
+        value={meta} onChange={(e) => setMeta(e.target.value)} disabled={saving}
+      />
+
+      <label className="block text-xs mt-3 mb-1" style={{ color: 'var(--text2)' }}>
+        Article body (Markdown)
+        <span className="text-xs ml-2" style={{ color: 'var(--text3)' }}>
+          {body.trim().split(/\s+/).filter(Boolean).length} words
+        </span>
+      </label>
+      <textarea
+        rows={18}
+        className="w-full rounded-lg px-3 py-2 text-sm font-mono"
+        style={{ background: 'var(--surface2)', color: 'var(--text)', border: '1px solid var(--border2)' }}
+        value={body} onChange={(e) => setBody(e.target.value)} disabled={saving}
+      />
+
+      <div className="flex items-center gap-2 mt-3 flex-wrap">
+        <Btn size="sm" variant="blue" disabled={saving || !dirty} onClick={save}>
+          {saving ? 'Saving…' : 'Save Changes'}
+        </Btn>
+        <Btn size="sm" variant="ghost" disabled={saving} onClick={cancel}>Cancel</Btn>
+        <span className="text-xs" style={{ color: 'var(--text3)' }}>
+          Saving does not approve or publish. The quality checks are not re-run by saving — press Recheck afterwards.
+        </span>
+      </div>
+    </div>
+  );
+};
+
 // What the automatic cycle is doing, or what it decided.
 //
 // The states are deliberately distinguishable at a glance, because they need
@@ -351,11 +482,16 @@ const AUTO_STEPS = [
 
 const AutoProgress = ({ run }) => {
   if (!run) return null;
-  const { running, phase, attempts = 0, maxAttempts, timeline = [], stoppedReason, auto } = run;
+  const { running, phase, attempts = 0, maxAttempts, timeline = [], stoppedReason, auto, targets = [] } = run;
   const cap = maxAttempts || MAX_AUTO_ATTEMPTS;
   const passed = !running && phase === 'passed';
   const stopped = !running && !passed;
   const activeIdx = AUTO_STEPS.findIndex((s) => s.key === phase);
+  // The gates this attempt is repairing, in the backend's own wording. One
+  // call fixes claims, title and meta together, so they are listed rather than
+  // shown as separate steps — a "Repairing title" stage on its own would
+  // describe a call that never happens.
+  const repairing = phase === 'repairing' && targets.length ? targets.join(', ') : null;
 
   return (
     <div className="card mb-3" style={{ borderColor: passed ? 'var(--accent)' : stopped ? 'var(--amber)' : 'var(--blue)' }}>
@@ -373,8 +509,13 @@ const AutoProgress = ({ run }) => {
           : passed ? <CheckCircle2 size={15} style={{ color: 'var(--accent)' }} />
                    : <AlertTriangle size={15} style={{ color: 'var(--amber)' }} />}
         <span className="text-sm font-medium">
-          {running ? 'Automatic repair running' : passed ? 'Automatic repair passed' : 'Manual review required'}
+          {running
+            ? (phase === 'detecting' ? 'Detecting failures' : phase === 'rechecking' ? 'Rechecking' : 'Repairing')
+            : passed ? 'Automatic repair passed' : 'Manual review required'}
         </span>
+        {repairing && (
+          <span className="text-xs" style={{ color: 'var(--text2)' }}>{repairing}</span>
+        )}
         {/* Zero attempts on a finished run is not a missing number: it means
             the loop looked at the failures and refused to spend a repair on
             them — a price, a duplicate slug, a cannibalisation score. Saying
@@ -470,7 +611,7 @@ const ApiErrorBanner = ({ error, onDismiss }) => {
   );
 };
 
-const DraftView = ({ article, onStatus, onRecheck, onRepair, onAutoRepair, autoState, working }) => {
+const DraftView = ({ article, onStatus, onRecheck, onRepair, onAutoRepair, onSave, autoState, working }) => {
   if (!article) return null;
   const checks = article.checks || {};
   const gen = article.generation || {};
@@ -586,6 +727,8 @@ const DraftView = ({ article, onStatus, onRecheck, onRepair, onAutoRepair, autoS
           ))}
         </div>
       </div>
+
+      <ManualEditor article={article} onSave={onSave} working={working} />
 
       <ChecksPanel checks={checks} article={article} />
 
@@ -842,6 +985,28 @@ export default function SeoStudioPage() {
     }
   };
 
+  // The manual fallback editor's save. Writes through the existing update
+  // route, which is the same one that has always accepted an edited article;
+  // it never touches status, so this cannot approve or publish.
+  //
+  // Saving does NOT re-run the gates — nothing but Recheck does — so the
+  // checks on screen afterwards belong to the previous text. The editor says
+  // so rather than letting a stale green tick stand.
+  const saveEdits = async (id, patch) => {
+    setWorking(true);
+    try {
+      const { data } = await seoApi.update(id, patch);
+      setSelected(data.article);
+      toast.success('Saved. Run Recheck to re-run the quality gates over the new text.', { duration: 8000 });
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not save changes', { duration: 8000 });
+      throw err;
+    } finally {
+      setWorking(false);
+    }
+  };
+
   // Re-run the gates over the current text. This is the only way an article
   // edited after approval can get checks.passed back — nothing else sets it.
   // A pass does NOT approve: the backend leaves status alone and a human
@@ -922,6 +1087,7 @@ export default function SeoStudioPage() {
             phase: a.phase || p.phase,
             attempts: a.attempts || p.attempts,
             maxAttempts: a.maxAttempts || p.maxAttempts,
+            targets: a.targets || p.targets || [],
             timeline: a.timeline?.length ? a.timeline : p.timeline,
           } : p));
         }
@@ -936,6 +1102,7 @@ export default function SeoStudioPage() {
         phase: data.passed ? 'passed' : 'stopped',
         attempts: data.attempts,
         maxAttempts: data.article?.generation?.autoRepair?.maxAttempts || MAX_AUTO_ATTEMPTS,
+        targets: [],
         timeline: data.timeline || [],
         stoppedReason: data.stoppedReason,
         auto,
@@ -1035,6 +1202,7 @@ export default function SeoStudioPage() {
             onRecheck={recheck}
             onRepair={repair}
             onAutoRepair={autoRepair}
+            onSave={saveEdits}
             autoState={autoState}
             working={working}
           />
