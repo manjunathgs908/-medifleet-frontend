@@ -92,6 +92,9 @@ const MAX_AUTO_ATTEMPTS = 2;
 // one article at a time, so the request cost is irrelevant next to being able
 // to see what is happening.
 const AUTO_POLL_MS = 2500;
+// Where a curated page lives. Only used to turn the backend's path into a
+// clickable link; nothing is fetched from it.
+const SITE_ORIGIN = 'https://www.savelife.health';
 const SIMILARITY_BLOCK = 0.55;
 const MIN_WORDS = 700;
 
@@ -622,6 +625,119 @@ const API_ERROR_TITLE = {
   upstream: 'Anthropic API failure',
 };
 
+// A keyword the site already answers. Deliberately not styled as an error:
+// nothing went wrong, nothing was charged, and the useful action is to open
+// the page that already exists rather than to retry.
+// What the article was asked to accomplish.
+//
+// Built deterministically on the backend (services/seoBrief.js) before the
+// writer runs, and stored on the article, so a reviewer can judge the draft
+// against its brief instead of against a guess. Collapsed by default: it is
+// reference material, not something to read on every visit.
+const BriefPanel = ({ brief }) => {
+  const [open, setOpen] = useState(false);
+  if (!brief) return null;
+
+  const Row = ({ label, children }) => (
+    <div className="mb-2.5">
+      <div className="text-xs font-medium" style={{ color: 'var(--text2)' }}>{label}</div>
+      <div className="text-xs mt-0.5" style={{ color: 'var(--text3)' }}>{children}</div>
+    </div>
+  );
+  const List = ({ items }) => (
+    <ul style={{ listStyle: 'disc', paddingLeft: 16 }}>
+      {(items || []).map((t, i) => <li key={i} className="mt-0.5">{t}</li>)}
+    </ul>
+  );
+
+  return (
+    <div className="card mb-4">
+      <div className="flex items-center gap-2 flex-wrap">
+        <FileText size={14} style={{ color: 'var(--accent)' }} />
+        <span className="text-sm font-medium">Content brief</span>
+        {brief.searchIntent && <Badge color="gray">{brief.searchIntent}</Badge>}
+        {brief.keywordCluster && <Badge color="blue">{brief.keywordCluster}</Badge>}
+        {brief.targetWordCount && <Badge color="gray">{brief.targetWordCount}+ words</Badge>}
+        <Btn size="sm" variant="ghost" className="ml-auto" onClick={() => setOpen((v) => !v)}>
+          {open ? 'Hide' : 'Show brief'}
+        </Btn>
+      </div>
+
+      {!open && (
+        <div className="text-xs mt-2" style={{ color: 'var(--text3)' }}>
+          What this page was asked to accomplish &mdash; H1, outline, keywords, FAQs,
+          E-E-A-T and verification requirements. Read it before approving.
+        </div>
+      )}
+
+      {open && (
+        <div className="mt-3">
+          <Row label="Primary keyword">{brief.primaryKeyword}</Row>
+          <Row label="Recommended H1">{brief.recommendedH1}</Row>
+          {brief.secondaryKeywords?.length > 0 && (
+            <Row label="Secondary keywords">{brief.secondaryKeywords.join(' \u00b7 ')}</Row>
+          )}
+          {brief.outline?.length > 0 && (
+            <Row label="Outline">
+              {brief.outline.map((s, i) => (
+                <div key={i} className="mt-1">
+                  <span style={{ color: 'var(--text2)' }}>[{s.level}] {s.heading}</span>
+                  <div style={{ opacity: 0.8 }}>{s.purpose}</div>
+                </div>
+              ))}
+            </Row>
+          )}
+          {brief.faqTopics?.length > 0 && <Row label="FAQ plan"><List items={brief.faqTopics} /></Row>}
+          {brief.eeatRequirements?.length > 0 && <Row label="E-E-A-T requirements"><List items={brief.eeatRequirements} /></Row>}
+          {brief.internalLinkRequirements?.length > 0 && <Row label="Internal links"><List items={brief.internalLinkRequirements} /></Row>}
+          {brief.verificationRequirements?.length > 0 && <Row label="Verification"><List items={brief.verificationRequirements} /></Row>}
+          {brief.editorNotes && <Row label="Editor notes">{brief.editorNotes}</Row>}
+          <div className="text-xs mt-2" style={{ color: 'var(--text3)' }}>
+            Pricing: no exact figure may appear anywhere in the article. The pricing gate
+            blocks approval if one does.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const AlreadyExistsPanel = ({ hit, onDismiss }) => {
+  if (!hit) return null;
+  const fromPage = hit.source === 'curated_page';
+  return (
+    <div className="card mb-5" style={{ borderColor: 'var(--amber)' }}>
+      <div className="flex items-start gap-2">
+        <AlertTriangle size={15} style={{ color: 'var(--amber)', flexShrink: 0, marginTop: 2 }} />
+        <div className="min-w-0">
+          <div className="text-sm font-medium">Already exists</div>
+          <div className="text-xs mt-1" style={{ color: 'var(--text2)' }}>
+            {fromPage
+              ? 'This keyword is already covered by an existing public page:'
+              : 'This keyword already has an SEO article:'}
+          </div>
+          <div className="text-sm font-medium mt-1.5 break-words">{hit.title}</div>
+          <div className="text-xs mt-0.5" style={{ color: 'var(--text3)' }}>
+            {hit.url}
+            {hit.status ? ' \u00b7 ' + hit.status : ''}
+            {hit.keyword ? ' \u00b7 keyword: ' + hit.keyword : ''}
+          </div>
+          <div className="text-xs mt-2" style={{ color: 'var(--text3)' }}>
+            Nothing was generated and nothing was charged. Use the existing page rather
+            than creating another guide for the same topic.
+          </div>
+          <div className="mt-3">
+            <a href={SITE_ORIGIN + hit.url} target="_blank" rel="noreferrer">
+              <Btn size="sm" variant="ghost">Open existing page</Btn>
+            </a>
+          </div>
+        </div>
+        <Btn size="sm" variant="ghost" className="ml-auto" onClick={onDismiss}>Dismiss</Btn>
+      </div>
+    </div>
+  );
+};
+
 const ApiErrorBanner = ({ error, onDismiss }) => {
   if (!error) return null;
   return (
@@ -768,6 +884,8 @@ const DraftView = ({ article, onStatus, onRecheck, onRepair, onAutoRepair, onSav
         </div>
       </div>
 
+      <BriefPanel brief={article.generation?.brief} />
+
       <ManualEditor article={article} onSave={onSave} working={working} />
 
       <ChecksPanel checks={checks} article={article} />
@@ -907,6 +1025,9 @@ export default function SeoStudioPage() {
   // only authoritative once the run is over.
   const [autoRun,    setAutoRun]    = useState(null);
   const [apiError,   setApiError]   = useState(null);
+  // A 409 'already_exists' from generate. Not an error state: the backend
+  // refused before spending anything because the topic is already covered.
+  const [alreadyExists, setAlreadyExists] = useState(null);
   // Whether a failed generation goes straight into the loop. On by default:
   // that is the whole point of the automation. Off is for when somebody wants
   // to read the draft before spending more on it.
@@ -978,6 +1099,7 @@ export default function SeoStudioPage() {
     setSelected(null);
     setAutoRun(null);
     setApiError(null);
+    setAlreadyExists(null);
     // Held outside the try so the automatic cycle can start AFTER the
     // generating panel has gone and the draft is on screen -- the operator
     // should be able to read what is being repaired while it is repaired.
@@ -994,6 +1116,24 @@ export default function SeoStudioPage() {
       toast.success('Draft generated');
       load();
     } catch (err) {
+      // 409 with reason 'already_exists' is not a failure. The backend
+      // refused before spending anything because the topic is already
+      // covered — by a curated page on the site, or by an existing article.
+      // Showing that as "Generation failed" would send the operator looking
+      // for a fault when the answer is "open the page that already exists".
+      const d = err.response?.data;
+      if (d?.reason === 'already_exists') {
+        setAlreadyExists({
+          source: d.source,
+          keyword: d.keyword,
+          title: d.existing?.title,
+          status: d.existing?.status,
+          url: d.existingUrl,
+          message: d.message,
+        });
+        toast(d.message, { icon: 'ℹ️', duration: 10000 });
+        return;
+      }
       // 503 = missing key or a Claude refusal, 402 = an exhausted balance.
       // The backend sends a readable message for all of them.
       showClaudeError(err, 'Generation failed');
@@ -1223,6 +1363,8 @@ export default function SeoStudioPage() {
           </span>
         </div>
       </div>
+
+      <AlreadyExistsPanel hit={alreadyExists} onDismiss={() => setAlreadyExists(null)} />
 
       {generating && <GeneratingPanel seconds={elapsed} />}
 
