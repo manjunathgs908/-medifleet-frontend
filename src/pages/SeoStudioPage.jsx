@@ -28,6 +28,9 @@ import { PageHeader, Btn, Input, Select, Spinner, Empty, Badge, Tabs, SectionLab
 import {
   Sparkles, FileText, AlertTriangle, CheckCircle2, Copy, RefreshCw,
   Link2, HelpCircle, Code2, Gauge, XCircle, Clock,
+  // Aliased: `Image` is a browser global, and shadowing it in a module
+  // that also runs in the browser is a trap for whoever edits next.
+  Image as ImageIcon, Plus, Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -227,6 +230,10 @@ const ChecksPanel = ({ checks = {}, article }) => {
       label: 'Internal links',
       detail: `${(article?.internalLinks || []).length} valid${dropped.length ? ` · ${dropped.length} dropped` : ''}`,
     },
+    // Media is NOT a row here. Everything in this panel blocks approval —
+    // the header says so — and media does not. It is reported in its own
+    // panel, where "optional" can be said plainly instead of being implied
+    // by a tick.
   ].map((r) => ({ ...r, icon: r.ok ? CheckCircle2 : AlertTriangle }));
 
   return (
@@ -702,6 +709,282 @@ const BriefPanel = ({ brief }) => {
   );
 };
 
+// ── Media ─────────────────────────────────────────────────────
+// Media is OPTIONAL. A banner is optional, in-article images are optional,
+// and an article with none is a complete article. There is no minimum image
+// count, no maximum and no ratio of images to words -- zero, one or several
+// are all correct answers. Nothing in this panel asks for a picture.
+//
+// What IS checked is anything actually supplied: a usable URL, alt text that
+// describes the picture, and a placement the article can honour. Those
+// findings are ADVISORY. medifleet-backend services/seoMedia.js is the
+// authority and the errors shown here are checks.mediaErrors verbatim, but
+// media is not one of the quality gates: it never sets checks.passed to
+// false, so nothing here can block an approval. Approve stays gated on
+// checks.passed exactly as it was before this panel existed.
+//
+// This panel neither uploads nor generates. There is no upload mechanism in
+// this application (no multer, no SEO upload route), no image generation and
+// no stock or placeholder fallback: images are hosted elsewhere and their
+// addresses are pasted in. An empty field stays empty.
+const RESERVED_PLACEMENTS = ['after-intro', 'before-faqs', 'end'];
+
+// Dimensions are CARRIED, never edited and never invented. This panel has no
+// input for them -- they exist only because something else stored them, and
+// the public page uses them to reserve space so the text does not jump when
+// the image loads.
+//
+// Carrying them is not cosmetic. The backend REPLACES the media object rather
+// than merging into it, so any field not sent back is deleted: without this,
+// a reviewer fixing a typo in alt text would silently wipe the stored width
+// and height. Nothing is defaulted or guessed -- absent stays absent.
+const keptDims = (src) => {
+  const out = {};
+  if (Number.isFinite(src?.width) && src.width > 0) out.width = src.width;
+  if (Number.isFinite(src?.height) && src.height > 0) out.height = src.height;
+  return out;
+};
+
+// The H2/H3 headings an image can sit against. The backend accepts either
+// a heading or its slug, so the heading text is submitted as typed and
+// nothing here has to reimplement the slug rule and drift from it.
+const headingOptions = (content) => {
+  const out = [];
+  for (const line of String(content || '').split(/\r?\n/)) {
+    const m = /^(#{2,3})\s+(.+?)\s*#*$/.exec(line.trim());
+    if (m) out.push(m[2].trim());
+  }
+  return out;
+};
+
+// Presence is answered here and now; quality is the backend's answer and
+// only moves when a recheck runs. Claiming "Pass" on alt text no gate has
+// looked at would be inventing a verdict, so an empty alt fails locally
+// and everything else defers to checks.mediaErrors.
+const mediaSummary = (article) => {
+  const media = article?.media || {};
+  const banner = media.banner || {};
+  const images = media.images || [];
+  const errors = article?.checks?.mediaErrors || [];
+  const hasBanner = Boolean(String(banner.url || '').trim());
+  const anyEmptyAlt = (hasBanner && !String(banner.alt || '').trim())
+    || images.some((i) => !String(i.alt || '').trim());
+  const altFlagged = errors.some((e) => /alt text/i.test(e));
+  return {
+    hasBanner,
+    imageCount: images.length,
+    errors,
+    altState: (!hasBanner && images.length === 0) ? 'none'
+      : (anyEmptyAlt || altFlagged) ? 'fail' : 'pass',
+    // Nothing supplied at all. Not a problem, and not a pass either —
+    // there is simply nothing to judge.
+    empty: !hasBanner && images.length === 0,
+  };
+};
+
+const MediaPanel = ({ article, onSave, working }) => {
+  const [open, setOpen] = useState(false);
+  const [banner, setBanner] = useState({ url: '', alt: '' });
+  const [images, setImages] = useState([]);
+  const [saving, setSaving] = useState(false);
+
+  // Re-seed from the article whenever it changes underneath, and never
+  // while the form is open -- overwriting a half-typed URL with a poll
+  // result is worse than showing slightly stale values. Same rule as
+  // ManualEditor above.
+  useEffect(() => {
+    if (open) return;
+    setBanner({
+      url: article.media?.banner?.url || '',
+      alt: article.media?.banner?.alt || '',
+      ...keptDims(article.media?.banner),
+    });
+    setImages((article.media?.images || []).map((i) => ({
+      url: i.url || '', alt: i.alt || '', placement: i.placement || '',
+      ...keptDims(i),
+    })));
+  }, [open, article._id, article.media]);
+
+  const s = mediaSummary(article);
+  const headings = headingOptions(article.content);
+
+  const setImg = (i, patch) => setImages((prev) => prev.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  const addImg = () => setImages((prev) => [...prev, { url: '', alt: '', placement: '' }]);
+  const removeImg = (i) => setImages((prev) => prev.filter((_, j) => j !== i));
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      // Sent whole. The backend trims it, stores it, and withdraws the
+      // approval if this changed a page that had one.
+      await onSave(article._id, { media: { banner, images } });
+      setOpen(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const Row = ({ ok, label, value }) => (
+    <div className="flex items-start gap-2 p-2.5 rounded-lg" style={{ background: 'var(--surface2)' }}>
+      {ok
+        ? <CheckCircle2 size={15} style={{ color: 'var(--accent)', marginTop: 2, flexShrink: 0 }} />
+        : <AlertTriangle size={15} style={{ color: 'var(--red)', marginTop: 2, flexShrink: 0 }} />}
+      <div className="min-w-0">
+        <div className="text-xs font-semibold">{label}</div>
+        <div className="text-xs break-words" style={{ color: 'var(--text3)' }}>{value}</div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="card mb-4">
+      <div className="flex items-center gap-2 flex-wrap">
+        <ImageIcon size={14} style={{ color: 'var(--accent)' }} />
+        <span className="text-sm font-medium">Media</span>
+        {s.empty
+          ? <Badge color="gray">Optional — none added</Badge>
+          : s.errors.length || s.altState === 'fail'
+            ? <Badge color="amber">Check these — not blocking approval</Badge>
+            : <Badge color="green">Valid</Badge>}
+        <Btn size="sm" variant="ghost" className="ml-auto" disabled={working} onClick={() => setOpen((v) => !v)}>
+          {open ? 'Cancel' : 'Edit media'}
+        </Btn>
+      </div>
+
+      <div className="grid gap-2 md:grid-cols-3 mt-3">
+        {/* `ok` here means "nothing wrong", which for an optional field
+            includes having nothing at all. Not added is a neutral state. */}
+        <Row ok label="Banner image" value={s.hasBanner ? 'Added' : 'Not added'} />
+        <Row
+          ok
+          label="In-article images"
+          value={s.imageCount === 0 ? 'None' : `${s.imageCount}`}
+        />
+        <Row
+          ok={s.altState !== 'fail'}
+          label="Alt text"
+          value={s.altState === 'pass' ? 'Pass' : s.altState === 'fail' ? 'Fail' : '—'}
+        />
+      </div>
+
+      {s.errors.length > 0 && (
+        <div className="mt-3 p-3 rounded-lg" style={{ background: 'rgba(255,184,48,.08)', border: '1px solid rgba(255,184,48,.25)' }}>
+          <div className="text-xs font-semibold mb-1.5" style={{ color: 'var(--amber)' }}>
+            {s.errors.length} problem{s.errors.length === 1 ? '' : 's'} with the media supplied — worth fixing, but not blocking approval
+          </div>
+          <ul className="space-y-1">
+            {s.errors.map((e, i) => (
+              <li key={i} className="text-xs leading-relaxed" style={{ color: 'var(--text2)' }}>• {e}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {!open && (
+        <div className="text-xs mt-2" style={{ color: 'var(--text3)' }}>
+          Optional — add media when it genuinely improves the article. There is no
+          image quota and no minimum: nothing here asks for a picture, and an
+          article with none is complete. Anything you do add is checked, because a
+          broken URL or an empty alt is worse than no image at all.
+        </div>
+      )}
+
+      {open && (
+        <div className="mt-3">
+          <div className="text-xs mb-2" style={{ color: 'var(--text3)' }}>
+            Optional — add media when it genuinely improves the article. Paste the
+            address of an image that is already hosted; there is no upload here, and
+            nothing invents an image URL for you. Leave it all empty and the article
+            is still complete.
+          </div>
+
+          <div className="p-3 rounded-lg mb-3" style={{ background: 'var(--surface2)' }}>
+            <div className="text-xs font-semibold mb-2">Banner image</div>
+            <div className="grid gap-2">
+              {/* Replacing the URL drops any carried dimensions: they
+                  describe the picture that was there, and stale ones cause
+                  the layout shift they exist to prevent. undefined is
+                  omitted by JSON, so the backend stores no dimension. */}
+              <Input
+                label="Image URL"
+                value={banner.url}
+                placeholder="https://… or /images/…"
+                onChange={(e) => setBanner((b) => ({
+                  ...b, url: e.target.value, width: undefined, height: undefined,
+                }))}
+              />
+              <Input
+                label="Alt text"
+                value={banner.alt}
+                placeholder="e.g. BLS ambulance parked outside a Bengaluru hospital at night"
+                onChange={(e) => setBanner((b) => ({ ...b, alt: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          {images.map((img, i) => (
+            <div key={i} className="p-3 rounded-lg mb-2" style={{ background: 'var(--surface2)' }}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold">In-article image {i + 1}</span>
+                <Btn size="sm" variant="danger" onClick={() => removeImg(i)}>
+                  <Trash2 size={13} /> Remove
+                </Btn>
+              </div>
+              <div className="grid gap-2">
+                {/* Same rule as the banner: a new URL invalidates the
+                    dimensions carried for the old one. */}
+                <Input
+                  label="Image URL"
+                  value={img.url}
+                  placeholder="https://… or /images/…"
+                  onChange={(e) => setImg(i, {
+                    url: e.target.value, width: undefined, height: undefined,
+                  })}
+                />
+                <Input
+                  label="Alt text"
+                  value={img.alt}
+                  placeholder="Describe what the image shows"
+                  onChange={(e) => setImg(i, { alt: e.target.value })}
+                />
+                <Select
+                  label="Placement"
+                  value={img.placement}
+                  onChange={(e) => setImg(i, { placement: e.target.value })}
+                >
+                  <option value="">Where does it belong?</option>
+                  {RESERVED_PLACEMENTS.map((p) => <option key={p} value={p}>{p}</option>)}
+                  {headings.map((h) => <option key={h} value={h}>{h}</option>)}
+                  {img.placement
+                    && !RESERVED_PLACEMENTS.includes(img.placement)
+                    && !headings.includes(img.placement)
+                    ? <option value={img.placement}>{img.placement}</option>
+                    : null}
+                </Select>
+              </div>
+            </div>
+          ))}
+
+          <div className="flex items-center gap-2 flex-wrap mt-3">
+            <Btn size="sm" variant="ghost" onClick={addImg}>
+              <Plus size={13} /> Add in-article image
+            </Btn>
+            <Btn size="sm" className="ml-auto" disabled={saving || working} onClick={save}>
+              {saving ? 'Saving…' : 'Save media'}
+            </Btn>
+          </div>
+
+          <div className="text-xs mt-2" style={{ color: 'var(--text3)' }}>
+            Saving does not re-run the checks. Run Recheck afterwards to have the
+            media re-read — and note that changing media on an approved article
+            returns it to review, because the page itself changed.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AlreadyExistsPanel = ({ hit, onDismiss }) => {
   if (!hit) return null;
   const fromPage = hit.source === 'curated_page';
@@ -885,6 +1168,8 @@ const DraftView = ({ article, onStatus, onRecheck, onRepair, onAutoRepair, onSav
       </div>
 
       <BriefPanel brief={article.generation?.brief} />
+
+      <MediaPanel article={article} onSave={onSave} working={working} />
 
       <ManualEditor article={article} onSave={onSave} working={working} />
 
