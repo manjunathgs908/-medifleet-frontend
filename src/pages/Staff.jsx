@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { authApi } from '../api/client';
+import { authApi, ownersApi } from '../api/client';
 import toast from 'react-hot-toast';
 
 const Staff = () => {
@@ -8,6 +8,10 @@ const Staff = () => {
   const [loading, setLoading] = useState(false);
   const [editingPosting, setEditingPosting] = useState(null); // staff row being edited, or null
   const [postingForm, setPostingForm] = useState({ postingName: '', postingLat: '', postingLng: '' });
+  const [owners, setOwners] = useState([]);              // partners, loaded lazily for the move picker
+  const [moveTarget, setMoveTarget] = useState(null);     // driver being moved, or null
+  const [moveOwnerId, setMoveOwnerId] = useState('');
+  const [moving, setMoving] = useState(false);
   const [form, setForm] = useState({
     name: '', phone: '', password: '', role: 'driver',
     driverType: 'shift_driver', baseSalary: 15000, perTripBonus: 100,
@@ -33,9 +37,10 @@ const Staff = () => {
 
       // register() only persists a fixed field list (see
       // authController.js) -- shiftHours/postingName/postingLat/postingLng
-      // aren't in it and would be silently dropped here. The edit path
-      // (PUT /auth/users/:id) has no such whitelist, so it's reused as an
-      // immediate follow-up instead of touching the backend's create path.
+      // aren't in it and would be silently dropped here, so the edit path
+      // is used as an immediate follow-up. Every field below is on
+      // EDITABLE_USER_FIELDS in routes/auth.js; anything not on that list
+      // is now rejected with a 400 naming it rather than ignored.
       const postingFields = {};
       if (form.shiftHours) postingFields.shiftHours = Number(form.shiftHours);
       if (form.postingName) postingFields.postingName = form.postingName;
@@ -91,10 +96,39 @@ const Staff = () => {
   const handleDeactivate = async (id) => {
     if (!window.confirm('Deactivate this user?')) return;
     try {
-      await authApi.updateUser(id, { isActive: false });
+      // The dedicated route, not updateUser: isActive is not on
+      // EDITABLE_USER_FIELDS, so the generic edit now rejects it.
+      await authApi.deactivateUser(id);
       toast.success('Deactivated');
       loadStaff();
-    } catch { toast.error('Failed'); }
+    } catch (e) { toast.error(e.response?.data?.message || 'Failed'); }
+  };
+
+  // ── Move a driver to another partner's fleet ──────────────────
+  const openMove = async (s) => {
+    setMoveTarget(s);
+    setMoveOwnerId(s.owner || '');
+    if (!owners.length) {
+      try {
+        const { data } = await ownersApi.getAll();
+        setOwners(data.owners || []);
+      } catch { toast.error('Could not load partners'); }
+    }
+  };
+
+  const confirmMove = async () => {
+    setMoving(true);
+    try {
+      await authApi.moveUserToOwner(moveTarget._id, moveOwnerId || null);
+      toast.success('Driver moved');
+      setMoveTarget(null);
+      loadStaff();
+    } catch (e) {
+      // DRIVER_ON_DUTY is the one an operator will actually hit. Shown as
+      // it comes back — it names the driver and says to end their duty
+      // first, which is the whole instruction.
+      toast.error(e.response?.data?.message || 'Could not move this driver');
+    } finally { setMoving(false); }
   };
 
   return (
@@ -246,11 +280,20 @@ const Staff = () => {
                 </td>
                 <td className="p-4">
                   {s.isActive && (
-                    <button onClick={() => handleDeactivate(s._id)}
-                      className="text-xs px-3 py-1 rounded-lg"
-                      style={{ background: 'rgba(255,77,109,.1)', color: 'var(--red)' }}>
-                      Deactivate
-                    </button>
+                    <div className="flex gap-2">
+                      {s.role === 'driver' && (
+                        <button onClick={() => openMove(s)}
+                          className="text-xs px-2 py-1 rounded-lg"
+                          style={{ background: 'var(--surface2)', color: 'var(--text2)' }}>
+                          Move fleet
+                        </button>
+                      )}
+                      <button onClick={() => handleDeactivate(s._id)}
+                        className="text-xs px-3 py-1 rounded-lg"
+                        style={{ background: 'rgba(255,77,109,.1)', color: 'var(--red)' }}>
+                        Deactivate
+                      </button>
+                    </div>
                   )}
                 </td>
               </tr>
@@ -261,6 +304,43 @@ const Staff = () => {
           <div className="text-center py-12 text-sm" style={{ color: 'var(--text3)' }}>No staff found</div>
         )}
       </div>
+
+      {/* Move a driver to another partner's fleet. */}
+      {moveTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,.6)' }}>
+          <div className="card w-full" style={{ maxWidth: 440 }}>
+            <h2 className="text-lg font-bold mb-1">Move {moveTarget.name}</h2>
+            <p className="text-xs mb-4" style={{ color: 'var(--text3)' }}>
+              This changes whose roster they are on, which ambulances they can claim, and whether
+              they get attendance and payroll. Any ambulance they are assigned to is unassigned.
+            </p>
+
+            <label className="block text-xs font-semibold mb-1 uppercase tracking-wide"
+              style={{ color: 'var(--text2)' }}>Fleet</label>
+            <select className="inp w-full mb-4" value={moveOwnerId}
+              onChange={e => setMoveOwnerId(e.target.value)}>
+              <option value="">— No fleet (unlink) —</option>
+              {owners.map(o => (
+                <option key={o._id} value={o._id}>
+                  {o.isPlatformOwner ? '★ ' : ''}{o.businessName || o.name}
+                </option>
+              ))}
+            </select>
+
+            <div className="flex justify-end gap-2">
+              <button className="text-sm px-3 py-2 rounded-lg"
+                style={{ background: 'var(--surface2)', color: 'var(--text2)' }}
+                onClick={() => setMoveTarget(null)}>Cancel</button>
+              <button className="text-sm px-3 py-2 rounded-lg"
+                style={{ background: 'var(--accent)', color: '#00110d', fontWeight: 600 }}
+                disabled={moving} onClick={confirmMove}>
+                {moving ? 'Moving…' : 'Move driver'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

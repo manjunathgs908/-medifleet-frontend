@@ -84,6 +84,14 @@ export default api;
 export const authApi = {
   getUsers  : (params) => api.get('/auth/users', { params }),
   updateUser: (id, data) => api.put(`/auth/users/${id}`, data),
+  // Deactivation has its own route. PUT /auth/users/:id takes an explicit
+  // field allowlist and isActive is deliberately not on it.
+  deactivateUser: (id) => api.put(`/auth/users/${id}/deactivate`),
+  // Moving a driver between partners — its own endpoint because it changes
+  // which fleet's roster they are on, which ambulances they can claim, and
+  // whether they accrue attendance and payroll at all. Refused by the
+  // backend while the driver holds an active duty.
+  moveUserToOwner: (id, ownerId) => api.put(`/auth/users/${id}/owner`, { ownerId }),
   register  : (data) => api.post('/auth/register', data),
 };
 
