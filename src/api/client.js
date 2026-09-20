@@ -127,7 +127,6 @@ export const vehiclesApi = {
   getById       : (id)     => api.get(`/vehicles/${id}`),
   create        : (data)   => api.post('/vehicles', data),
   update        : (id, d)  => api.put(`/vehicles/${id}`, d),
-  assignDriver  : (id, driverId) => api.put(`/vehicles/${id}/assign-driver`, { driverId }),
   updateDocument: (id, data)     => api.put(`/vehicles/${id}/document`, data),
   addServiceLog : (id, data)     => api.post(`/vehicles/${id}/service-log`, data),
   getServiceLogs: (id)           => api.get(`/vehicles/${id}/service-logs`),
