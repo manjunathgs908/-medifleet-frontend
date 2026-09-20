@@ -101,6 +101,16 @@ export default function OwnersPage() {
                     </div>
                     <div className="text-xs mt-0.5" style={{ color: 'var(--text2)' }}>{o.name}</div>
                     <div className="text-xs font-mono mt-0.5" style={{ color: 'var(--text3)' }}>{o.phone}</div>
+                    {/* What this partner actually operates. A KYC
+                        decision is easier with the fleet in front of you
+                        than with only the form they filled in. */}
+                    <div className="flex items-center gap-3 mt-2 text-[11px]" style={{ color: 'var(--text2)' }}>
+                      <span>🚑 {o.counts?.ambulances ?? 0} ambulance{o.counts?.ambulances === 1 ? '' : 's'}</span>
+                      <span>🧑‍✈️ {o.counts?.drivers ?? 0} driver{o.counts?.drivers === 1 ? '' : 's'}</span>
+                      <span style={{ color: o.counts?.onDutyNow ? 'var(--accent)' : 'var(--text3)' }}>
+                        ● {o.counts?.onDutyNow ?? 0} on duty now
+                      </span>
+                    </div>
                     {(o.gstin || o.pan) && (
                       <div className="text-[11px] font-mono mt-1" style={{ color: 'var(--text3)' }}>
                         {o.gstin ? `GSTIN ${o.gstin}` : null}{o.gstin && o.pan ? ' · ' : null}{o.pan ? `PAN ${o.pan}` : null}
