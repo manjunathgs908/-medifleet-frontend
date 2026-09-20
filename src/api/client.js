@@ -225,6 +225,7 @@ export const ownersApi = {
   getAll : ()          => api.get('/owners'),
   approve: (id)        => api.put(`/owners/${id}/approve`),
   reject : (id, reason) => api.put(`/owners/${id}/reject`, { reason }),
+  setPlatformOwner: (id, isPlatformOwner) => api.put(`/owners/${id}/platform-owner`, { isPlatformOwner }),
 };
 
 // WhatsApp leads — customers who asked for a service with no working

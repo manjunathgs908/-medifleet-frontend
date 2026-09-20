@@ -39,6 +39,21 @@ export default function OwnersPage() {
     }
   };
 
+  const togglePlatformOwner = async (owner, next) => {
+    setBusyId(owner._id);
+    try {
+      await ownersApi.setPlatformOwner(owner._id, next);
+      toast.success(next
+        ? 'Marked as SaveLife-owned — its drivers now get attendance and payroll.'
+        : 'Unmarked — its drivers no longer get attendance or payroll.');
+      await load();
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Could not update this owner');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const confirmReject = async () => {
     setBusyId(rejectTarget._id);
     try {
@@ -63,13 +78,34 @@ export default function OwnersPage() {
           {owners.map((o) => {
             const docs = o.kycDocuments || {};
             const isBusy = busyId === o._id;
-            const canDecide = o.kycStatus === 'submitted';
+            // 'pending' as well as 'submitted'. A partner who registers
+            // has kycStatus 'pending' and only reaches 'submitted' by
+            // uploading KYC documents from the app — gating the buttons on
+            // 'submitted' alone left every new registration unapprovable
+            // and stalled onboarding at step one. Documents are still
+            // visible above, so the admin can see there are none and
+            // decide accordingly.
+            const canDecide = o.kycStatus === 'pending' || o.kycStatus === 'submitted';
             return (
               <div key={o._id} className="card">
                 <div className="flex items-start justify-between mb-4">
                   <div>
-                    <div className="font-bold font-display">{o.name}</div>
+                    <div className="font-bold font-display">
+                      {o.businessName || o.name}
+                      {o.isPlatformOwner && (
+                        <span className="text-[10px] font-semibold ml-2 px-1.5 py-0.5 rounded"
+                              style={{ background: 'var(--green-dim, #16a34a22)', color: 'var(--green, #16a34a)' }}>
+                          SAVELIFE
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs mt-0.5" style={{ color: 'var(--text2)' }}>{o.name}</div>
                     <div className="text-xs font-mono mt-0.5" style={{ color: 'var(--text3)' }}>{o.phone}</div>
+                    {(o.gstin || o.pan) && (
+                      <div className="text-[11px] font-mono mt-1" style={{ color: 'var(--text3)' }}>
+                        {o.gstin ? `GSTIN ${o.gstin}` : null}{o.gstin && o.pan ? ' · ' : null}{o.pan ? `PAN ${o.pan}` : null}
+                      </div>
+                    )}
                     {o.kycStatus === 'rejected' && o.kycRejectionReason && (
                       <div className="text-xs mt-2" style={{ color: 'var(--red)' }}>Reason: {o.kycRejectionReason}</div>
                     )}
@@ -94,12 +130,30 @@ export default function OwnersPage() {
                   ))}
                 </div>
 
-                {canDecide && (
-                  <div className="flex gap-2">
-                    <Btn size="sm" onClick={() => approve(o)} disabled={isBusy}>✓ Approve</Btn>
-                    <Btn size="sm" variant="danger" onClick={() => { setRejectTarget(o); setReason(''); }} disabled={isBusy}>✕ Reject</Btn>
-                  </div>
-                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  {canDecide && (
+                    <>
+                      <Btn size="sm" onClick={() => approve(o)} disabled={isBusy}>✓ Approve</Btn>
+                      <Btn size="sm" variant="danger" onClick={() => { setRejectTarget(o); setReason(''); }} disabled={isBusy}>✕ Reject</Btn>
+                    </>
+                  )}
+
+                  {/* Marks this Owner as SaveLife's own. Its drivers then get
+                      attendance rows and appear in payroll; a partner's do
+                      not, because the partner employs and pays them. Only
+                      this CRM session can set it — there is no owner-app
+                      path to it at all. */}
+                  <label className="flex items-center gap-2 text-xs ml-auto cursor-pointer select-none"
+                         style={{ color: 'var(--text2)' }}>
+                    <input
+                      type="checkbox"
+                      checked={!!o.isPlatformOwner}
+                      disabled={isBusy}
+                      onChange={(e) => togglePlatformOwner(o, e.target.checked)}
+                    />
+                    SaveLife-owned fleet (attendance &amp; payroll)
+                  </label>
+                </div>
               </div>
             );
           })}
