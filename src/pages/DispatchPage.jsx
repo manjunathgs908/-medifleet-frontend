@@ -349,7 +349,11 @@ export default function DispatchPage() {
       }
 
       setLiveTrips(trips);
-      setVehicles(data.availableVehicles || []);
+      // Ambulance-sourced units only. The legacy Vehicle collection is
+      // empty in production and nothing creates one, so a 'vehicle' entry
+      // here would be a row a dispatcher could pick that no driver is
+      // actually sitting in.
+      setVehicles((data.availableVehicles || []).filter(v => v.source === 'ambulance'));
     } catch { /* silent */ }
   };
 
@@ -745,7 +749,12 @@ export default function DispatchPage() {
                             </option>
                             {vehicles.map(v => (
                               <option key={v._id} value={`${v._id}|${v.source}`}>
-                                {v.source === 'ambulance' ? '🧑‍✈️ ' : ''}{v.registrationNumber} · {v.assignedDriver?.name || 'No driver'}
+                                {/* Partner first: on a multi-partner board
+                                    the operator is choosing whose crew to
+                                    send, not just which registration. */}
+                                {v.partner?.isPlatformOwner ? '★ ' : ''}
+                                {v.partner?.label ? `${v.partner.label} · ` : ''}
+                                {v.registrationNumber} · {v.assignedDriver?.name || 'No driver'}
                               </option>
                             ))}
                           </select>

@@ -1,9 +1,9 @@
 // src/pages/FleetPage.jsx
 import React, { useState, useEffect } from 'react';
-import { vehiclesApi, ambulancesApi, authApi } from '../api/client';
+import { ambulancesApi, authApi } from '../api/client';
 import { PageHeader, StatusBadge, Btn, Modal, StatCard, Spinner, Empty } from '../components/ui';
 import toast from 'react-hot-toast';
-import { Plus, Gauge } from 'lucide-react';
+import { Gauge } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -26,12 +26,11 @@ const STATUS_ICONS = {
 };
 
 export default function FleetPage() {
-  const [vehicles,   setVehicles]   = useState([]);
   const [ambulances, setAmbulances] = useState([]);
   const [drivers,    setDrivers]    = useState([]);
   const [loading,  setLoading]  = useState(true);
-  const [modal,    setModal]    = useState(false);
-  const [form,     setForm]     = useState({ registrationNumber:'', model:'', type:'BLS', assignedDriver:'' });
+  // '' = every partner. Filters the cards below by Ambulance.owner.
+  const [partnerId, setPartnerId] = useState('');
 
   useEffect(() => {
     load();
@@ -42,12 +41,10 @@ export default function FleetPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const [v, a, d] = await Promise.all([
-        vehiclesApi.getAll(),
+      const [a, d] = await Promise.all([
         ambulancesApi.getAdminList(),
         authApi.getUsers({ role: 'driver' }),
       ]);
-      setVehicles(v.data.vehicles||[]);
       setAmbulances(a.data.ambulances||[]);
       setDrivers(d.data.users||[]);
     } finally { setLoading(false); }
@@ -60,31 +57,32 @@ export default function FleetPage() {
     } catch { /* silent */ }
   };
 
-  const save = async () => {
-    await vehiclesApi.create(form);
-    toast.success('Vehicle added!');
-    setModal(false);
-    load();
-  };
+  // Ambulance-only. The legacy Vehicle collection is empty in production
+  // (vehicles = 0) and nothing creates one any more — every live unit is
+  // an Ambulance, going on duty through the app's Assignment/Shift system.
+  // Adding a Vehicle from here is gone with it: it wrote to a collection
+  // the duty system never reads, so the row could never be driven.
+  //
+  // status <- displayStatus ('off' -> 'offline') keeps the existing card
+  // markup and the counts above unchanged.
+  const allItems = ambulances.map(a => ({
+    ...a,
+    status: a.displayStatus === 'off' ? 'offline' : a.displayStatus,
+    source: 'ambulance',
+  }));
 
-  const changeStatus = async (id, status) => {
-    await vehiclesApi.update(id, { status });
-    load();
-  };
+  // Distinct partners present in the fleet, for the filter.
+  const partners = Object.values(
+    allItems.reduce((m, a) => {
+      if (a.partner?._id) m[a.partner._id] = a.partner;
+      return m;
+    }, {}),
+  ).sort((x, y) => Number(y.isPlatformOwner) - Number(x.isPlatformOwner)
+    || x.label.localeCompare(y.label));
 
-  // Ambulances are the mobile app's Ambulance/Assignment/Shift system —
-  // an owner or driver goes on duty there via 'Drive an Ambulance', which
-  // never touches the legacy Vehicle collection. Adapted into the same
-  // shape as a vehicle (status <- displayStatus, 'off' -> 'offline') so
-  // the existing card markup and counts can render both side by side.
-  const fleetItems = [
-    ...vehicles.map(v => ({ ...v, source: 'vehicle' })),
-    ...ambulances.map(a => ({
-      ...a,
-      status: a.displayStatus === 'off' ? 'offline' : a.displayStatus,
-      source: 'ambulance',
-    })),
-  ];
+  const fleetItems = partnerId
+    ? allItems.filter(a => a.partner?._id === partnerId)
+    : allItems;
 
   const counts = {
     available:   fleetItems.filter(v => v.status === 'available').length,
@@ -99,8 +97,21 @@ export default function FleetPage() {
 
   return (
     <div className="page-enter">
-      <PageHeader title="Fleet Tracker" subtitle="Live ambulance status · Driver assignment · Compliance"
-        action={<Btn onClick={() => setModal(true)}><Plus size={14}/> Add Vehicle</Btn>} />
+      <PageHeader
+        title="Fleet Tracker"
+        subtitle="Live ambulance status across all partners"
+        action={partners.length > 1 && (
+          <select className="inp" style={{ minWidth: 200 }}
+            value={partnerId} onChange={e => setPartnerId(e.target.value)}>
+            <option value="">All partners ({allItems.length})</option>
+            {partners.map(p => (
+              <option key={p._id} value={p._id}>
+                {p.isPlatformOwner ? '★ ' : ''}{p.label}
+              </option>
+            ))}
+          </select>
+        )}
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <StatCard label="Available"   value={counts.available}   color="green" />
@@ -160,8 +171,20 @@ export default function FleetPage() {
                     <div className="font-mono text-xs mb-0.5" style={{ color: 'var(--accent)' }}>{v._id?.slice(-6).toUpperCase()}</div>
                     <div className="font-bold">{v.registrationNumber}</div>
                     <div className="text-xs mt-0.5" style={{ color: 'var(--text2)' }}>
-                      {v.source === 'ambulance' ? '🧑‍✈️ Own Fleet' : `${v.model} · ${v.type}`}
+                      {v.serviceTypeLabel || v.serviceType}
                     </div>
+                    {/* Whose unit this is. The star marks SaveLife's own,
+                        so a dispatcher can tell at a glance whether a
+                        problem is ours to fix or a partner's to be told
+                        about. */}
+                    {v.partner && (
+                      <div className="text-[10px] mt-1 inline-block px-1.5 py-0.5 rounded"
+                        style={v.partner.isPlatformOwner
+                          ? { background: 'rgba(0,212,170,.15)', color: 'var(--accent)' }
+                          : { background: 'var(--surface2)', color: 'var(--text3)' }}>
+                        {v.partner.isPlatformOwner ? '★ ' : ''}{v.partner.label}
+                      </div>
+                    )}
                   </div>
                   <StatusBadge status={v.status} />
                 </div>
@@ -172,8 +195,15 @@ export default function FleetPage() {
                     {v.assignedDriver?.name?.split(' ').map(w=>w[0]).join('').slice(0,2) || '??'}
                   </div>
                   <div>
-                    <div className="text-xs font-medium">{v.assignedDriver?.name || 'Unassigned'}</div>
-                    <div className="text-[10px] font-mono" style={{ color: 'var(--text3)' }}>{v.assignedDriver?.phone}</div>
+                    {/* On duty now, then the rostered driver. Two
+                        different questions — see Ambulance.defaultDriver. */}
+                    <div className="text-xs font-medium">
+                      {v.assignedDriver?.name
+                        || (v.defaultDriver?.name ? `${v.defaultDriver.name} (off duty)` : 'Unassigned')}
+                    </div>
+                    <div className="text-[10px] font-mono" style={{ color: 'var(--text3)' }}>
+                      {v.assignedDriver?.phone || v.defaultDriver?.phone}
+                    </div>
                   </div>
                 </div>
 
@@ -194,52 +224,15 @@ export default function FleetPage() {
                 {/* Ambulance status is driven by the owner/driver's own
                     on-duty toggle in the mobile app, not editable from
                     the CRM — show it read-only instead of a dropdown. */}
-                {v.source === 'ambulance' ? (
-                  <div className="text-xs py-1.5 text-center rounded-lg" style={{ background: 'var(--surface2)', color: 'var(--text3)' }}>
-                    Status set from mobile app
-                  </div>
-                ) : (
-                  <select value={v.status} onChange={e => changeStatus(v._id, e.target.value)}
-                    className="inp text-xs py-1.5 w-full">
-                    <option value="available">Available</option>
-                    <option value="on_trip">On Trip</option>
-                    <option value="offline">Offline</option>
-                    <option value="maintenance">Maintenance</option>
-                  </select>
-                )}
+                <div className="text-xs py-1.5 text-center rounded-lg" style={{ background: 'var(--surface2)', color: 'var(--text3)' }}>
+                  Status set from mobile app
+                </div>
               </div>
             );
           })}
         </div>
       }
 
-      <Modal open={modal} onClose={() => setModal(false)} title="Add Vehicle">
-        <div className="space-y-4">
-          {[['registrationNumber','Registration No.','DL-01-AA-1234'],['model','Model','Force Traveller ALS']].map(([k,l,p]) => (
-            <div key={k}>
-              <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>{l}</label>
-              <input className="inp" placeholder={p} value={form[k]} onChange={e => setForm(f=>({...f,[k]:e.target.value}))} />
-            </div>
-          ))}
-          <div>
-            <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>Type</label>
-            <select className="inp" value={form.type} onChange={e => setForm(f=>({...f,type:e.target.value}))}>
-              <option value="ALS">ALS</option><option value="BLS">BLS</option><option value="Patient_Transport">Patient Transport</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>Assign Driver</label>
-            <select className="inp" value={form.assignedDriver} onChange={e => setForm(f=>({...f,assignedDriver:e.target.value}))}>
-              <option value="">-- Select Driver --</option>
-              {drivers.map(d => <option key={d._id} value={d._id}>{d.name} · {d.phone}</option>)}
-            </select>
-          </div>
-          <div className="flex gap-3 pt-2">
-            <Btn className="flex-1" onClick={save}>Save Vehicle</Btn>
-            <Btn variant="ghost" onClick={() => setModal(false)}>Cancel</Btn>
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 }
