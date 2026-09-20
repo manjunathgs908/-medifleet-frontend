@@ -108,6 +108,12 @@ export const tripsApi = {
   // target: { vehicleId } (legacy) or { ambulanceId } (owner/driver on
   // duty via the mobile app) — backend accepts either.
   assign      : (id, target) => api.put(`/trips/${id}/assign`, target),
+  // On-duty ambulances ranked by distance from this trip's pickup. A
+  // ranking to help the dispatcher choose — assignment is still a click.
+  suggestedAmbulances: (id) => api.get(`/trips/${id}/suggested-ambulances`),
+  // On-duty ambulances ranked by distance from this trip's pickup. A
+  // ranking to help the dispatcher choose — assignment is still a click.
+  suggestedAmbulances: (id) => api.get(`/trips/${id}/suggested-ambulances`),
   complete    : (id, data) => api.put(`/trips/${id}/complete`, data),
   cancel      : (id, reason)   => api.put(`/trips/${id}/cancel`, { reason }),
   updateStatus: (id, status)   => api.put(`/trips/${id}/status`, { status }),

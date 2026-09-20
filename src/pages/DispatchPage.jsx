@@ -177,6 +177,12 @@ export default function DispatchPage() {
   const [submitting, setSubmitting] = useState(false);
   const [billModal, setBillModal]   = useState(null);
   const [assigning, setAssigning]   = useState(null); // tripId currently being assigned
+  // tripId -> ranked suggestions, fetched when the operator opens the
+  // assign dropdown for that trip. Not preloaded for every trip on the
+  // board: it is a per-trip distance calculation and most rows on screen
+  // are already assigned.
+  const [suggestions, setSuggestions] = useState({});
+  const [loadingSuggestions, setLoadingSuggestions] = useState(null);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [newBookings, setNewBookings]   = useState([]); // freshly-arrived trips awaiting acknowledgment
   const intervalRef      = useRef();
@@ -431,12 +437,31 @@ export default function DispatchPage() {
   // from the legacy Vehicle collection or an on-duty Ambulance (owner/
   // driver via the mobile app) — see tripController.getLiveBoard's
   // merged availableVehicles.
+  const loadSuggestions = async (tripId) => {
+    if (suggestions[tripId] || loadingSuggestions === tripId) return;
+    setLoadingSuggestions(tripId);
+    try {
+      const { data } = await tripsApi.suggestedAmbulances(tripId);
+      setSuggestions(prev => ({ ...prev, [tripId]: data }));
+    } catch {
+      // Silent: the dropdown still lists every on-duty unit from the live
+      // board below, just unranked. A failed ranking must not block
+      // dispatch.
+      setSuggestions(prev => ({ ...prev, [tripId]: null }));
+    } finally { setLoadingSuggestions(null); }
+  };
+
   const assignDriver = async (tripId, id, source) => {
     if (!id) return;
     setAssigning(tripId);
     try {
-      await tripsApi.assign(tripId, source === 'ambulance' ? { ambulanceId: id } : { vehicleId: id });
+      // ambulanceId only — the backend's vehicleId branch is gone with the
+      // legacy Vehicle path, and every unit offered above is ambulance-sourced.
+      await tripsApi.assign(tripId, { ambulanceId: id });
       toast.success('🚑 Driver assigned!');
+      // Drop the cached ranking for this trip. The unit just taken is no
+      // longer free, and a stale list would keep offering it.
+      setSuggestions(prev => { const next = { ...prev }; delete next[tripId]; return next; });
       await loadLiveBoard();
     } catch { /* axios interceptor shows error */ }
     finally { setAssigning(null); }
@@ -739,24 +764,57 @@ export default function DispatchPage() {
                             className="inp text-xs py-1.5 w-full"
                             disabled={assigning === t._id}
                             value=""
+                            onFocus={() => loadSuggestions(t._id)}
+                            onMouseDown={() => loadSuggestions(t._id)}
                             onChange={(e) => {
                               const [id, source] = e.target.value.split('|');
                               assignDriver(t._id, id, source);
                             }}
                           >
                             <option value="">
-                              {assigning === t._id ? 'Assigning...' : '🚑 Assign Vehicle / Driver'}
+                              {assigning === t._id
+                                ? 'Assigning...'
+                                : loadingSuggestions === t._id
+                                  ? 'Finding nearest…'
+                                  : '🚑 Assign Vehicle / Driver'}
                             </option>
-                            {vehicles.map(v => (
-                              <option key={v._id} value={`${v._id}|${v.source}`}>
-                                {/* Partner first: on a multi-partner board
-                                    the operator is choosing whose crew to
-                                    send, not just which registration. */}
-                                {v.partner?.isPlatformOwner ? '★ ' : ''}
-                                {v.partner?.label ? `${v.partner.label} · ` : ''}
-                                {v.registrationNumber} · {v.assignedDriver?.name || 'No driver'}
-                              </option>
-                            ))}
+
+                            {/* Ranked by how far the driver's last GPS fix
+                                is from this pickup. Shown first so the
+                                nearest crew is the easiest thing to pick —
+                                the dispatcher still chooses. */}
+                            {suggestions[t._id]?.suggestions?.length > 0 && (
+                              <optgroup label={suggestions[t._id].pickupHasCoordinates
+                                ? 'Nearest first'
+                                : 'On duty (no pickup GPS — not ranked)'}>
+                                {suggestions[t._id].suggestions.map(s => (
+                                  <option key={`s-${s._id}`} value={`${s._id}|ambulance`}>
+                                    {s.distanceKm != null ? `${s.distanceKm} km · ` : 'No GPS · '}
+                                    {s.partner?.isPlatformOwner ? '★ ' : ''}
+                                    {s.partner?.label ? `${s.partner.label} · ` : ''}
+                                    {s.registrationNumber}
+                                    {s.driver?.name ? ` · ${s.driver.name}` : ''}
+                                    {s.locationAgeSec != null && s.locationAgeSec > 300
+                                      ? ` · ${Math.round(s.locationAgeSec / 60)}m old`
+                                      : ''}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+
+                            {/* The unranked live-board list stays as the
+                                fallback, so a failed or not-yet-loaded
+                                ranking never leaves the dispatcher with an
+                                empty dropdown. */}
+                            <optgroup label="All on duty">
+                              {vehicles.map(v => (
+                                <option key={v._id} value={`${v._id}|${v.source}`}>
+                                  {v.partner?.isPlatformOwner ? '★ ' : ''}
+                                  {v.partner?.label ? `${v.partner.label} · ` : ''}
+                                  {v.registrationNumber} · {v.assignedDriver?.name || 'No driver'}
+                                </option>
+                              ))}
+                            </optgroup>
                           </select>
                         </div>
                       ) : (
