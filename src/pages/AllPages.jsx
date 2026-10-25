@@ -19,6 +19,7 @@ export function TripsPage() {
   const [mainTab, setMainTab] = useState('dispatch');
   const [bookingTrips, setBookingTrips] = useState([]);
   const [btLoading, setBtLoading] = useState(false);
+  const [error,   setError]   = useState(null);
 
 useEffect(() => { load(); }, [filter]);
 
@@ -37,10 +38,13 @@ useEffect(() => { load(); }, [filter]);
 
  const load = async () => {
     setLoading(true);
+    setError(null);
     try {
       const params = filter !== 'all' ? { status: filter } : {};
       const { data } = await tripsApi.getAll(params);
       setTrips(data.trips);
+    } catch (e) {
+      setError(e.response?.data?.message || e.message || 'Could not load trips.');
     } finally { setLoading(false); }
   };
 
@@ -116,7 +120,7 @@ useEffect(() => { load(); }, [filter]);
               <table className="tbl">
                 <thead><tr>
                   <th>Trip</th><th>Patient</th><th>Emergency</th><th>Hospital</th>
-                  <th>Vehicle</th><th>Driver</th><th>Fare</th><th>Status</th><th>Date</th>
+                  <th>Vehicle</th><th>Driver</th><th>Helper</th><th>Fare</th><th>Status</th><th>Booked At</th>
                 </tr></thead>
                 <tbody>
                   {trips.map(t => (
@@ -127,9 +131,16 @@ useEffect(() => { load(); }, [filter]);
                       <td className="text-sm" style={{ color:'var(--text2)' }}>{t.dropHospital?.name}</td>
                       <td className="font-mono text-xs" style={{ color:'var(--text2)' }}>{t.vehicle?.registrationNumber}</td>
                       <td className="text-sm">{t.driver?.name || '—'}</td>
+                      <td className="whitespace-nowrap">
+                        {typeof t.helperEnabled !== 'boolean'
+                          ? <span className="text-xs" style={{ color:'var(--text3)' }}>—</span>
+                          : t.helperEnabled
+                            ? <span className="badge badge-green text-xs">🧑‍⚕️ Helper added</span>
+                            : <span className="badge badge-gray text-xs">No helper</span>}
+                      </td>
                       <td className="font-bold font-mono" style={{ color:'var(--accent)' }}>{rupee(t.grandTotal || t.baseFare)}</td>
                       <td><StatusBadge status={t.status} /></td>
-                      <td className="text-xs font-mono" style={{ color:'var(--text3)' }}>{new Date(t.createdAt).toLocaleDateString('en-IN')}</td>
+                      <td className="text-xs font-mono whitespace-nowrap" style={{ color:'var(--text3)' }}>{fmt(t.createdAt)}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -122,17 +122,29 @@ const BookingSummary = ({ t }) => {
   // answer ("Non-AC") and must not be collapsed into the field being absent
   // on a booking that never offered the choice.
   const hasAc     = typeof t.acEnabled === 'boolean';
+  // Same strict test as AC: a trip that predates the field shows no badge.
+  const hasHelper = typeof t.helperEnabled === 'boolean';
   const isRound   = t.tripType === 'round_trip';
   const eta       = fmtDuration(t.estimatedDurationSec);
+  const bookedAt  = fmtDateTime(t.createdAt);
+  const pickupAt  = t.scheduleType === 'later' ? fmtDateTime(t.scheduleDate) : '';
   const money     = dotJoin(km !== null && `📏 ${km} km`, eta && `⏱️ ${eta}`, fare !== null && `💰 ${rupee(fare)}`);
-  const hasBadges = ambulance || hasAc || tripType || schedule || emergency;
+  const hasBadges = ambulance || hasAc || hasHelper || tripType || schedule || emergency;
 
   return (
     <div className="space-y-1">
+      {(bookedAt || pickupAt) && (
+        <div className="text-[11px] font-mono flex flex-wrap gap-x-3" style={{ color: 'var(--text3)' }}>
+          {bookedAt && <span>🕒 Booked {bookedAt}</span>}
+          {pickupAt && <span style={{ color: 'var(--amber)' }}>📅 Scheduled: {pickupAt}</span>}
+        </div>
+      )}
+
       {hasBadges && (
         <div className="flex flex-wrap gap-1 mb-1.5">
           {ambulance && <Badge color="green">🚑 {ambulance}</Badge>}
           {hasAc     && <Badge color={t.acEnabled ? 'blue' : 'gray'}>{t.acEnabled ? '❄️ AC Included' : 'Non-AC'}</Badge>}
+          {hasHelper && <Badge color={t.helperEnabled ? 'green' : 'gray'}>{t.helperEnabled ? '🧑‍⚕️ Helper added' : 'No helper'}</Badge>}
           {tripType  && <Badge color={isRound ? 'amber' : 'gray'}>{isRound ? '🔄' : '➡️'} {tripType}</Badge>}
           {schedule  && <Badge color={t.scheduleType === 'later' ? 'amber' : 'gray'}>🕐 {schedule}</Badge>}
           {emergency && <Badge color="gray">{emergency}</Badge>}
