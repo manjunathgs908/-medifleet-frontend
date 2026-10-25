@@ -29,6 +29,7 @@ import PostingAlertsPage from './pages/PostingAlertsPage';
 import WhatsappLeadsPage from './pages/WhatsappLeadsPage';
 import WhatsappConversationsPage from './pages/WhatsappConversationsPage';
 import SeoStudioPage from './pages/SeoStudioPage';
+import QuotePage from './pages/QuotePage';
 
 // Driver mobile app pages
 import DriverApp       from './pages/driver/DriverApp';
@@ -64,6 +65,8 @@ export default function App() {
     <Routes>
       {/* Public */}
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
+      {/* Customer "Quote & Confirm" link — no login, keyed by the link's token. */}
+      <Route path="/q/:token" element={<QuotePage />} />
 
       {/* Driver mobile app — standalone layout */}
       <Route path="/driver/*" element={

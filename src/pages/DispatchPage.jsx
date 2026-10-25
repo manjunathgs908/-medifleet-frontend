@@ -1,7 +1,8 @@
 // src/pages/DispatchPage.jsx
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { tripsApi, hospitalsApi, pricingApi } from '../api/client';
+import { tripsApi, hospitalsApi, pricingApi, quotesApi } from '../api/client';
 import AddressAutocomplete from '../components/AddressAutocomplete';
+import { ambulanceTypeLabel, servicesFromPricing, fmtDuration } from '../utils/serviceTypes';
 import RoutePreviewMap from '../components/RoutePreviewMap';
 import { PageHeader, StatusBadge, Badge, Btn, Modal, rupee, Spinner, fmtDateTime as fmtStamp, timeAgo } from '../components/ui';
 import toast from 'react-hot-toast';
@@ -31,11 +32,18 @@ const EMPTY_FORM = {
 const TRACK_BASE = 'https://www.savelife.health/track';
 const trackUrl = (t) => (t.trackingToken ? `${TRACK_BASE}/${t.trackingToken}` : null);
 
-const fmtDuration = (sec) => {
-  if (!Number.isFinite(Number(sec))) return null;
-  const m = Math.round(Number(sec) / 60);
-  return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${m % 60}m`;
+// "Send Quote Link": only the phone is required. Whatever is left blank the
+// customer fills in on their own page before confirming.
+const EMPTY_QUOTE = { phone: '', patientName: '', selectedType: '', acEnabled: false };
+
+const QUOTE_STATUS = {
+  sent     : { color: 'blue',  label: 'Sent' },
+  viewed   : { color: 'amber', label: 'Viewed' },
+  confirmed: { color: 'green', label: 'Confirmed' },
 };
+
+const isMobile = (v) => /^[6-9]\d{9}$/.test(String(v).replace(/\D/g, '').slice(-10));
+const toQuotePlace = (p) => (p ? { address: p.label, lat: p.lat, lng: p.lng } : undefined);
 
 const EMERGENCY_TYPES = [
   { value:'cardiac',      label:'🫀 Cardiac Emergency' },
@@ -54,33 +62,6 @@ const EMERGENCY_TYPES = [
 // when absent — never "undefined", "NaN", or a stranded "·".
 const dotJoin = (...parts) => parts.filter(Boolean).join(' · ');
 const numOr   = (v) => (v === '' || v === null || v === undefined || !Number.isFinite(Number(v)) ? null : Number(v));
-
-// ── Website booking options ──
-// selectedType is the Pricing serviceType id and arrives in whichever case
-// the sending client used: savelife-web posts lowercase ('bls',
-// 'als_tempo'), while the backend's own catalog in
-// utils/ambulanceServiceTypes.js is uppercase. Normalising to uppercase
-// lets one map serve both. An id not listed here degrades to a readable
-// "Als Tempo" rather than leaking the raw token onto the dispatch board.
-const AMBULANCE_TYPE_LABELS = {
-  BLS             : 'BLS Ambulance — Maruti Eeco',
-  BLS_TEMPO       : 'BLS Ambulance — Tempo Traveller',
-  ALS_TEMPO       : 'ALS Ambulance — Tempo Traveller',
-  ACLS_TEMPO      : 'ACLS Ambulance — Tempo Traveller',
-  NICU_TEMPO      : 'NICU Ambulance — Tempo Traveller',
-  BODY_TEMPO      : 'Body Shifting Ambulance — Tempo Traveller',
-  BODY_MINI       : 'Body Shifting Mini — Maruti Eeco',
-  HEARSE          : 'Hearse',
-  HEARSE_BASIC    : 'Hearse — Basic',
-  HEARSE_STANDARD : 'Hearse — Standard',
-  HEARSE_LUXURY   : 'Hearse — Luxury',
-  FREEZER_BOX     : 'Freezer Box',
-};
-
-const titleCase = (v) => String(v).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-
-const ambulanceTypeLabel = (v) =>
-  v ? (AMBULANCE_TYPE_LABELS[String(v).trim().toUpperCase()] || titleCase(v)) : '';
 
 const TRIP_TYPE_LABELS = { one_way: 'One Way', round_trip: 'Round Trip / Up & Down' };
 
@@ -193,6 +174,12 @@ export default function DispatchPage() {
   const [loadingSuggestions, setLoadingSuggestions] = useState(null);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [newBookings, setNewBookings]   = useState([]); // freshly-arrived trips awaiting acknowledgment
+  const [quotes,      setQuotes]      = useState([]);
+  const [quoteOpen,   setQuoteOpen]   = useState(false);
+  const [quoteForm,   setQuoteForm]   = useState(EMPTY_QUOTE);
+  const [quotePickup, setQuotePickup] = useState(null);
+  const [quoteDrop,   setQuoteDrop]   = useState(null);
+  const [sendingQuote, setSendingQuote] = useState(false);
   const intervalRef      = useRef();
   const knownTripIdsRef  = useRef(null); // null = baseline not yet captured (skip alert on first load)
   const audioCtxRef      = useRef(null);
@@ -202,20 +189,8 @@ export default function DispatchPage() {
 
   useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
 
-  // The dropdown is whatever the Pricing collection currently offers. A
-  // service with no active Pricing doc is not bookable — showing it would
-  // only let an operator reach "No active pricing found" at submit time.
-  const services = useMemo(
-    () => pricing
-      .filter(p => p.active !== false && p.serviceType)
-      .map(p => ({
-        id     : String(p.serviceType).toLowerCase(), // same ids savelife-web posts
-        label  : ambulanceTypeLabel(p.serviceType),
-        acPerKm: Number(p.acPerKm) || 0,
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label)),
-    [pricing],
-  );
+  // The dropdown is whatever the Pricing collection currently offers.
+  const services = useMemo(() => servicesFromPricing(pricing), [pricing]);
 
   const activeService = services.find(s => s.id === form.selectedType) || null;
   const acAvailable   = !!activeService?.acPerKm;
@@ -257,7 +232,7 @@ export default function DispatchPage() {
 
   useEffect(() => {
     loadInitialData();
-    intervalRef.current = setInterval(loadLiveBoard, 20000);
+    intervalRef.current = setInterval(() => { loadLiveBoard(); loadQuotes(); }, 20000);
     return () => {
       clearInterval(intervalRef.current);
       stopRinging();
@@ -340,8 +315,54 @@ export default function DispatchPage() {
       // Ambulance) list below — no separate vehiclesApi call needed,
       // it would only be immediately overwritten and lacks the
       // source tag the assign dropdown relies on.
-      await loadLiveBoard();
+      await Promise.all([loadLiveBoard(), loadQuotes()]);
     } finally { setLoading(false); }
+  };
+
+  const loadQuotes = async () => {
+    try {
+      const { data } = await quotesApi.getAll();
+      setQuotes(data.quotes || []);
+    } catch { /* silent, like the live board */ }
+  };
+
+  const setQuoteField = (k, v) => setQuoteForm(f => ({ ...f, [k]: v }));
+
+  const closeQuote = () => {
+    setQuoteOpen(false);
+    setQuoteForm(EMPTY_QUOTE);
+    setQuotePickup(null);
+    setQuoteDrop(null);
+  };
+
+  const quoteService     = services.find(s => s.id === quoteForm.selectedType) || null;
+  const quoteAcAvailable = !!quoteService?.acPerKm;
+
+  const sendQuote = async (e) => {
+    e.preventDefault();
+    if (!isMobile(quoteForm.phone)) { toast.error('Enter a valid 10-digit mobile number'); return; }
+
+    setSendingQuote(true);
+    try {
+      const { data } = await quotesApi.create({
+        phone       : quoteForm.phone,
+        patientName : quoteForm.patientName.trim() || undefined,
+        pickup      : toQuotePlace(quotePickup),
+        drop        : toQuotePlace(quoteDrop),
+        selectedType: quoteForm.selectedType || undefined,
+        acEnabled   : quoteAcAvailable && quoteForm.acEnabled,
+      });
+      if (data.quote?.whatsappSent) {
+        toast.success('📲 Quote link sent on WhatsApp');
+      } else {
+        // The quote still exists — the operator can copy its link from the
+        // Quote Links list and share it another way.
+        toast.error(`WhatsApp not sent${data.quote?.whatsappError ? ` — ${data.quote.whatsappError}` : ''}. Copy the link from Quote Links.`, { duration: 8000 });
+      }
+      closeQuote();
+      await loadQuotes();
+    } catch { /* axios interceptor shows error */ }
+    finally { setSendingQuote(false); }
   };
 
   const loadLiveBoard = async () => {
@@ -478,12 +499,13 @@ export default function DispatchPage() {
   // navigator.clipboard needs a secure context and can be refused; the
   // toast shows the URL either way so the operator can still read it out
   // or select it by hand.
-  const copyTrackingLink = async (t) => {
-    const url = trackUrl(t);
+  const copyTrackingLink = (t) => copyLink(trackUrl(t), 'Tracking link copied');
+
+  const copyLink = async (url, message) => {
     if (!url) return;
     try {
       await navigator.clipboard.writeText(url);
-      toast.success('Tracking link copied');
+      toast.success(message);
     } catch {
       toast(url, { duration: 8000 });
     }
@@ -496,6 +518,9 @@ export default function DispatchPage() {
         subtitle="Book emergency · Live fleet board · Assign ambulance"
         action={
           <div className="flex items-center gap-2">
+            <Btn variant="blue" size="sm" onClick={() => setQuoteOpen(true)}>
+              <Link2 size={13} /> Send Quote Link
+            </Btn>
             <button
               onClick={enableSound}
               disabled={soundEnabled}
@@ -872,8 +897,149 @@ export default function DispatchPage() {
                 </div>
             }
           </div>
+
+          {/* ── Quote Links: what each customer did with the link ── */}
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold font-display text-sm">Quote Links</h3>
+              <button onClick={loadQuotes}
+                className="p-1.5 rounded-lg transition-all"
+                style={{ color: 'var(--text3)', background: 'var(--surface2)' }}>
+                <RefreshCw size={13} />
+              </button>
+            </div>
+
+            {quotes.length === 0
+              ? <div className="text-center py-6 text-sm" style={{ color: 'var(--text3)' }}>No quote links in the last 7 days</div>
+              : <div className="space-y-3 overflow-y-auto" style={{ maxHeight: 420 }}>
+                  {quotes.map(q => {
+                    const st = q.expired
+                      ? { color: 'gray', label: 'Expired' }
+                      : (QUOTE_STATUS[q.status] || { color: 'gray', label: q.status });
+                    return (
+                      <div key={q._id} className="rounded-xl p-3"
+                        style={{ background: 'var(--surface2)', border: '1px solid var(--border2)' }}>
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="min-w-0">
+                            <div className="font-semibold text-sm truncate">{q.patientName || 'Customer'}</div>
+                            <div className="text-xs flex items-center gap-1 mt-0.5" style={{ color: 'var(--text3)' }}>
+                              <Phone size={10} /> {q.phone}
+                              {q.selectedType && <> · {ambulanceTypeLabel(q.selectedType)}</>}
+                            </div>
+                          </div>
+                          <Badge color={st.color}>{st.label}</Badge>
+                        </div>
+
+                        <div className="text-[11px] font-mono mt-2 space-y-0.5" style={{ color: 'var(--text3)' }}>
+                          <div>📤 Sent {fmtStamp(q.sentAt)}</div>
+                          {q.viewedAt    && <div>👀 Viewed {fmtStamp(q.viewedAt)}</div>}
+                          {q.confirmedAt && <div style={{ color: 'var(--accent)' }}>✅ Confirmed {fmtStamp(q.confirmedAt)}</div>}
+                        </div>
+
+                        {!q.whatsappSent && (
+                          <div className="text-[11px] mt-1.5" style={{ color: 'var(--amber)' }}>
+                            ⚠️ WhatsApp not sent{q.whatsappError ? ` — ${q.whatsappError}` : ''}. Share the link by hand.
+                          </div>
+                        )}
+
+                        {q.trip && (
+                          <div className="text-xs font-mono mt-1.5" style={{ color: 'var(--amber)' }}>
+                            🚑 {q.trip.tripNumber}{numOr(q.trip.estimatedFare) !== null && <> · {rupee(q.trip.estimatedFare)}</>}
+                          </div>
+                        )}
+
+                        {q.status !== 'confirmed' && !q.expired && (
+                          <button
+                            type="button"
+                            onClick={() => copyLink(q.url, 'Quote link copied')}
+                            className="w-full flex items-center justify-center gap-1 mt-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                            style={{ background: 'rgba(59,158,255,.1)', color: 'var(--blue)', border: '1px solid rgba(59,158,255,.2)' }}
+                          >
+                            <Link2 size={11} /> Copy Quote Link
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+            }
+          </div>
         </div>
       </div>
+
+      {/* ── Send Quote Link ── */}
+      <Modal open={quoteOpen} onClose={closeQuote} title="📲 Send Quote Link" width="max-w-xl">
+        <form onSubmit={sendQuote} className="space-y-4">
+          <div className="text-xs" style={{ color: 'var(--text3)' }}>
+            Only the phone is required. Anything you leave empty, the customer fills in on their link before confirming.
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>WhatsApp Number *</label>
+              <input className="inp" value={quoteForm.phone} onChange={e => setQuoteField('phone', e.target.value)} placeholder="+91 XXXXX XXXXX" required />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>Patient Name</label>
+              <input className="inp" value={quoteForm.patientName} onChange={e => setQuoteField('patientName', e.target.value)} placeholder="Optional" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <AddressAutocomplete
+              label="Pickup"
+              value={quotePickup} onSelect={setQuotePickup}
+              dotColor="#00d4aa"
+              placeholder="Optional — customer can share GPS"
+            />
+            <AddressAutocomplete
+              label="Drop / Destination"
+              value={quoteDrop} onSelect={setQuoteDrop}
+              dotColor="#ff4d6d"
+              placeholder="Optional"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>Ambulance / Service</label>
+              <select className="inp" value={quoteForm.selectedType}
+                onChange={e => {
+                  const svc = services.find(s => s.id === e.target.value);
+                  setQuoteForm(f => ({ ...f, selectedType: e.target.value, acEnabled: svc?.acPerKm ? f.acEnabled : false }));
+                }}>
+                <option value="">-- Customer chooses --</option>
+                {services.map(sv => <option key={sv.id} value={sv.id}>{sv.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>AC</label>
+              <button
+                type="button"
+                disabled={!quoteAcAvailable}
+                onClick={() => setQuoteField('acEnabled', !quoteForm.acEnabled)}
+                className="inp flex items-center justify-between text-left"
+                style={{ opacity: quoteAcAvailable ? 1 : 0.45, cursor: quoteAcAvailable ? 'pointer' : 'not-allowed' }}
+              >
+                <span>{!quoteAcAvailable ? (quoteForm.selectedType ? 'Not available for this service' : 'Choose a service first') : quoteForm.acEnabled ? '❄️ AC Included' : 'Non-AC'}</span>
+                <span className="w-8 h-4 rounded-full relative transition-colors"
+                  style={{ background: quoteForm.acEnabled ? 'var(--accent)' : 'var(--border2)' }}>
+                  <span className="absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all"
+                    style={{ left: quoteForm.acEnabled ? 18 : 2 }} />
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-1">
+            <Btn type="submit" disabled={sendingQuote} className="flex-1">
+              {sendingQuote ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
+              Send on WhatsApp
+            </Btn>
+            <Btn type="button" variant="ghost" onClick={closeQuote}>Cancel</Btn>
+          </div>
+        </form>
+      </Modal>
 
       {/* ── Bill Modal ── */}
       <Modal open={!!billModal} onClose={() => setBillModal(null)} title="🧾 Trip Bill Generated" width="max-w-md">

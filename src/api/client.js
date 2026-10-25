@@ -66,9 +66,10 @@ api.interceptors.response.use(
       }
     }
 
-    // Show error toast for non-401 errors (skip network errors)
+    // Show error toast for non-401 errors (skip network errors). A request
+    // sent with { skipErrorToast: true } shows its own inline message instead.
     const msg = err.response?.data?.message || err.message;
-    if (err.response && err.response.status !== 401) {
+    if (err.response && err.response.status !== 401 && !original?.skipErrorToast) {
       toast.error(msg, { duration: 4000 });
     }
 
@@ -125,6 +126,19 @@ export const tripsApi = {
 // DB shows up in dispatch without a frontend release.
 export const pricingApi = {
   getAll: () => api.get('/pricing'),
+};
+
+// "Quote & Confirm" booking links (medifleet-backend routes/quotes.js).
+// create/getAll are the dispatch desk's (owner). The *Public calls are the
+// customer's page at /q/:token — no login, keyed only by the link's token,
+// and priced/booked server-side by the same code as estimate and create.
+export const quotesApi = {
+  create        : (data)         => api.post('/quotes', data),
+  // Polled with the live board, and silent like it on failure.
+  getAll        : ()             => api.get('/quotes', { skipErrorToast: true }),
+  getPublic     : (token)        => api.get(`/quotes/public/${encodeURIComponent(token)}`, { skipErrorToast: true }),
+  estimatePublic: (token, data)  => api.post(`/quotes/public/${encodeURIComponent(token)}/estimate`, data, { skipErrorToast: true }),
+  confirmPublic : (token, data)  => api.post(`/quotes/public/${encodeURIComponent(token)}/confirm`, data, { skipErrorToast: true }),
 };
 
 // Google Places / Directions, proxied by the backend so the Maps key stays
