@@ -95,10 +95,12 @@ const fmtDateTime = (v) => {
 };
 
 // scheduleDate is only persisted for scheduleType 'later', but a stray date
-// on a 'now' booking is still worth surfacing rather than swallowing.
+// on a booking with no scheduleType is still worth surfacing rather than
+// swallowing. A 'later' booking's time is shown on BookingSummary's
+// "📅 Scheduled:" line instead, so the badge doesn't repeat it.
 const scheduleLabel = (t) => {
   const when = fmtDateTime(t.scheduleDate);
-  if (t.scheduleType === 'later') return when ? `Scheduled · ${when}` : 'Scheduled';
+  if (t.scheduleType === 'later') return 'Scheduled';
   if (t.scheduleType === 'now')   return 'Right Now';
   return when ? `Scheduled · ${when}` : '';
 };
