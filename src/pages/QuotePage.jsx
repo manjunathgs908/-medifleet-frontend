@@ -13,7 +13,7 @@ import { useParams } from 'react-router-dom';
 import { quotesApi, pricingApi, placesApi } from '../api/client';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import { Btn, Spinner, rupee, fmtDateTime } from '../components/ui';
-import { servicesFromPricing, fmtDuration } from '../utils/serviceTypes';
+import { servicesFromPricing, fmtDuration, ambulanceTypeLabel } from '../utils/serviceTypes';
 import { LocateFixed, RefreshCw, CheckCircle, AlertTriangle, ExternalLink } from 'lucide-react';
 
 const errMessage = (err, fallback) => err?.response?.data?.message || fallback;
@@ -41,6 +41,20 @@ const Shell = ({ children }) => (
         <div className="font-bold font-display text-lg mt-1" style={{ color: 'var(--accent)' }}>SaveLife Ambulance</div>
       </div>
       {children}
+    </div>
+  </div>
+);
+
+// A field SaveLife already set for this booking: shown plainly, with nothing
+// to tap or clear, so it cannot be changed by mistake. The backend ignores
+// any other value for it too.
+const Fixed = ({ label, children }) => (
+  <div>
+    <Label>{label}</Label>
+    <div className="rounded-lg px-3 py-2.5 text-sm flex items-start justify-between gap-2"
+      style={{ background: 'var(--surface2)', border: '1px solid var(--border2)', color: 'var(--text)' }}>
+      <span>{children}</span>
+      <span className="text-[10px] whitespace-nowrap mt-0.5" style={{ color: 'var(--text3)' }}>🔒 Set by SaveLife</span>
     </div>
   </div>
 );
@@ -115,6 +129,10 @@ export default function QuotePage() {
   const activeService = services.find(s => s.id === String(selectedType).toLowerCase()) || null;
   const acAvailable = !!activeService?.acPerKm;
   const isOpen = quote && quote.status !== 'confirmed' && !quote.expired;
+  // What the operator already set. Pickup is never locked — it is the
+  // customer's own location.
+  const dropLocked    = !!quote?.locked?.drop && !!drop;
+  const serviceLocked = !!quote?.locked?.service && !!selectedType;
 
   // Re-price whenever anything the fare depends on changes, once all three
   // are set. Debounced like the dispatch form: every call is a Google
@@ -268,22 +286,35 @@ export default function QuotePage() {
           />
         </div>
 
-        <AddressAutocomplete
-          label="Drop / Hospital" required
-          value={drop} onSelect={setDrop}
-          dotColor="#ff4d6d"
-          placeholder="Hospital, address or landmark"
-        />
+        {dropLocked ? (
+          <Fixed label="Drop / Hospital">🏥 {drop?.label}</Fixed>
+        ) : (
+          <AddressAutocomplete
+            label="Drop / Hospital" required
+            value={drop} onSelect={setDrop}
+            dotColor="#ff4d6d"
+            placeholder="Hospital, address or landmark"
+          />
+        )}
 
-        <div>
-          <Label>Service *</Label>
-          <select className="inp" value={String(selectedType).toLowerCase()} onChange={e => chooseService(e.target.value)}>
-            <option value="">{services.length ? '-- Select service --' : 'Loading services...'}</option>
-            {services.map(sv => <option key={sv.id} value={sv.id}>{sv.label}</option>)}
-          </select>
-        </div>
+        {serviceLocked ? (
+          <>
+            <Fixed label="Service">🚑 {activeService?.label || ambulanceTypeLabel(selectedType)}</Fixed>
+            {(acAvailable || acEnabled) && (
+              <Fixed label="AC">{acEnabled ? '❄️ AC Included' : 'Non-AC'}</Fixed>
+            )}
+          </>
+        ) : (
+          <div>
+            <Label>Service *</Label>
+            <select className="inp" value={String(selectedType).toLowerCase()} onChange={e => chooseService(e.target.value)}>
+              <option value="">{services.length ? '-- Select service --' : 'Loading services...'}</option>
+              {services.map(sv => <option key={sv.id} value={sv.id}>{sv.label}</option>)}
+            </select>
+          </div>
+        )}
 
-        {acAvailable && (
+        {!serviceLocked && acAvailable && (
           <button
             type="button"
             onClick={() => setAcEnabled(v => !v)}
