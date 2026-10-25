@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/client';
 import toast from 'react-hot-toast';
+import { fmtDateTime } from '../components/ui';
 
 const AdvancePage = () => {
   const [advances, setAdvances] = useState([]);
@@ -58,7 +59,7 @@ const AdvancePage = () => {
                   <div className="text-xs mt-1" style={{ color: 'var(--text2)' }}>{a.driver?.phone}</div>
                   <div className="text-xs mt-1" style={{ color: 'var(--text2)' }}>Reason: {a.reason}</div>
                   <div className="text-xs mt-1 font-mono" style={{ color: 'var(--text3)' }}>
-                    {new Date(a.createdAt).toLocaleDateString('en-IN')}
+                    {fmtDateTime(a.createdAt)}
                   </div>
                 </div>
                 <div className="text-right">
@@ -110,7 +111,7 @@ const AdvancePage = () => {
                     </span>
                   </td>
                   <td className="p-4 text-xs font-mono" style={{ color: 'var(--text3)' }}>
-                    {new Date(a.createdAt).toLocaleDateString('en-IN')}
+                    {fmtDateTime(a.createdAt)}
                   </td>
                 </tr>
               ))}

@@ -1,19 +1,11 @@
 // src/pages/WhatsappLeadsPage.jsx
 import React, { useEffect, useRef, useState } from 'react';
 import { whatsappLeadsApi } from '../api/client';
-import { PageHeader, Btn, Spinner, Empty, StatusBadge, Tabs } from '../components/ui';
+import { PageHeader, Btn, Spinner, Empty, StatusBadge, Tabs, fmtDateTime, timeAgo } from '../components/ui';
 import { AlertTriangle, Phone } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const POLL_MS = 30000;
-
-// Same "Xm ago" / "Xh Ym ago" shape as SosAlertsPage.jsx's elapsed() helper,
-// kept local here since no shared time-formatting util exists yet.
-const elapsed = (iso) => {
-  const mins = Math.floor((Date.now() - new Date(iso)) / 60000);
-  if (mins < 1) return 'just now';
-  return mins < 60 ? `${mins}m ago` : `${Math.floor(mins / 60)}h ${mins % 60}m ago`;
-};
 
 const FILTERS = [
   { key: 'all',       label: 'All' },
@@ -124,7 +116,10 @@ export default function WhatsappLeadsPage() {
                       </td>
                       <td className="text-sm">{l.service}</td>
                       <td><StatusBadge status={l.status} /></td>
-                      <td className="text-xs" style={{ color: 'var(--text3)' }}>{elapsed(l.createdAt)}</td>
+                      <td className="text-xs whitespace-nowrap">
+                        <div className="font-mono" style={{ color: 'var(--text2)' }}>{fmtDateTime(l.createdAt)}</div>
+                        {timeAgo(l.createdAt) && <div className="text-[10px]" style={{ color: 'var(--text3)' }}>{timeAgo(l.createdAt)}</div>}
+                      </td>
                       <td>
                         <div className="flex gap-1">
                           {l.status === 'new' && (

@@ -24,7 +24,7 @@
 // it until the reason is gone.
 import React, { useEffect, useRef, useState } from 'react';
 import { seoApi } from '../api/client';
-import { PageHeader, Btn, Input, Select, Spinner, Empty, Badge, Tabs, SectionLabel } from '../components/ui';
+import { PageHeader, Btn, Input, Select, Spinner, Empty, Badge, Tabs, SectionLabel, fmtDateTime } from '../components/ui';
 import {
   Sparkles, FileText, AlertTriangle, CheckCircle2, Copy, RefreshCw,
   Link2, HelpCircle, Code2, Gauge, XCircle, Clock,
@@ -1284,7 +1284,7 @@ const DraftView = ({ article, onStatus, onRecheck, onRepair, onAutoRepair, onSav
               <div>tokens: {gen.inputTokens || 0} in / {gen.outputTokens || 0} out</div>
             )}
             {gen.factSheetHash && <div className="break-all">fact sheet: {gen.factSheetHash}</div>}
-            {gen.generatedAt && <div>generated: {new Date(gen.generatedAt).toLocaleString('en-IN')}</div>}
+            {gen.generatedAt && <div>generated: {fmtDateTime(gen.generatedAt)}</div>}
           </div>
         </div>
       )}
@@ -1717,7 +1717,7 @@ export default function SeoStudioPage() {
                   <td className="py-2.5 px-2 text-xs" style={{ color: 'var(--text3)' }}>
                     <span className="inline-flex items-center gap-1">
                       <Clock size={11} />
-                      {a.updatedAt ? new Date(a.updatedAt).toLocaleString('en-IN') : '—'}
+                      {fmtDateTime(a.updatedAt)}
                     </span>
                   </td>
                   <td className="py-2.5 px-2 text-right">

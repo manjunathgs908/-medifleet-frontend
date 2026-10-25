@@ -1,7 +1,7 @@
 // src/pages/TripAlertsPage.jsx
 import React, { useEffect, useState } from 'react';
 import { tripCallEventsApi, authApi } from '../api/client';
-import { PageHeader, Badge, Spinner, Empty, Select } from '../components/ui';
+import { PageHeader, Badge, Spinner, Empty, Select, fmtDateTime as fmt } from '../components/ui';
 import { AlertTriangle, Copy } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -14,13 +14,6 @@ const EVENT_MAP = {
   ACCEPTED    : { color: 'green', label: 'Accepted' },
   REJECTED    : { color: 'red',   label: 'Rejected' },
   NO_RESPONSE : { color: 'red',   label: 'No Response' },
-};
-
-// Same dd/mm/yyyy hh:mm shape as TripsPage's fmt() in AllPages.jsx.
-const fmt = (date) => {
-  if (!date) return '';
-  const d = new Date(date);
-  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 };
 
 export default function TripAlertsPage() {

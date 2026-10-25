@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { tripsApi, billingApi, hospitalsApi, financeApi, salaryApi, leadsApi, vehiclesApi, authApi } from '../api/client';
 import api from '../api/client';
-import { PageHeader, StatusBadge, Btn, Modal, StatCard, Tabs, Spinner, Empty, rupee } from '../components/ui';
+import { PageHeader, StatusBadge, Btn, Modal, StatCard, Tabs, Spinner, Empty, rupee, fmtDateTime, fmtDate } from '../components/ui';
 import toast from 'react-hot-toast';
 import {
   FileText, Receipt, FileStack, Wallet, Landmark, Users, Target,
@@ -58,12 +58,6 @@ useEffect(() => { load(); }, [filter]);
 
 
 
-
-  const fmt = (date) => {
-    if (!date) return '';
-    const d = new Date(date);
-    return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-  };
 
   const approveCancel = async (id) => {
     try {
@@ -140,7 +134,7 @@ useEffect(() => { load(); }, [filter]);
                       </td>
                       <td className="font-bold font-mono" style={{ color:'var(--accent)' }}>{rupee(t.grandTotal || t.baseFare)}</td>
                       <td><StatusBadge status={t.status} /></td>
-                      <td className="text-xs font-mono whitespace-nowrap" style={{ color:'var(--text3)' }}>{fmt(t.createdAt)}</td>
+                      <td className="text-xs font-mono whitespace-nowrap" style={{ color:'var(--text3)' }}>{fmtDateTime(t.createdAt)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -229,7 +223,7 @@ export function BillingPage() {
                     <td className="font-mono text-xs" style={{ color:'var(--accent)' }}>{b.billNumber}</td>
                     <td className="text-sm font-medium">{b.patient}</td>
                     <td className="text-sm" style={{ color:'var(--text2)' }}>{b.hospital?.name}</td>
-                    <td className="text-xs font-mono" style={{ color:'var(--text3)' }}>{new Date(b.createdAt).toLocaleDateString('en-IN')}</td>
+                    <td className="text-xs font-mono whitespace-nowrap" style={{ color:'var(--text3)' }}>{fmtDateTime(b.createdAt)}</td>
                     <td className="font-bold font-mono" style={{ color:'var(--accent)' }}>{rupee(b.grandTotal)}</td>
                     <td><StatusBadge status={b.paymentStatus} /></td>
                   </tr>
@@ -342,7 +336,7 @@ export function FinancePage() {
               <tbody>
                 {[...entries].reverse().map(e=>(
                   <tr key={e._id}>
-                    <td className="font-mono text-xs" style={{color:'var(--text3)'}}>{new Date(e.date).toLocaleDateString('en-IN')}</td>
+                    <td className="font-mono text-xs" style={{color:'var(--text3)'}}>{fmtDate(e.date)}</td>
                     <td><span className={`badge ${e.type==='income'?'badge-green':'badge-red'} text-[10px]`}>{e.type}</span></td>
                     <td><span className="badge badge-gray text-[10px] capitalize">{e.category?.replace('_',' ')}</span></td>
                     <td className="text-sm" style={{color:'var(--text2)'}}>{e.description}</td>
@@ -609,8 +603,6 @@ export function LeadsPage() {
   };
   const FILTERS = ['all','new','contacted','converted','lost'];
 
-  const fmtDate = (d) => { const dt = d ? new Date(d) : null; return dt && !isNaN(dt) ? dt.toLocaleDateString('en-IN') : '-'; };
-
   return (
     <div className="page-enter">
       <PageHeader title="Leads Dashboard" subtitle="FB Ads · Google Ads · Inbound Calls · WhatsApp" />
@@ -642,7 +634,7 @@ export function LeadsPage() {
                   <td className="text-xs max-w-xs truncate" style={{color:'var(--text2)'}}>{l.message||'—'}</td>
                   <td className="text-xs" style={{color:'var(--text3)'}}>{l.adName||l.formName||'—'}</td>
                   <td><StatusBadge status={l.status}/></td>
-                  <td className="text-xs font-mono" style={{color:'var(--text3)'}}>{fmtDate(l.receivedAt)}</td>
+                  <td className="text-xs font-mono whitespace-nowrap" style={{color:'var(--text3)'}}>{fmtDateTime(l.receivedAt)}</td>
                   <td>
                     <div className="flex gap-1">
                       {l.status==='new'       && <Btn size="sm" variant="blue"  onClick={()=>update(l._id,'contacted')}>Contact</Btn>}
@@ -704,7 +696,7 @@ export function CompliancePage() {
           <div className="font-mono font-bold text-sm" style={{color:colors[severity]}}>
             {item.daysLeft < 0 ? `Expired ${Math.abs(item.daysLeft)}d ago` : `${item.daysLeft}d left`}
           </div>
-          <div className="text-xs" style={{color:'var(--text3)'}}>{new Date(item.expiryDate).toLocaleDateString('en-IN')}</div>
+          <div className="text-xs" style={{color:'var(--text3)'}}>{fmtDate(item.expiryDate)}</div>
         </div>
       </div>
     );

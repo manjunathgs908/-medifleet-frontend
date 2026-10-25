@@ -1,7 +1,7 @@
 // src/pages/WhatsappConversationsPage.jsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { whatsappConversationsApi, whatsappCustomerApi } from '../api/client';
-import { PageHeader, Spinner, Empty, SectionLabel, StatusBadge, rupee } from '../components/ui';
+import { PageHeader, Spinner, Empty, SectionLabel, StatusBadge, rupee, fmtDateTime } from '../components/ui';
 import { AlertTriangle, Phone, X, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -82,12 +82,9 @@ function minutesSince(iso) {
   return (Date.now() - new Date(iso).getTime()) / 60000;
 }
 
-function formatDateTime(iso) {
-  if (!iso) return '';
-  return new Date(iso).toLocaleString('en-IN', {
-    day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit',
-  });
-}
+// '' for a missing date so a missing start time doesn't leave a dangling
+// "BLS · —" after the service label; the rest render the shared "—".
+const formatDateTime = (iso) => fmtDateTime(iso, '');
 
 // green while the session is still live regardless of completed (a phone
 // can complete a booking and immediately start a fresh conversation within
@@ -375,12 +372,13 @@ export default function WhatsappConversationsPage() {
                               </span>
                             )}
                             <span className="text-xs" style={{ color: 'var(--text3)' }}>
-                              {friendlyMinutes(c.minutesSince)}
+                              <span className="font-mono">{fmtDateTime(c.lastSeenAt)}</span>
+                              {c.minutesSince != null && <> · {friendlyMinutes(c.minutesSince)}</>}
                             </span>
                           </div>
                           {c.lastCalledAt && (
                             <div className="text-[11px] mt-1" style={{ color: 'var(--text3)' }}>
-                              Last call: {OUTCOME_LABELS[c.lastOutcome] || c.lastOutcome} · {friendlyMinutes(minutesSince(c.lastCalledAt))}
+                              Last call: {OUTCOME_LABELS[c.lastOutcome] || c.lastOutcome} · {fmtDateTime(c.lastCalledAt)} ({friendlyMinutes(minutesSince(c.lastCalledAt))})
                             </div>
                           )}
                         </div>
@@ -398,7 +396,7 @@ export default function WhatsappConversationsPage() {
                       <div className="mt-3 flex items-center justify-between gap-2 rounded-lg px-3 py-2.5"
                         style={{ background: 'rgba(59,158,255,.08)', border: '1px solid rgba(59,158,255,.25)' }}>
                         <span className="text-xs font-semibold" style={{ color: 'var(--blue)' }}>
-                          Follow up on {formatDateTime(c.followUpAt)}
+                          Follow up on {fmtDateTime(c.followUpAt)}
                         </span>
                         <button onClick={() => setForceShow((p) => ({ ...p, [c.phone]: true }))}
                           className="text-xs underline flex-shrink-0" style={{ color: 'var(--text3)' }}>
@@ -537,7 +535,7 @@ export default function WhatsappConversationsPage() {
                       <div key={i} className="card-sm">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-sm font-semibold">{OUTCOME_LABELS[call.outcome] || call.outcome}</span>
-                          <span className="text-xs" style={{ color: 'var(--text3)' }}>{formatDateTime(call.createdAt)}</span>
+                          <span className="text-xs" style={{ color: 'var(--text3)' }}>{fmtDateTime(call.createdAt)}</span>
                         </div>
                         {call.note && <div className="text-xs mt-1" style={{ color: 'var(--text2)' }}>{call.note}</div>}
                         {(call.calledBy || call.followUpAt || call.tripId) && (
@@ -577,7 +575,7 @@ export default function WhatsappConversationsPage() {
                           {trip.pickup?.address || '—'} → {trip.drop?.address || '—'}
                         </div>
                         <div className="flex items-center justify-between mt-1">
-                          <span className="text-xs" style={{ color: 'var(--text3)' }}>{formatDateTime(trip.createdAt)}</span>
+                          <span className="text-xs" style={{ color: 'var(--text3)' }}>{fmtDateTime(trip.createdAt)}</span>
                           {trip.fare != null && <span className="text-xs font-mono font-semibold">{rupee(trip.fare)}</span>}
                         </div>
                       </div>

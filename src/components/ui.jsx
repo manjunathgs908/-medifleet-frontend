@@ -191,6 +191,42 @@ export const Empty = ({ icon = '📭', message = 'No records found' }) => (
 // ── Rupee formatter ───────────────────────────────────────────
 export const rupee = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 
+// ── Date / time formatters ─────────────────────────────────────
+// The one format for every timestamp in the CRM: "25 Oct 2026, 02:32 pm".
+// A missing or unparseable value renders as "—", never "Invalid Date" —
+// pass a different fallback (e.g. '') where the caller hides the row.
+const toValidDate = (v) => {
+  if (v == null || v === '') return null;
+  const d = v instanceof Date ? v : new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+export const fmtDateTime = (v, fallback = '—') => {
+  const d = toValidDate(v);
+  return d ? d.toLocaleString('en-IN', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: true,
+  }) : fallback;
+};
+
+// Only for calendar-date fields (expense date, document expiry) that carry
+// no real time of day — adding one would print a meaningless "05:30 am".
+export const fmtDate = (v, fallback = '—') => {
+  const d = toValidDate(v);
+  return d ? d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : fallback;
+};
+
+// Secondary "12m ago" / "29h 51m ago" text. Empty for a missing date or one
+// in the future, so it can sit beside fmtDateTime without its own guard.
+export const timeAgo = (v) => {
+  const d = toValidDate(v);
+  if (!d) return '';
+  const mins = Math.floor((Date.now() - d.getTime()) / 60000);
+  if (mins < 0) return '';
+  if (mins < 1) return 'just now';
+  return mins < 60 ? `${mins}m ago` : `${Math.floor(mins / 60)}h ${mins % 60}m ago`;
+};
+
 // ── Tab strip ─────────────────────────────────────────────────
 export const Tabs = ({ tabs, active, onChange }) => (
   <div className="flex gap-1 p-1 rounded-xl mb-5" style={{ background: 'var(--surface)', width: 'fit-content' }}>

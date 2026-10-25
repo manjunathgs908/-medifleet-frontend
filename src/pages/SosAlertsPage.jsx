@@ -1,19 +1,11 @@
 // src/pages/SosAlertsPage.jsx
 import React, { useEffect, useRef, useState } from 'react';
 import { sosApi } from '../api/client';
-import { PageHeader, Btn, Spinner, Empty } from '../components/ui';
+import { PageHeader, Btn, Spinner, Empty, fmtDateTime, timeAgo } from '../components/ui';
 import { AlertTriangle, Phone, MapPin } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const POLL_MS = 30000;
-
-// Same "Xm ago" / "Xh Ym ago" shape as DispatchPage.jsx's elapsed() helper,
-// kept local here since no shared time-formatting util exists yet.
-const elapsed = (iso) => {
-  const mins = Math.floor((Date.now() - new Date(iso)) / 60000);
-  if (mins < 1) return 'just now';
-  return mins < 60 ? `${mins}m ago` : `${Math.floor(mins / 60)}h ${mins % 60}m ago`;
-};
 
 export default function SosAlertsPage() {
   const [alerts,    setAlerts]    = useState([]);
@@ -93,7 +85,8 @@ export default function SosAlertsPage() {
                         <span className="font-bold font-display">{a.driver?.name || 'Unknown driver'}</span>
                       </div>
                       <div className="text-xs mt-1" style={{ color: 'var(--text3)' }}>
-                        {elapsed(a.createdAt)}
+                        <span className="font-mono">{fmtDateTime(a.createdAt)}</span>
+                        {timeAgo(a.createdAt) && <> · {timeAgo(a.createdAt)}</>}
                         {a.trip?.tripNumber && <> · Trip {a.trip.tripNumber}</>}
                       </div>
                     </div>

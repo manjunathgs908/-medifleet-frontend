@@ -13,6 +13,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { tripsApi, attendanceApi, vehiclesApi } from '../../api/client';
 import toast from 'react-hot-toast';
+import { fmtDateTime } from '../../components/ui';
 import {
   CheckCircle, XCircle, MapPin, Phone, Clock,
   Zap, AlertTriangle, LogOut, Navigation, History
@@ -258,8 +259,8 @@ const DriverApp = () => {
               </div>
               {attendance?.clockIn && (
                 <div className="text-xs mt-2 text-center font-mono" style={{ color: 'var(--text3)' }}>
-                  In: {new Date(attendance.clockIn).toLocaleTimeString('en-IN')}
-                  {attendance.clockOut && ` · Out: ${new Date(attendance.clockOut).toLocaleTimeString('en-IN')}`}
+                  In: {fmtDateTime(attendance.clockIn)}
+                  {attendance.clockOut && ` · Out: ${fmtDateTime(attendance.clockOut)}`}
                 </div>
               )}
             </div>
@@ -356,7 +357,7 @@ const DriverApp = () => {
                     <div className="flex justify-between mt-1.5">
                       <span className="badge badge-green text-[10px]">{t.emergencyType}</span>
                       <span className="text-[10px] font-mono" style={{ color: 'var(--text3)' }}>
-                        {new Date(t.completedAt).toLocaleDateString('en-IN')}
+                        {fmtDateTime(t.completedAt)}
                       </span>
                     </div>
                   </div>

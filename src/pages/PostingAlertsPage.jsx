@@ -1,7 +1,7 @@
 // src/pages/PostingAlertsPage.jsx
 import React, { useEffect, useState } from 'react';
 import { geofenceEventsApi, authApi } from '../api/client';
-import { PageHeader, Badge, Spinner, Empty, Select } from '../components/ui';
+import { PageHeader, Badge, Spinner, Empty, Select, fmtDateTime as fmt } from '../components/ui';
 import { AlertTriangle } from 'lucide-react';
 
 const POLL_MS = 30000;
@@ -11,13 +11,6 @@ const todayStr = () => new Date().toISOString().slice(0, 10); // YYYY-MM-DD, loc
 const EVENT_MAP = {
   LEFT_POSTING       : { color: 'red',   label: 'Left Posting' },
   RETURNED_TO_POSTING: { color: 'green', label: 'Returned' },
-};
-
-// Same dd/mm/yyyy hh:mm shape as TripAlertsPage's fmt().
-const fmt = (date) => {
-  if (!date) return '';
-  const d = new Date(date);
-  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 };
 
 export default function PostingAlertsPage() {

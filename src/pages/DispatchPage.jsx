@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { tripsApi, hospitalsApi, pricingApi } from '../api/client';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import RoutePreviewMap from '../components/RoutePreviewMap';
-import { PageHeader, StatusBadge, Badge, Btn, Modal, rupee, Spinner } from '../components/ui';
+import { PageHeader, StatusBadge, Badge, Btn, Modal, rupee, Spinner, fmtDateTime as fmtStamp, timeAgo } from '../components/ui';
 import toast from 'react-hot-toast';
 import { Send, RefreshCw, CheckCircle, XCircle, MapPin, Phone, Bell, BellOff, X, Link2, ExternalLink } from 'lucide-react';
 
@@ -84,15 +84,9 @@ const ambulanceTypeLabel = (v) =>
 
 const TRIP_TYPE_LABELS = { one_way: 'One Way', round_trip: 'Round Trip / Up & Down' };
 
-const fmtDateTime = (v) => {
-  if (!v) return '';
-  const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleString('en-IN', {
-    day: '2-digit', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit', hour12: true,
-  });
-};
+// '' rather than '—' for a missing date: every caller here hides the line
+// or badge when there's nothing to show.
+const fmtDateTime = (v) => fmtStamp(v, '');
 
 // scheduleDate is only persisted for scheduleType 'later', but a stray date
 // on a booking with no scheduleType is still worth surfacing rather than
@@ -495,11 +489,6 @@ export default function DispatchPage() {
     }
   };
 
-  const elapsed = (iso) => {
-    const mins = Math.floor((Date.now() - new Date(iso)) / 60000);
-    return mins < 60 ? `${mins}m ago` : `${Math.floor(mins/60)}h ${mins%60}m ago`;
-  };
-
   return (
     <div className="page-enter">
       <PageHeader
@@ -836,7 +825,7 @@ export default function DispatchPage() {
                           <div className="text-xs font-mono" style={{ color: 'var(--amber)' }}>
                             🚑 {t.vehicle?.registrationNumber || t.ambulance?.registrationNumber} · {t.driver?.name}
                           </div>
-                          <div className="text-[10px]" style={{ color: 'var(--text3)' }}>{elapsed(t.createdAt)}</div>
+                          <div className="text-[10px]" style={{ color: 'var(--text3)' }}>{timeAgo(t.createdAt)}</div>
                         </div>
                       )}
 
