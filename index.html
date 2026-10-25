@@ -2,11 +2,23 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MediFleet CRM</title>
+  <!-- viewport-fit=cover lets the installed app use the full screen on
+       notched phones; the bottom nav pads itself with env(safe-area-inset-bottom). -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>SaveLife CRM</title>
+  <meta name="theme-color" content="#0a0f1e" />
+  <meta name="description" content="SaveLife ambulance dispatch and fleet CRM" />
+  <!-- iOS Safari "Add to Home Screen": full-screen, dark status bar, own icon. -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <!-- "black", not "black-translucent": a translucent bar draws every page
+       underneath the clock, which would hide the top of login and quote pages. -->
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+  <meta name="apple-mobile-web-app-title" content="SaveLife" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="64x64" href="/favicon-64x64.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚑</text></svg>" />
 </head>
 <body>
   <div id="root"></div>

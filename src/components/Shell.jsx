@@ -30,7 +30,16 @@ const NAV = [
   { label: 'Staff',       to: '/staff',      icon: Users,           roles: ['owner'] },
   { label: 'Advances',    to: '/advances',   icon: Users,           roles: ['owner'] },  { label: 'Compliance',  to: '/compliance', icon: ShieldCheck,     roles: ['owner'] },
   { label: 'Owners',      to: '/owners',     icon: UserCheck,       roles: ['owner'] },
-  { label: 'Building2s',   to: '/Building2s',  icon: Building2,        roles: ['owner'] },
+  { label: 'Hospitals',   to: '/hospitals',  icon: Building2,       roles: ['owner'] },
+];
+
+// Phone-only bottom tab bar: the pages used most on the move, reachable
+// with one thumb. "More" opens the full drawer, so nothing is out of reach.
+const MOBILE_TABS = [
+  { label: 'Dispatch', to: '/dispatch',               icon: Radio },
+  { label: 'Trips',    to: '/trips',                  icon: FileText },
+  { label: 'SOS',      to: '/sos',                    icon: AlertTriangle, badgeKey: 'sos' },
+  { label: 'WhatsApp', to: '/whatsapp-conversations', icon: MessageSquare },
 ];
 
 export default function Shell({ children }) {
@@ -209,8 +218,8 @@ export default function Shell({ children }) {
           </div>
         </div>
         {mobile && (
-          <button onClick={() => setSideOpen(false)} className="ml-auto p-1" style={{ color: 'var(--text3)' }}>
-            <X size={18} />
+          <button onClick={() => setSideOpen(false)} className="ml-auto p-2.5 -mr-2" style={{ color: 'var(--text3)' }} aria-label="Close menu">
+            <X size={20} />
           </button>
         )}
       </div>
@@ -224,7 +233,7 @@ export default function Shell({ children }) {
             end={to === '/'}
             onClick={() => mobile && setSideOpen(false)}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg mb-0.5 text-[13px] font-medium transition-all
+              `flex items-center gap-3 px-3 ${mobile ? 'py-3 text-sm' : 'py-2.5 text-[13px]'} rounded-lg mb-0.5 font-medium transition-all
                ${isActive
                  ? 'text-[var(--accent)] bg-[rgba(0,212,170,.1)]'
                  : 'text-[var(--text2)] hover:text-[var(--text)] hover:bg-[rgba(255,255,255,.04)]'
@@ -293,7 +302,7 @@ export default function Shell({ children }) {
           the sidebar div is later in the DOM and was painting over the
           banner at their old equal z-50, independent of position. */}
       {newSosAlerts.length > 0 && (
-        <div className="fixed top-16 left-4 md:left-60 z-[60] space-y-2 w-full max-w-sm">
+        <div className="fixed top-16 left-4 right-4 md:right-auto md:left-60 z-[60] space-y-2 md:w-full max-w-sm">
           {newSosAlerts.length > 1 && (
             <button onClick={dismissAllSosAlerts}
               className="w-full text-center text-[11px] font-semibold py-1 rounded-lg"
@@ -337,7 +346,7 @@ export default function Shell({ children }) {
       {/* Mobile sidebar overlay */}
       {sideOpen && (
         <div className="fixed inset-0 z-50 flex md:hidden">
-          <div className="w-56 h-full"><Sidebar mobile /></div>
+          <div className="w-72 max-w-[85vw] h-full"><Sidebar mobile /></div>
           <div className="flex-1 bg-black/50" onClick={() => setSideOpen(false)} />
         </div>
       )}
@@ -347,10 +356,11 @@ export default function Shell({ children }) {
         {/* Top bar */}
         <header className="flex items-center gap-3 px-5 py-3 sticky top-0 z-40"
           style={{ background: 'rgba(10,15,30,.85)', backdropFilter: 'blur(12px)', borderBottom: '1px solid var(--border)' }}>
-          <button className="md:hidden p-1.5 rounded-lg"
+          <button className="md:hidden p-2.5 rounded-lg"
             style={{ color: 'var(--text2)', background: 'var(--surface2)' }}
-            onClick={() => setSideOpen(true)}>
-            <Menu size={17} />
+            onClick={() => setSideOpen(true)}
+            aria-label="Open menu">
+            <Menu size={18} />
           </button>
 
           {/* Breadcrumb hint */}
@@ -394,11 +404,44 @@ export default function Shell({ children }) {
           </div>
         </header>
 
-        {/* Page content */}
-        <main className="flex-1 p-5 md:p-7 page-enter overflow-x-hidden">
+        {/* Page content. Extra bottom padding on phones keeps the last row
+            clear of the bottom tab bar. */}
+        <main className="flex-1 p-4 pb-28 md:p-7 page-enter overflow-x-hidden">
           {children}
         </main>
       </div>
+
+      {/* Phone bottom tab bar — hidden from md up, where the sidebar shows. */}
+      <nav className="mobile-tabbar md:hidden fixed bottom-0 inset-x-0 z-40 flex"
+        style={{ background: 'rgba(17,24,39,.97)', backdropFilter: 'blur(12px)', borderTop: '1px solid var(--border)' }}>
+        {MOBILE_TABS.map(({ label, to, icon: Icon, badgeKey }) => (
+          <NavLink
+            key={to}
+            to={to}
+            className={({ isActive }) =>
+              `relative flex-1 flex flex-col items-center justify-center gap-1 py-2 min-h-[56px] text-[11px] font-semibold
+               ${isActive ? 'text-[var(--accent)]' : 'text-[var(--text3)]'}`}
+          >
+            <Icon size={20} />
+            {label}
+            {badgeKey && badgeCounts[badgeKey] > 0 && (
+              <span className="absolute top-1.5 left-1/2 ml-2 px-1.5 rounded-full text-[10px] font-bold leading-4"
+                style={{ background: 'var(--red)', color: '#fff', minWidth: 16, textAlign: 'center' }}>
+                {badgeCounts[badgeKey]}
+              </span>
+            )}
+          </NavLink>
+        ))}
+        <button
+          type="button"
+          onClick={() => setSideOpen(true)}
+          className="flex-1 flex flex-col items-center justify-center gap-1 py-2 min-h-[56px] text-[11px] font-semibold"
+          style={{ color: 'var(--text3)' }}
+        >
+          <Menu size={20} />
+          More
+        </button>
+      </nav>
     </div>
   );
 }

@@ -396,7 +396,7 @@ export function FinancePage() {
 
       <Modal open={addModal} onClose={()=>setAddModal(false)} title="Add Finance Entry">
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{color:'var(--text2)'}}>Type</label>
               <select className="inp" value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))}>
@@ -417,7 +417,7 @@ export function FinancePage() {
             <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{color:'var(--text2)'}}>Description</label>
             <input className="inp" value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{color:'var(--text2)'}}>Amount (₹)</label>
               <input className="inp" type="number" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))} />
@@ -802,7 +802,7 @@ export function HospitalsPage() {
             <label htmlFor="tieup" className="text-sm font-medium">Tie-up Hospital</label>
           </div>
           {form.tieUp.isActive && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{color:'var(--text2)'}}>Discount %</label>
                 <input className="inp" type="number" value={form.tieUp.discountPercent}

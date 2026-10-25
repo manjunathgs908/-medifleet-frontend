@@ -129,6 +129,30 @@ input, select, textarea {
   z-index: 0 !important;
 }
 
+/* ── Phones (below Tailwind's md, where the sidebar becomes the drawer +
+      bottom tab bar). Everything here is inside this query, so the desktop
+      layout is untouched. ───────────────────────────── */
+@media (max-width: 767px) {
+  .card { padding: 14px; }
+
+  /* 16px stops iOS Safari zooming the page when a field is tapped; 44px is
+     the minimum comfortable touch height. */
+  .inp { min-height: 44px; font-size: 16px; }
+  input, select, textarea { font-size: 16px; }
+
+  /* Finger-sized buttons in page content (filters, card actions, modals).
+     Header and tab-bar buttons are sized on their own. */
+  main button { min-height: 40px; }
+
+  /* Every table scrolls sideways inside its card instead of squeezing its
+     columns or widening the page. */
+  .tbl { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
+  .tbl th, .tbl td { padding: 10px 12px; }
+
+  /* Clear the iPhone home indicator in the installed app. */
+  .mobile-tabbar { padding-bottom: env(safe-area-inset-bottom); }
+}
+
 /* ── New booking alert banner ─────────────────────────── */
 .banner-pop { animation: bannerPop .3s cubic-bezier(.34,1.56,.64,1); }
 

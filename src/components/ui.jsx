@@ -42,7 +42,7 @@ export const StatCard = ({ label, value, sub, color = 'green', icon }) => {
 
 // ── Page Header ───────────────────────────────────────────────
 export const PageHeader = ({ title, subtitle, action }) => (
-  <div className="flex items-start justify-between mb-6">
+  <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
     <div>
       <h1 className="text-2xl font-bold font-display">{title}</h1>
       {subtitle && <p className="text-sm mt-1" style={{ color: 'var(--text2)' }}>{subtitle}</p>}

@@ -517,7 +517,7 @@ export default function DispatchPage() {
         title="Dispatch Center"
         subtitle="Book emergency · Live fleet board · Assign ambulance"
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Btn variant="blue" size="sm" onClick={() => setQuoteOpen(true)}>
               <Link2 size={13} /> Send Quote Link
             </Btn>
@@ -544,7 +544,7 @@ export default function DispatchPage() {
 
       {/* ── New Booking Alert Banner ── */}
       {newBookings.length > 0 && (
-        <div className="fixed top-4 right-4 z-50 space-y-2 w-full max-w-sm">
+        <div className="fixed top-4 left-4 right-4 sm:left-auto z-50 space-y-2 sm:w-full max-w-sm">
           {newBookings.length > 1 && (
             <button onClick={dismissAllBookings}
               className="w-full text-center text-[11px] font-semibold py-1 rounded-lg"
@@ -586,7 +586,7 @@ export default function DispatchPage() {
         <form onSubmit={dispatch} className="lg:col-span-3 card space-y-4">
           <h2 className="font-bold font-display" style={{ color: 'var(--accent)' }}>🚑 New Emergency Booking</h2>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>Patient Name *</label>
               <input className="inp" value={form.patientName} onChange={e => set('patientName', e.target.value)} placeholder="Full name" required />
@@ -597,7 +597,7 @@ export default function DispatchPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <AddressAutocomplete
               label="Pickup" required
               value={pickup} onSelect={setPickup}
@@ -612,7 +612,7 @@ export default function DispatchPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>Ambulance / Service *</label>
               <select className="inp" value={form.selectedType} onChange={e => selectService(e.target.value)} required>
@@ -628,7 +628,7 @@ export default function DispatchPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>Trip Type</label>
               <select className="inp" value={form.tripType} onChange={e => set('tripType', e.target.value)}>
@@ -650,7 +650,7 @@ export default function DispatchPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>AC</label>
               {/* Offered only where the selected service actually has an
@@ -974,7 +974,7 @@ export default function DispatchPage() {
             Only the phone is required. Anything you leave empty, the customer fills in on their link before confirming.
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>WhatsApp Number *</label>
               <input className="inp" value={quoteForm.phone} onChange={e => setQuoteField('phone', e.target.value)} placeholder="+91 XXXXX XXXXX" required />
@@ -985,7 +985,7 @@ export default function DispatchPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <AddressAutocomplete
               label="Pickup"
               value={quotePickup} onSelect={setQuotePickup}
@@ -1000,7 +1000,7 @@ export default function DispatchPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>Ambulance / Service</label>
               <select className="inp" value={quoteForm.selectedType}
