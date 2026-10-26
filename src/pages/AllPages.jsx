@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { tripsApi, billingApi, hospitalsApi, financeApi, salaryApi, leadsApi, vehiclesApi, authApi } from '../api/client';
 import api from '../api/client';
-import { PageHeader, StatusBadge, Btn, Modal, StatCard, Tabs, Spinner, Empty, rupee, fmtDateTime, fmtDate } from '../components/ui';
+import { PageHeader, StatusBadge, Btn, Modal, StatCard, Tabs, Spinner, Empty, rupee, fmtDateTime, fmtDate, custPhone } from '../components/ui';
 import toast from 'react-hot-toast';
 import CallButton from '../components/CallButton';
 import {
@@ -121,7 +121,7 @@ useEffect(() => { load(); }, [filter]);
                   {trips.map(t => (
                     <tr key={t._id}>
                       <td className="font-mono text-xs" style={{ color: 'var(--accent)' }}>{t.tripNumber || t._id.slice(-6)}</td>
-                      <td><div className="font-medium text-sm">{t.patientName}</div><div className="text-xs" style={{ color:'var(--text3)' }}>{t.patientPhoneMasked}</div></td>
+                      <td><div className="font-medium text-sm">{t.patientName}</div><div className="text-xs" style={{ color:'var(--text3)' }}>{custPhone(t.patientPhone, t.patientPhoneMasked)}</div></td>
                       <td><span className="badge badge-blue text-xs capitalize">{t.emergencyType}</span></td>
                       <td className="text-sm" style={{ color:'var(--text2)' }}>{t.dropHospital?.name}</td>
                       <td className="font-mono text-xs" style={{ color:'var(--text2)' }}>{t.vehicle?.registrationNumber}</td>
@@ -632,7 +632,7 @@ export function LeadsPage() {
                   <td><span title={l.source}>{SRC_ICONS[l.source]||<Mail size={14} />}</span> <span className="text-xs" style={{color:'var(--text3)'}}>{l.source?.replace('_',' ')||'-'}</span></td>
                   <td><div className="font-medium text-sm">{l.patientName||'Unknown'}</div></td>
                   <td className="font-mono text-xs whitespace-nowrap">
-                    <div>{l.phoneMasked||'-'}</div>
+                    <div className="font-mono">{custPhone(l.phone, l.phoneMasked, '-')}</div>
                     {l.phoneMasked && <CallButton target={{ leadId: l._id }} className="mt-1" />}
                   </td>
                   <td className="text-xs max-w-xs truncate" style={{color:'var(--text2)'}}>{l.message||'—'}</td>

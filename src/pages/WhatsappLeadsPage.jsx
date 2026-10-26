@@ -1,7 +1,7 @@
 // src/pages/WhatsappLeadsPage.jsx
 import React, { useEffect, useRef, useState } from 'react';
 import { whatsappLeadsApi } from '../api/client';
-import { PageHeader, Btn, Spinner, Empty, StatusBadge, Tabs, fmtDateTime, timeAgo } from '../components/ui';
+import { PageHeader, Btn, Spinner, Empty, StatusBadge, Tabs, fmtDateTime, timeAgo, custPhone } from '../components/ui';
 import { AlertTriangle } from 'lucide-react';
 import CallButton from '../components/CallButton';
 import toast from 'react-hot-toast';
@@ -111,7 +111,7 @@ export default function WhatsappLeadsPage() {
                       {/* Masked: the CRM gets only the last four digits. The
                           call goes through Plivo and is recorded. */}
                       <td className="whitespace-nowrap">
-                        <div className="text-xs font-mono mb-1" style={{ color: 'var(--text2)' }}>{l.phoneMasked}</div>
+                        <div className="text-xs font-mono mb-1" style={{ color: 'var(--text2)' }}>{custPhone(l.phone, l.phoneMasked)}</div>
                         <CallButton target={{ whatsappLeadId: l._id }} />
                       </td>
                       <td className="text-sm">{l.service}</td>

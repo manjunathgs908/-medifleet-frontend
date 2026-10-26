@@ -5,7 +5,7 @@ import AddressAutocomplete from '../components/AddressAutocomplete';
 import CallButton from '../components/CallButton';
 import { ambulanceTypeLabel, servicesFromPricing, fmtDuration } from '../utils/serviceTypes';
 import RoutePreviewMap from '../components/RoutePreviewMap';
-import { PageHeader, StatusBadge, Badge, Btn, Modal, rupee, Spinner, fmtDateTime as fmtStamp, timeAgo } from '../components/ui';
+import { PageHeader, StatusBadge, Badge, Btn, Modal, rupee, Spinner, fmtDateTime as fmtStamp, timeAgo, custPhone } from '../components/ui';
 import toast from 'react-hot-toast';
 import { Send, RefreshCw, CheckCircle, XCircle, MapPin, Phone, Bell, BellOff, X, Link2, ExternalLink } from 'lucide-react';
 
@@ -566,7 +566,7 @@ export default function DispatchPage() {
               </div>
               <div className="text-sm font-semibold mt-1.5">{b.patientName}</div>
               <div className="text-xs flex items-center gap-1 mt-0.5" style={{ color: 'var(--text2)' }}>
-                <Phone size={10} /> {b.patientPhoneMasked}
+                <Phone size={10} /> {custPhone(b.patientPhone, b.patientPhoneMasked)}
               </div>
               <div className="mt-2">
                 <BookingSummary t={b} />
@@ -774,7 +774,7 @@ export default function DispatchPage() {
                         <div>
                           <div className="font-semibold text-sm">{t.patientName}</div>
                           <div className="text-xs flex items-center gap-1 mt-0.5" style={{ color: 'var(--text3)' }}>
-                            <Phone size={10}/> {t.patientPhoneMasked}
+                            <Phone size={10}/> {custPhone(t.patientPhone, t.patientPhoneMasked)}
                           </div>
                         </div>
                         <div className="flex flex-col items-end gap-1.5">
@@ -929,7 +929,7 @@ export default function DispatchPage() {
                           <div className="min-w-0">
                             <div className="font-semibold text-sm truncate">{q.patientName || 'Customer'}</div>
                             <div className="text-xs flex items-center gap-1 mt-0.5" style={{ color: 'var(--text3)' }}>
-                              <Phone size={10} /> {q.phoneMasked}
+                              <Phone size={10} /> {custPhone(q.phone, q.phoneMasked)}
                               {q.selectedType && <> · {ambulanceTypeLabel(q.selectedType)}</>}
                             </div>
                           </div>

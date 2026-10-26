@@ -1,7 +1,7 @@
 // src/pages/WhatsappConversationsPage.jsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { whatsappConversationsApi, whatsappCustomerApi, callsApi } from '../api/client';
-import { PageHeader, Spinner, Empty, SectionLabel, StatusBadge, rupee, fmtDateTime } from '../components/ui';
+import { PageHeader, Spinner, Empty, SectionLabel, StatusBadge, rupee, fmtDateTime, custPhone } from '../components/ui';
 import CallButton from '../components/CallButton';
 import CallLogList from '../components/CallLogList';
 import { AlertTriangle, X, RotateCcw } from 'lucide-react';
@@ -363,11 +363,11 @@ export default function WhatsappConversationsPage() {
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <button
-                              onClick={() => openHistory(c.customerRef, c.customerRefMasked)}
+                              onClick={() => openHistory(c.customerRef, custPhone(c.phone, c.phoneMasked))}
                               className="text-xl font-bold font-mono truncate text-left"
                               style={{ color: 'var(--text)', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
                             >
-                              {c.customerRefMasked}
+                              {custPhone(c.phone, c.phoneMasked)}
                             </button>
                             {c.isReturning && (
                               <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
@@ -488,7 +488,7 @@ export default function WhatsappConversationsPage() {
               style={{ background: 'var(--surface2)', color: 'var(--text2)' }}>
               <X size={18} />
             </button>
-            <div className="text-lg font-bold font-mono truncate">{historyData?.phoneMasked || historyMasked}</div>
+            <div className="text-lg font-bold font-mono truncate">{historyData ? custPhone(historyData.phone, historyData.phoneMasked) : historyMasked}</div>
             <CallButton target={{ customerRef: historyPhone }} className="ml-auto flex-shrink-0" />
           </div>
 

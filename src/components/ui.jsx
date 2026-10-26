@@ -189,6 +189,13 @@ export const Empty = ({ icon = '📭', message = 'No records found' }) => (
 );
 
 // ── Rupee formatter ───────────────────────────────────────────
+// A customer's number as this viewer may see it. The server sends the full
+// number only to a CRM owner (and leaves the field out for everyone else,
+// e.g. telecallers), so: the full number when present, else the masked
+// "••••••1234".
+export const custPhone = (full, masked, fallback = '—') =>
+  full ? String(full).replace(/^(\d{5})(\d{5})$/, '$1 $2') : (masked || fallback);
+
 export const rupee = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 
 // ── Date / time formatters ─────────────────────────────────────

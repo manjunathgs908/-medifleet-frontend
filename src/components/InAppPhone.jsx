@@ -9,6 +9,7 @@
 import React, { useEffect, useState } from 'react';
 import { Phone, PhoneOff, Mic, MicOff } from 'lucide-react';
 import * as phone from '../lib/inAppPhone';
+import { custPhone } from './ui';
 
 export function useInAppPhone() {
   const [s, setS] = useState(phone.getState());
@@ -21,7 +22,7 @@ const describe = (log) => {
   const about = log.trip?.tripNumber
     ? `Trip ${log.trip.tripNumber}${log.trip.patientName ? ` · ${log.trip.patientName}` : ''}`
     : log.lead?.patientName ? `Lead · ${log.lead.patientName}` : 'New caller';
-  return { who: log.customerMasked || 'Unknown number', about };
+  return { who: custPhone(log.customerPhone, log.customerMasked, 'Unknown number'), about };
 };
 
 function Elapsed({ since }) {

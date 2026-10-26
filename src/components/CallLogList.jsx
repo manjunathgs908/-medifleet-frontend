@@ -7,7 +7,7 @@
 // call, by the log's id.
 import React from 'react';
 import { PhoneIncoming, PhoneOutgoing } from 'lucide-react';
-import { Badge, fmtDateTime } from './ui';
+import { Badge, fmtDateTime, custPhone } from './ui';
 import CallButton from './CallButton';
 import RecordingPlayer from './RecordingPlayer';
 import DeliveryTrail from './DeliveryTrail';
@@ -107,7 +107,7 @@ export default function CallLogList({ logs, emptyText = 'No recorded calls yet.'
                     : <PhoneOutgoing size={14} style={{ color: 'var(--accent)' }} />}
                   {log.context === 'test_ring'
                     ? <span>Test ring to {log.agentName ? `${log.agentName}'s` : 'your'} phone</span>
-                    : <span className="font-mono">{log.customerMasked || 'Unknown number'}</span>}
+                    : <span className="font-mono">{custPhone(log.customerPhone, log.customerMasked, 'Unknown number')}</span>}
                   <Badge color={st.color}>{st.label}</Badge>
                 </div>
                 <div className="text-[11px] mt-1 font-mono" style={{ color: 'var(--text3)' }}>
