@@ -33,6 +33,85 @@ const set = (patch) => { state = { ...state, ...patch }; listeners.forEach((l) =
 export const subscribe = (fn) => { listeners.add(fn); fn(state); return () => listeners.delete(fn); };
 export const getState = () => state;
 
+// ── TEMPORARY: registration diagnostics ─────────────────────────────────
+// Every event the Plivo SDK emits, plus our own login/logout calls and
+// changes in its registration state, go into window.__plivoDebug and, in
+// batches, to POST /api/calls/webrtc/debug (read back with GET). Each
+// page load is its own session, so two devices on one endpoint show up
+// as two sessions. Tokens never leave the browser in these records.
+const SESSION_ID = (window.crypto?.randomUUID?.() || `s${Date.now()}${Math.random().toString(36).slice(2)}`);
+const DEVICE = [
+  window.matchMedia?.('(display-mode: standalone)').matches ? 'installed-app' : 'browser-tab',
+  navigator.userAgent,
+].join(' · ');
+window.__plivoDebug = window.__plivoDebug || [];
+
+let debugQueue = [];
+let debugTimer = null;
+
+const compact = (v, depth = 0) => {
+  if (v == null || depth > 3) return v;
+  if (typeof v === 'string') return v.length > 300 || /^eyJ[\w-]+\./.test(v) ? `[${v.length} chars]` : v;
+  if (typeof v === 'number' || typeof v === 'boolean') return v;
+  if (Array.isArray(v)) return v.slice(0, 10).map((x) => compact(x, depth + 1));
+  if (typeof v === 'object') {
+    const out = {};
+    for (const [k, x] of Object.entries(v).slice(0, 20)) {
+      if (typeof x === 'function') continue;
+      out[k] = /token|password|jwt|secret/i.test(k) ? '[redacted]' : compact(x, depth + 1);
+    }
+    return out;
+  }
+  return String(v);
+};
+
+function record(event, args = []) {
+  const [first, ...rest] = args;
+  const entry = {
+    event,
+    reason   : typeof first === 'string' ? first : undefined,
+    detail   : compact(typeof first === 'string' ? rest : args),
+    at       : new Date().toISOString(),
+    sessionId: SESSION_ID,
+    device   : DEVICE,
+  };
+  window.__plivoDebug.push(entry);
+  if (window.__plivoDebug.length > 300) window.__plivoDebug.splice(0, window.__plivoDebug.length - 300);
+  debugQueue.push(entry);
+  clearTimeout(debugTimer);
+  debugTimer = setTimeout(flushDebug, 1500);
+}
+
+function flushDebug() {
+  if (!debugQueue.length) return;
+  const batch = debugQueue.splice(0, 50);
+  callsApi.debug(batch).catch(() => {});
+  if (debugQueue.length) debugTimer = setTimeout(flushDebug, 1500);
+}
+
+let lastStateKey = '';
+let lastStateAt = 0;
+function recordState(why) {
+  if (!client) return;
+  let snap;
+  try {
+    snap = {
+      isLoggedIn  : !!client.isLoggedIn,
+      isRegistered: !!client.isRegistered?.(),
+      isConnected : !!client.isConnected?.(),
+      visibility  : document.visibilityState,
+      why,
+    };
+  } catch (e) { snap = { error: String(e), why }; }
+  const key = `${snap.isLoggedIn}${snap.isRegistered}${snap.isConnected}`;
+  // On every change, and every 5 minutes regardless.
+  if (key !== lastStateKey || Date.now() - lastStateAt > 5 * 60 * 1000) {
+    lastStateKey = key;
+    lastStateAt = Date.now();
+    record('state', [snap]);
+  }
+}
+
 let client = null;
 let heartbeatTimer = null;
 let reloginTimer = null;
@@ -64,6 +143,7 @@ const isRegistered = () => {
 
 function beat() {
   if (!running) return;
+  recordState('heartbeat');
   if (state.status === 'ready' && isRegistered()) {
     callsApi.presence(true).catch(() => {});
   } else if (state.status === 'ready') {
@@ -97,16 +177,25 @@ const onPageHide = (e) => {
       body     : JSON.stringify({ online: false }),
     }).catch(() => {});
   } catch { /* best effort — the server's 75s window covers it anyway */ }
+  record('call:logout', ['pagehide']);
+  flushDebug();
   try { stopping = true; client?.logout(); } catch { /* page is closing */ }
 };
 
 // Plivo asks for a token itself whenever it needs one — at sign-in and
 // before the current one expires — so renewal never logs out.
 const tokenGenerator = {
-  getAccessToken: () => callsApi.webrtcToken().then(({ data }) => data.token),
+  getAccessToken: () => callsApi.webrtcToken(SESSION_ID).then(({ data }) => {
+    record('token:received', [{ expiresAt: data.expiresAt, endpointCheck: data.endpointCheck }]);
+    return data.token;
+  }).catch((err) => {
+    record('token:failed', [err?.response?.data?.message || err?.message || 'token request failed', { status: err?.response?.status, stage: err?.response?.data?.stage }]);
+    throw err;
+  }),
 };
 
 function login() {
+  record('call:login', ['loginWithAccessTokenGenerator']);
   client.loginWithAccessTokenGenerator(tokenGenerator);
 }
 
@@ -120,6 +209,16 @@ function scheduleRelogin() {
 }
 
 function wire(c) {
+  // TEMPORARY: see every event the SDK emits, before any handler runs.
+  const emit = c.emit.bind(c);
+  c.emit = (name, ...args) => {
+    try {
+      record(name, args);
+      if (['onLogin', 'onLogout', 'onLoginFailed', 'onConnectionChange'].includes(name)) setTimeout(() => recordState(name), 0);
+    } catch { /* never break the SDK */ }
+    return emit(name, ...args);
+  };
+
   // Presence first, then state, so routing is never behind the browser.
   c.on('onLogin', () => {
     callsApi.presence(true).catch(() => {});
@@ -229,6 +328,7 @@ export function stop() {
   document.removeEventListener('visibilitychange', onVisible);
   window.removeEventListener('pagehide', onPageHide);
   callsApi.presence(false).catch(() => {});
+  record('call:logout', ['stop']);
   try { if (client && !state.inCall) client.logout(); } catch { /* already gone */ }
   set({ ...initial });
 }

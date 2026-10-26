@@ -163,7 +163,10 @@ export const callsApi = {
   // In-app (WebRTC) calling: a receive-only Plivo access token, the
   // "this tab is open and can take calls" check-in, one call's masked
   // details for the ringing screen, and "I answered it".
-  webrtcToken: ()         => api.get('/calls/webrtc/token', { skipErrorToast: true }),
+  // sessionId tags which browser tab / device asked (TEMPORARY diagnostics).
+  webrtcToken: (sessionId) => api.get('/calls/webrtc/token', { skipErrorToast: true, headers: sessionId ? { 'X-Client-Session': sessionId } : {} }),
+  // TEMPORARY: Plivo SDK event capture (GET /calls/webrtc/debug reads it).
+  debug      : (events)   => api.post('/calls/webrtc/debug', { events }, { skipErrorToast: true }),
   presence   : (online)   => api.post('/calls/webrtc/presence', { online }, { skipErrorToast: true }),
   getCall    : (id)       => api.get(`/calls/${id}`, { skipErrorToast: true }),
   answered   : (id)       => api.post(`/calls/${id}/answered`, {}, { skipErrorToast: true }),
