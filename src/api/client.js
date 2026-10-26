@@ -156,8 +156,17 @@ export const callsApi = {
   // separate from your login number ('' clears it back to the login one).
   getMe      : ()         => api.get('/calls/me'),
   setMe      : (callPhone) => api.put('/calls/me', { callPhone }),
+  // 'app' (ring inside the CRM) or 'phone' (ring my call ring number).
+  setMode    : (callMode) => api.put('/calls/me', { callMode }),
   // Which provider is live and the caller ID customers see.
   config     : ()         => api.get('/calls/config', { skipErrorToast: true }),
+  // In-app (WebRTC) calling: a receive-only Plivo access token, the
+  // "this tab is open and can take calls" check-in, one call's masked
+  // details for the ringing screen, and "I answered it".
+  webrtcToken: ()         => api.get('/calls/webrtc/token', { skipErrorToast: true }),
+  presence   : (online)   => api.post('/calls/webrtc/presence', { online }, { skipErrorToast: true }),
+  getCall    : (id)       => api.get(`/calls/${id}`, { skipErrorToast: true }),
+  answered   : (id)       => api.post(`/calls/${id}/answered`, {}, { skipErrorToast: true }),
   // The recording, streamed through the backend (which holds the Plivo
   // credentials). Fetched as a blob because an <audio src> cannot send the
   // login token; the Plivo URL itself never reaches the browser.

@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { sosApi, tripCallEventsApi, callsApi } from '../api/client';
+import InAppPhone, { useInAppPhone } from './InAppPhone';
 import toast from 'react-hot-toast';
 import {
   LayoutDashboard, Radio, Truck, FileText, Receipt,
@@ -200,23 +201,43 @@ export default function Shell({ children }) {
   }, [user?.role]);
 
   // "On call duty": while on, customer calls to the company number ring
-  // this user's phone (masked, recorded). Stored on the server, so it
-  // follows the user across devices; null until the first read returns.
+  // this user — in this app or on their phone, as they chose on the Staff
+  // page (callMode). Stored on the server, so it follows the user across
+  // devices; null until the first read returns.
   const [onDuty, setOnDuty] = useState(null);
+  const [callMode, setCallMode] = useState('phone');
+  const loadCallSettings = () =>
+    callsApi.getMe().then(({ data }) => { setOnDuty(!!data.me.onDuty); setCallMode(data.me.callMode || 'phone'); }).catch(() => {});
   useEffect(() => {
     if (user?.role !== 'owner') return;
-    callsApi.getDuty().then(({ data }) => setOnDuty(!!data.onDuty)).catch(() => {});
+    loadCallSettings();
+    // The Staff page's call settings card announces changes.
+    window.addEventListener('calls:settings-changed', loadCallSettings);
+    return () => window.removeEventListener('calls:settings-changed', loadCallSettings);
   }, [user?.role]);
+
+  const phoneState = useInAppPhone();
 
   const toggleDuty = async () => {
     try {
       const { data } = await callsApi.setDuty(!onDuty);
       setOnDuty(!!data.onDuty);
       toast.success(data.onDuty
-        ? '📞 On call duty — incoming customer calls will ring your phone'
+        ? (callMode === 'app'
+          ? '📞 On call duty — incoming customer calls will ring here in the app'
+          : '📞 On call duty — incoming customer calls will ring your phone')
         : 'Off call duty — incoming calls will not ring you');
     } catch { /* the API client shows the backend's message */ }
   };
+
+  // What the in-app phone is doing, for the header chip.
+  const appChip = onDuty && callMode === 'app' ? ({
+    starting   : { text: 'Connecting…',                color: 'var(--text3)' },
+    ready      : { text: 'Ringing in app',             color: 'var(--accent)' },
+    mic_blocked: { text: 'Mic blocked → your phone',   color: 'var(--amber)' },
+    unsupported: { text: 'No in-app calls → your phone', color: 'var(--amber)' },
+    error      : { text: 'In-app off → your phone',    color: 'var(--amber)' },
+  })[phoneState.status] : null;
 
   const visibleNav = NAV.filter(n => n.roles.includes(user?.role));
   const badgeCounts = { sos: sosCount, noResponse: noResponseCount };
@@ -424,6 +445,12 @@ export default function Shell({ children }) {
                 <span className="hidden sm:inline">{onDuty ? 'On call duty' : 'Off call duty'}</span>
               </button>
             )}
+            {appChip && (
+              <span className="text-[11px] font-semibold px-2 py-1 rounded-lg" title={phoneState.error || ''}
+                style={{ color: appChip.color, background: 'var(--surface2)' }}>
+                {appChip.text}
+              </span>
+            )}
 
             {/* Notification bell */}
             <button className="relative p-1.5 rounded-lg transition-colors"
@@ -445,6 +472,10 @@ export default function Shell({ children }) {
           {children}
         </main>
       </div>
+
+      {/* In-app calling: ringing screen + in-call bar. Live only while on
+          duty with "Ring in app" chosen. */}
+      {user?.role === 'owner' && <InAppPhone active={!!onDuty && callMode === 'app'} />}
 
       {/* Phone bottom tab bar — hidden from md up, where the sidebar shows. */}
       <nav className="mobile-tabbar md:hidden fixed bottom-0 inset-x-0 z-40 flex"

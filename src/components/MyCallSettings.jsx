@@ -36,6 +36,21 @@ export default function MyCallSettings() {
     finally { setSaving(false); }
   };
 
+  const chooseMode = async (callMode) => {
+    if (callMode === me.callMode) return;
+    setSaving(true);
+    try {
+      const { data } = await callsApi.setMode(callMode);
+      setMe(data.me);
+      // The header's duty switch and in-app phone pick this up.
+      window.dispatchEvent(new Event('calls:settings-changed'));
+      toast.success(callMode === 'app'
+        ? 'Incoming calls will ring here in the CRM while it is open (your phone when it is not)'
+        : 'Incoming calls will ring your phone');
+    } catch { /* the API client shows the backend's message */ }
+    finally { setSaving(false); }
+  };
+
   if (!me) return null;
 
   return (
@@ -48,6 +63,26 @@ export default function MyCallSettings() {
         The phone Plivo rings when you tap Call, and for incoming customer calls while you are On call duty.
         Separate from your login number.
       </p>
+
+      {/* How incoming calls reach you while On call duty. */}
+      <div className="mb-4">
+        <div className="text-[10px] uppercase tracking-wide mb-1.5" style={{ color: 'var(--text3)' }}>Incoming calls ring</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {[
+            ['app',   '💻 In the CRM app', 'Answer in this browser or the installed app. Needs the microphone and the app open — if it is closed, your phone rings instead.'],
+            ['phone', '📱 My phone',       'Plivo rings the number below. Works with the app closed.'],
+          ].map(([key, title, hint]) => (
+            <button key={key} type="button" disabled={saving} onClick={() => chooseMode(key)}
+              className="text-left rounded-lg p-3 transition-all"
+              style={me.callMode === key
+                ? { background: 'rgba(0,212,170,.1)', border: '1px solid rgba(0,212,170,.4)' }
+                : { background: 'var(--surface2)', border: '1px solid var(--border2)' }}>
+              <div className="font-semibold text-sm" style={{ color: me.callMode === key ? 'var(--accent)' : 'var(--text)' }}>{title}</div>
+              <div className="text-[11px] mt-0.5" style={{ color: 'var(--text3)' }}>{hint}</div>
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 text-sm">
         <div className="rounded-lg p-3" style={{ background: 'var(--surface2)' }}>
