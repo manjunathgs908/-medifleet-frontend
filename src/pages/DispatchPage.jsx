@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { tripsApi, hospitalsApi, pricingApi, quotesApi } from '../api/client';
 import AddressAutocomplete from '../components/AddressAutocomplete';
+import CallButton from '../components/CallButton';
 import { ambulanceTypeLabel, servicesFromPricing, fmtDuration } from '../utils/serviceTypes';
 import RoutePreviewMap from '../components/RoutePreviewMap';
 import { PageHeader, StatusBadge, Badge, Btn, Modal, rupee, Spinner, fmtDateTime as fmtStamp, timeAgo } from '../components/ui';
@@ -565,7 +566,7 @@ export default function DispatchPage() {
               </div>
               <div className="text-sm font-semibold mt-1.5">{b.patientName}</div>
               <div className="text-xs flex items-center gap-1 mt-0.5" style={{ color: 'var(--text2)' }}>
-                <Phone size={10} /> {b.patientPhone}
+                <Phone size={10} /> {b.patientPhoneMasked}
               </div>
               <div className="mt-2">
                 <BookingSummary t={b} />
@@ -773,10 +774,15 @@ export default function DispatchPage() {
                         <div>
                           <div className="font-semibold text-sm">{t.patientName}</div>
                           <div className="text-xs flex items-center gap-1 mt-0.5" style={{ color: 'var(--text3)' }}>
-                            <Phone size={10}/> {t.patientPhone}
+                            <Phone size={10}/> {t.patientPhoneMasked}
                           </div>
                         </div>
-                        <StatusBadge status={t.status} />
+                        <div className="flex flex-col items-end gap-1.5">
+                          <StatusBadge status={t.status} />
+                          {/* Masked: the CRM never has the number; this rings
+                              your phone and connects to the customer. */}
+                          <CallButton target={{ tripId: t._id }} />
+                        </div>
                       </div>
                       <div className="mb-2.5">
                         <BookingSummary t={t} />
@@ -923,11 +929,14 @@ export default function DispatchPage() {
                           <div className="min-w-0">
                             <div className="font-semibold text-sm truncate">{q.patientName || 'Customer'}</div>
                             <div className="text-xs flex items-center gap-1 mt-0.5" style={{ color: 'var(--text3)' }}>
-                              <Phone size={10} /> {q.phone}
+                              <Phone size={10} /> {q.phoneMasked}
                               {q.selectedType && <> · {ambulanceTypeLabel(q.selectedType)}</>}
                             </div>
                           </div>
-                          <Badge color={st.color}>{st.label}</Badge>
+                          <div className="flex flex-col items-end gap-1.5">
+                            <Badge color={st.color}>{st.label}</Badge>
+                            <CallButton target={{ quoteId: q._id }} />
+                          </div>
                         </div>
 
                         <div className="text-[11px] font-mono mt-2 space-y-0.5" style={{ color: 'var(--text3)' }}>

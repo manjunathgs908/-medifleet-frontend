@@ -141,6 +141,19 @@ export const quotesApi = {
   confirmPublic : (token, data)  => api.post(`/quotes/public/${encodeURIComponent(token)}/confirm`, data, { skipErrorToast: true }),
 };
 
+// Masked, recorded calling through Plivo (medifleet-backend routes/calls.js).
+// The CRM never has a customer's number to send: it names the customer by
+// what it does have — { tripId } | { leadId } | { quoteId } |
+// { whatsappLeadId } | { callLogId } | { customerRef }. Plivo rings the
+// signed-in user's own phone, then connects them to the customer; both
+// sides see only the company number.
+export const callsApi = {
+  clickToCall: (target)   => api.post('/calls/click-to-call', target),
+  logs       : (params)   => api.get('/calls/logs', { params }),
+  getDuty    : ()         => api.get('/calls/duty', { skipErrorToast: true }),
+  setDuty    : (onDuty)   => api.put('/calls/duty', { onDuty }),
+};
+
 // Google Places / Directions, proxied by the backend so the Maps key stays
 // server-side. Same endpoints the SaveLife website booking form uses.
 export const placesApi = {

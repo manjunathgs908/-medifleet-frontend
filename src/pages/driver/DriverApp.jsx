@@ -14,6 +14,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { tripsApi, attendanceApi, vehiclesApi } from '../../api/client';
 import toast from 'react-hot-toast';
 import { fmtDateTime } from '../../components/ui';
+import CallButton from '../../components/CallButton';
 import {
   CheckCircle, XCircle, MapPin, Phone, Clock,
   Zap, AlertTriangle, LogOut, Navigation, History
@@ -194,8 +195,10 @@ const DriverApp = () => {
           </div>
 
           <div className="font-bold text-lg mb-1">{myTrip.patientName}</div>
-          <div className="flex items-center gap-1 text-xs mb-1" style={{ color: 'var(--text2)' }}>
-            <Phone size={10}/> {myTrip.patientPhone}
+          <div className="flex items-center gap-2 text-xs mb-1" style={{ color: 'var(--text2)' }}>
+            <span className="flex items-center gap-1"><Phone size={10}/> {myTrip.patientPhoneMasked}</span>
+            {/* Masked call: the backend rings this phone, then the customer. */}
+            <CallButton target={{ tripId: myTrip._id }} label="Call Customer" />
           </div>
           <div className="flex items-start gap-1 text-xs mb-1" style={{ color: 'var(--text2)' }}>
             <MapPin size={10} className="mt-0.5 flex-shrink-0" /> {myTrip.pickup?.address}

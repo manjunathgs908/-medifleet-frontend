@@ -30,6 +30,7 @@ import WhatsappLeadsPage from './pages/WhatsappLeadsPage';
 import WhatsappConversationsPage from './pages/WhatsappConversationsPage';
 import SeoStudioPage from './pages/SeoStudioPage';
 import QuotePage from './pages/QuotePage';
+import CallLogsPage from './pages/CallLogsPage';
 
 // Driver mobile app pages
 import DriverApp       from './pages/driver/DriverApp';
@@ -144,6 +145,11 @@ export default function App() {
               <Route path="whatsapp-leads" element={
                 <ProtectedRoute roles={['owner']}>
                   <WhatsappLeadsPage />
+                </ProtectedRoute>
+              } />
+              <Route path="call-logs" element={
+                <ProtectedRoute roles={['owner']}>
+                  <CallLogsPage />
                 </ProtectedRoute>
               } />
               <Route path="whatsapp-conversations" element={

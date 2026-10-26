@@ -2,7 +2,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { whatsappLeadsApi } from '../api/client';
 import { PageHeader, Btn, Spinner, Empty, StatusBadge, Tabs, fmtDateTime, timeAgo } from '../components/ui';
-import { AlertTriangle, Phone } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
+import CallButton from '../components/CallButton';
 import toast from 'react-hot-toast';
 
 const POLL_MS = 30000;
@@ -107,12 +108,11 @@ export default function WhatsappLeadsPage() {
                 <tbody>
                   {leads.map((l) => (
                     <tr key={l._id} style={l.status === 'new' ? { background: 'rgba(59,158,255,.05)' } : undefined}>
-                      <td>
-                        <a href={`tel:${l.phone}`}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
-                          style={{ background: 'rgba(59,158,255,.12)', color: 'var(--blue)', border: '1px solid rgba(59,158,255,.3)' }}>
-                          <Phone size={13} /> {l.phone}
-                        </a>
+                      {/* Masked: the CRM gets only the last four digits. The
+                          call goes through Plivo and is recorded. */}
+                      <td className="whitespace-nowrap">
+                        <div className="text-xs font-mono mb-1" style={{ color: 'var(--text2)' }}>{l.phoneMasked}</div>
+                        <CallButton target={{ whatsappLeadId: l._id }} />
                       </td>
                       <td className="text-sm">{l.service}</td>
                       <td><StatusBadge status={l.status} /></td>

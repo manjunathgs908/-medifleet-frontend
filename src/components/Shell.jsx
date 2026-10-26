@@ -2,12 +2,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { sosApi, tripCallEventsApi } from '../api/client';
+import { sosApi, tripCallEventsApi, callsApi } from '../api/client';
 import toast from 'react-hot-toast';
 import {
   LayoutDashboard, Radio, Truck, FileText, Receipt,
   TrendingUp, Users, Target, ShieldCheck, Building2, UserCheck,
-  LogOut, Menu, X, Bell, BellOff, ChevronRight, AlertTriangle, PhoneMissed, MapPin, MessageCircle, MessageSquare, Sparkles
+  LogOut, Menu, X, Bell, BellOff, ChevronRight, AlertTriangle, PhoneMissed, MapPin, MessageCircle, MessageSquare, Sparkles,
+  PhoneCall, Headphones
 } from 'lucide-react';
 
 const SOS_POLL_MS = 30000;
@@ -24,6 +25,7 @@ const NAV = [
   { label: 'Posting Alerts', to: '/posting-alerts', icon: MapPin,   roles: ['owner'] },
   { label: 'WhatsApp Leads', to: '/whatsapp-leads', icon: MessageCircle, roles: ['owner'] },
   { label: 'WhatsApp Chats', to: '/whatsapp-conversations', icon: MessageSquare, roles: ['owner'] },
+  { label: 'Call Logs',   to: '/call-logs',  icon: PhoneCall,       roles: ['owner'] },
   { label: 'SEO Studio',  to: '/seo-studio', icon: Sparkles,        roles: ['owner'] },
   { label: 'Leads',       to: '/leads',      icon: Target,          roles: ['owner'] },
   { label: 'Finance',     to: '/finance',    icon: TrendingUp,      roles: ['owner'] },{ label: 'Salaries',    to: '/salary',     icon: Users,           roles: ['owner'] },
@@ -196,6 +198,25 @@ export default function Shell({ children }) {
     noResponseIntervalRef.current = setInterval(loadNoResponse, NO_RESPONSE_POLL_MS);
     return () => clearInterval(noResponseIntervalRef.current);
   }, [user?.role]);
+
+  // "On call duty": while on, customer calls to the company number ring
+  // this user's phone (masked, recorded). Stored on the server, so it
+  // follows the user across devices; null until the first read returns.
+  const [onDuty, setOnDuty] = useState(null);
+  useEffect(() => {
+    if (user?.role !== 'owner') return;
+    callsApi.getDuty().then(({ data }) => setOnDuty(!!data.onDuty)).catch(() => {});
+  }, [user?.role]);
+
+  const toggleDuty = async () => {
+    try {
+      const { data } = await callsApi.setDuty(!onDuty);
+      setOnDuty(!!data.onDuty);
+      toast.success(data.onDuty
+        ? '📞 On call duty — incoming customer calls will ring your phone'
+        : 'Off call duty — incoming calls will not ring you');
+    } catch { /* the API client shows the backend's message */ }
+  };
 
   const visibleNav = NAV.filter(n => n.roles.includes(user?.role));
   const badgeCounts = { sos: sosCount, noResponse: noResponseCount };
@@ -387,6 +408,20 @@ export default function Shell({ children }) {
               >
                 {sosSoundEnabled ? <Bell size={13} /> : <BellOff size={13} />}
                 <span className="hidden sm:inline">{sosSoundEnabled ? 'SOS Sound On' : 'Enable SOS sound'}</span>
+              </button>
+            )}
+
+            {user?.role === 'owner' && onDuty !== null && (
+              <button
+                onClick={toggleDuty}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                style={onDuty
+                  ? { background: 'rgba(0,212,170,.12)', color: 'var(--accent)', border: '1px solid rgba(0,212,170,.3)' }
+                  : { background: 'var(--surface2)', color: 'var(--text3)', border: '1px solid var(--border2)' }}
+                title={onDuty ? 'Incoming customer calls ring your phone. Click to go off duty.' : 'Click to take incoming customer calls on your phone.'}
+              >
+                <Headphones size={13} />
+                <span className="hidden sm:inline">{onDuty ? 'On call duty' : 'Off call duty'}</span>
               </button>
             )}
 

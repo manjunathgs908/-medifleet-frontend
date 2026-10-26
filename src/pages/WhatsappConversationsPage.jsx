@@ -1,8 +1,10 @@
 // src/pages/WhatsappConversationsPage.jsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { whatsappConversationsApi, whatsappCustomerApi } from '../api/client';
+import { whatsappConversationsApi, whatsappCustomerApi, callsApi } from '../api/client';
 import { PageHeader, Spinner, Empty, SectionLabel, StatusBadge, rupee, fmtDateTime } from '../components/ui';
-import { AlertTriangle, Phone, X, RotateCcw } from 'lucide-react';
+import CallButton from '../components/CallButton';
+import CallLogList from '../components/CallLogList';
+import { AlertTriangle, X, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const POLL_MS = 30000;
@@ -105,8 +107,10 @@ export default function WhatsappConversationsPage() {
   const [chip,         setChip]         = useState('total');
   const intervalRef = useRef();
 
-  // Per-phone draft state for the outcome-logging UI -- { note, tripNumber,
-  // followUpAt } keyed by phone, so switching between cards (or a
+  // Per-customer draft state for the outcome-logging UI -- { note, tripNumber,
+  // followUpAt } keyed by the row's customerRef (the opaque stand-in for the
+  // number the backend no longer sends; the `phone` parameter names below
+  // all hold that ref), so switching between cards (or a
   // background refresh replacing rows) never bleeds one card's in-progress
   // input into another's.
   const [drafts,        setDrafts]        = useState({});
@@ -115,7 +119,9 @@ export default function WhatsappConversationsPage() {
   const [submittingPhone, setSubmittingPhone] = useState(null);
 
   // Full-screen customer-history modal (Part 2).
-  const [historyPhone,   setHistoryPhone]   = useState(null);
+  const [historyPhone,   setHistoryPhone]   = useState(null); // the customerRef
+  const [historyMasked,  setHistoryMasked]  = useState('');
+  const [historyCalls,   setHistoryCalls]   = useState([]);   // recorded Plivo calls
   const [historyData,    setHistoryData]    = useState(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError,   setHistoryError]   = useState(null);
@@ -204,7 +210,7 @@ export default function WhatsappConversationsPage() {
 
   const submitOutcome = async (phone, outcome) => {
     const draft = getDraft(phone);
-    const body = { phone, outcome };
+    const body = { customerRef: phone, outcome };
     if (draft.note?.trim()) body.note = draft.note.trim();
     if (outcome === 'booked' && draft.tripNumber?.trim()) body.tripId = draft.tripNumber.trim();
 
@@ -238,11 +244,18 @@ export default function WhatsappConversationsPage() {
     }
   };
 
-  const openHistory = async (phone) => {
+  const openHistory = async (phone, masked) => {
     setHistoryPhone(phone);
+    setHistoryMasked(masked || '');
     setHistoryData(null);
+    setHistoryCalls([]);
     setHistoryError(null);
     setHistoryLoading(true);
+    // Recorded calls are a separate, best-effort read: the rest of the
+    // history must still show if it fails.
+    callsApi.logs({ customerRef: phone, limit: 50 })
+      .then(({ data }) => setHistoryCalls(data.logs || []))
+      .catch(() => {});
     try {
       const { data } = await whatsappCustomerApi.get(phone);
       setHistoryData(data);
@@ -338,23 +351,23 @@ export default function WhatsappConversationsPage() {
             <div className="flex flex-col gap-3">
               {filtered.map((c) => {
                 const hasPendingFollowUp = c.followUpAt && new Date(c.followUpAt) > new Date();
-                const showButtons = !hasPendingFollowUp || forceShow[c.phone];
-                const draft = getDraft(c.phone);
-                const isSubmitting = submittingPhone === c.phone;
+                const showButtons = !hasPendingFollowUp || forceShow[c.customerRef];
+                const draft = getDraft(c.customerRef);
+                const isSubmitting = submittingPhone === c.customerRef;
 
                 return (
-                  <div key={c.phone} className="card">
+                  <div key={c.customerRef} className="card">
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                       <div className="flex items-start gap-3 min-w-0">
                         <div className="mt-2"><StatusDot row={c} /></div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <button
-                              onClick={() => openHistory(c.phone)}
+                              onClick={() => openHistory(c.customerRef, c.customerRefMasked)}
                               className="text-xl font-bold font-mono truncate text-left"
                               style={{ color: 'var(--text)', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
                             >
-                              {c.phone}
+                              {c.customerRefMasked}
                             </button>
                             {c.isReturning && (
                               <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
@@ -384,11 +397,10 @@ export default function WhatsappConversationsPage() {
                         </div>
                       </div>
 
-                      <a href={`tel:${c.phone}`}
-                        className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-lg text-sm font-bold flex-shrink-0 w-full sm:w-auto"
-                        style={{ background: 'rgba(0,212,170,.14)', color: 'var(--accent)', border: '1px solid rgba(0,212,170,.35)' }}>
-                        <Phone size={16} /> Call
-                      </a>
+                      {/* Masked, recorded call: the CRM only has the opaque
+                          customerRef, never the number. */}
+                      <CallButton target={{ customerRef: c.customerRef }} size="lg" className="flex-shrink-0 w-full sm:w-auto" />
+
                     </div>
 
                     {/* Call-outcome logging */}
@@ -398,7 +410,7 @@ export default function WhatsappConversationsPage() {
                         <span className="text-xs font-semibold" style={{ color: 'var(--blue)' }}>
                           Follow up on {fmtDateTime(c.followUpAt)}
                         </span>
-                        <button onClick={() => setForceShow((p) => ({ ...p, [c.phone]: true }))}
+                        <button onClick={() => setForceShow((p) => ({ ...p, [c.customerRef]: true }))}
                           className="text-xs underline flex-shrink-0" style={{ color: 'var(--text3)' }}>
                           Call now anyway
                         </button>
@@ -410,9 +422,9 @@ export default function WhatsappConversationsPage() {
                             <button
                               key={ob.key}
                               disabled={isSubmitting}
-                              onClick={() => handleOutcomeTap(c.phone, ob.key)}
+                              onClick={() => handleOutcomeTap(c.customerRef, ob.key)}
                               className="rounded-lg text-xs font-bold py-3 px-2 transition-all disabled:opacity-50"
-                              style={activePanel[c.phone] === ob.key
+                              style={activePanel[c.customerRef] === ob.key
                                 ? { background: ob.color, color: 'var(--ink)', border: `1px solid ${ob.color}` }
                                 : { background: ob.bg, color: ob.color, border: `1px solid ${ob.border}` }}
                             >
@@ -425,16 +437,16 @@ export default function WhatsappConversationsPage() {
                           className="inp mt-2 text-xs"
                           placeholder="Optional note..."
                           value={draft.note}
-                          onChange={(e) => updateDraft(c.phone, 'note', e.target.value)}
+                          onChange={(e) => updateDraft(c.customerRef, 'note', e.target.value)}
                         />
 
-                        {activePanel[c.phone] === 'booked' && (
+                        {activePanel[c.customerRef] === 'booked' && (
                           <div className="mt-2 flex gap-2">
                             <input className="inp text-xs flex-1" placeholder="Trip number (optional)"
                               value={draft.tripNumber}
-                              onChange={(e) => updateDraft(c.phone, 'tripNumber', e.target.value)} />
+                              onChange={(e) => updateDraft(c.customerRef, 'tripNumber', e.target.value)} />
                             <button
-                              onClick={() => submitOutcome(c.phone, 'booked')}
+                              onClick={() => submitOutcome(c.customerRef, 'booked')}
                               disabled={isSubmitting}
                               className="px-4 rounded-lg text-xs font-bold flex-shrink-0 disabled:opacity-50"
                               style={{ background: 'var(--accent)', color: 'var(--ink)' }}>
@@ -443,13 +455,13 @@ export default function WhatsappConversationsPage() {
                           </div>
                         )}
 
-                        {activePanel[c.phone] === 'followup' && (
+                        {activePanel[c.customerRef] === 'followup' && (
                           <div className="mt-2 flex gap-2 flex-wrap">
                             <input type="datetime-local" className="inp text-xs flex-1" style={{ minWidth: 170 }}
                               value={draft.followUpAt}
-                              onChange={(e) => updateDraft(c.phone, 'followUpAt', e.target.value)} />
+                              onChange={(e) => updateDraft(c.customerRef, 'followUpAt', e.target.value)} />
                             <button
-                              onClick={() => submitOutcome(c.phone, 'followup')}
+                              onClick={() => submitOutcome(c.customerRef, 'followup')}
                               disabled={isSubmitting}
                               className="px-4 rounded-lg text-xs font-bold flex-shrink-0 disabled:opacity-50"
                               style={{ background: 'var(--blue)', color: '#fff' }}>
@@ -476,7 +488,8 @@ export default function WhatsappConversationsPage() {
               style={{ background: 'var(--surface2)', color: 'var(--text2)' }}>
               <X size={18} />
             </button>
-            <div className="text-lg font-bold font-mono truncate">{historyPhone}</div>
+            <div className="text-lg font-bold font-mono truncate">{historyData?.phoneMasked || historyMasked}</div>
+            <CallButton target={{ customerRef: historyPhone }} className="ml-auto flex-shrink-0" />
           </div>
 
           <div className="flex-1 overflow-y-auto p-4">
@@ -551,6 +564,11 @@ export default function WhatsappConversationsPage() {
                     ))}
                   </div>
                 )}
+
+                <SectionLabel>Recorded calls</SectionLabel>
+                <div className="mb-6">
+                  <CallLogList logs={historyCalls} emptyText="No recorded calls with this customer yet." showCallBack={false} />
+                </div>
 
                 <SectionLabel>Trips</SectionLabel>
                 {historyData.trips.length === 0 ? (
