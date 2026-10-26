@@ -9,6 +9,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { callsApi } from '../api/client';
 import { PageHeader, Spinner, Tabs, fmtDateTime } from '../components/ui';
 import CallLogList from '../components/CallLogList';
+import MyCallSettings from '../components/MyCallSettings';
+import { useAuth } from '../contexts/AuthContext';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 const POLL_MS = 30000;
@@ -190,6 +192,8 @@ function MyInAppDevices() {
 }
 
 export default function CallLogsPage() {
+  const { user } = useAuth();
+  const isOwner = user?.role === 'owner';
   const [direction, setDirection] = useState('all');
   const [logs,      setLogs]      = useState([]);
   const [loading,   setLoading]   = useState(true);
@@ -248,7 +252,10 @@ export default function CallLogsPage() {
       )}
 
       {config?.webhooks && <WebhookStatus config={config} />}
-      {config?.provider === 'plivo' && <LivePlivoCalls />}
+      {/* A telecaller's own ring number, mode and test ring live here (an
+          owner's are on the Staff page). */}
+      {!isOwner && <MyCallSettings />}
+      {isOwner && config?.provider === 'plivo' && <LivePlivoCalls />}
       {config?.provider === 'plivo' && <MyInAppDevices />}
 
       <Tabs tabs={DIRECTIONS} active={direction} onChange={setDirection} />

@@ -137,7 +137,7 @@ const Staff = () => {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold">Staff Management</h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--text2)' }}>Drivers manage ಮಾಡಿ</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--text2)' }}>Drivers & Telecallers manage ಮಾಡಿ</p>
         </div>
         <button onClick={() => setShowAdd(true)}
           className="px-4 py-2 rounded-xl font-semibold text-sm"
@@ -159,7 +159,15 @@ const Staff = () => {
               <input className="inp w-full" placeholder="Password" type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
               <select className="inp w-full" value={form.role} onChange={e => setForm({...form, role: e.target.value})}>
                 <option value="driver">Driver</option>
+                <option value="telecaller">Telecaller</option>
               </select>
+              {form.role === 'telecaller' && (
+                <p className="text-xs" style={{ color: 'var(--text3)' }}>
+                  Logs in to the CRM with this phone and password and sees only Call Logs: answers incoming customer
+                  calls and calls customers back. Incoming calls ring this phone once they switch On call duty
+                  (they can set a different ring number, or ring in the app, on their Call Logs page).
+                </p>
+              )}
               {form.role === 'driver' && (
                 <>
                   <select className="inp w-full" value={form.driverType} onChange={e => setForm({...form, driverType: e.target.value})}>

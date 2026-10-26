@@ -9,7 +9,7 @@ import Shell from './components/Shell';
 // Auth
 import LoginPage from './pages/LoginPage';
 
-// Owner pages (telecaller role removed for now — planned to come back later)
+// Owner pages (telecallers see Call Logs only — see the telecaller shell below)
 import DashboardPage   from './pages/DashboardPage';
 import DispatchPage    from './pages/DispatchPage';
 import FleetPage       from './pages/FleetPage';
@@ -76,8 +76,22 @@ export default function App() {
         </ProtectedRoute>
       } />
 
-      {/* Admin shell — Owner only for now */}
-      <Route path="/*" element={
+      {/* Telecallers: Call Logs only — answer and return customer calls. */}
+      {user?.role === 'telecaller' && (
+        <Route path="/*" element={
+          <ProtectedRoute roles={['telecaller']}>
+            <Shell>
+              <Routes>
+                <Route path="call-logs" element={<CallLogsPage />} />
+                <Route path="*" element={<Navigate to="/call-logs" replace />} />
+              </Routes>
+            </Shell>
+          </ProtectedRoute>
+        } />
+      )}
+
+      {/* Admin shell — Owner */}
+      {user?.role !== 'telecaller' && <Route path="/*" element={
         <ProtectedRoute roles={['owner']}>
           <Shell>
             <Routes>
@@ -161,7 +175,7 @@ export default function App() {
             </Routes>
           </Shell>
         </ProtectedRoute>
-      } />
+      } />}
     </Routes>
   );
 }

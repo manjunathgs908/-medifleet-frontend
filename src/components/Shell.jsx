@@ -28,7 +28,7 @@ const NAV = [
   { label: 'Posting Alerts', to: '/posting-alerts', icon: MapPin,   roles: ['owner'] },
   { label: 'WhatsApp Leads', to: '/whatsapp-leads', icon: MessageCircle, roles: ['owner'] },
   { label: 'WhatsApp Chats', to: '/whatsapp-conversations', icon: MessageSquare, roles: ['owner'] },
-  { label: 'Call Logs',   to: '/call-logs',  icon: PhoneCall,       roles: ['owner'] },
+  { label: 'Call Logs',   to: '/call-logs',  icon: PhoneCall,       roles: ['owner', 'telecaller'] },
   { label: 'SEO Studio',  to: '/seo-studio', icon: Sparkles,        roles: ['owner'] },
   { label: 'Leads',       to: '/leads',      icon: Target,          roles: ['owner'] },
   { label: 'Finance',     to: '/finance',    icon: TrendingUp,      roles: ['owner'] },{ label: 'Salaries',    to: '/salary',     icon: Users,           roles: ['owner'] },
@@ -46,6 +46,12 @@ const MOBILE_TABS = [
   { label: 'SOS',      to: '/sos',                    icon: AlertTriangle, badgeKey: 'sos' },
   { label: 'WhatsApp', to: '/whatsapp-conversations', icon: MessageSquare },
 ];
+
+// Telecallers only answer and return customer calls: Call Logs is their tab.
+const TELECALLER_TABS = [
+  { label: 'Call Logs', to: '/call-logs', icon: PhoneCall },
+];
+const CALL_STAFF = ['owner', 'telecaller'];
 
 export default function Shell({ children }) {
   const { user, logout } = useAuth();
@@ -206,12 +212,14 @@ export default function Shell({ children }) {
   // this user — in this app or on their phone, as they chose on the Staff
   // page (callMode). Stored on the server, so it follows the user across
   // devices; null until the first read returns.
+  // CRM admins and telecallers both take customer calls.
+  const isCallStaff = CALL_STAFF.includes(user?.role);
   const [onDuty, setOnDuty] = useState(null);
   const [callMode, setCallMode] = useState('phone');
   const loadCallSettings = () =>
     callsApi.getMe().then(({ data }) => { setOnDuty(!!data.me.onDuty); setCallMode(data.me.callMode || 'phone'); }).catch(() => {});
   useEffect(() => {
-    if (user?.role !== 'owner') return;
+    if (!isCallStaff) return;
     loadCallSettings();
     // The Staff page's call settings card announces changes.
     window.addEventListener('calls:settings-changed', loadCallSettings);
@@ -440,7 +448,7 @@ export default function Shell({ children }) {
               </button>
             )}
 
-            {user?.role === 'owner' && onDuty !== null && (
+            {isCallStaff && onDuty !== null && (
               <button
                 onClick={toggleDuty}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
@@ -483,12 +491,12 @@ export default function Shell({ children }) {
 
       {/* In-app calling: ringing screen + in-call bar. Live only while on
           duty with "Ring in app" chosen. */}
-      {user?.role === 'owner' && <InAppPhone active={!!onDuty && callMode === 'app'} />}
+      {isCallStaff && <InAppPhone active={!!onDuty && callMode === 'app'} />}
 
       {/* Phone bottom tab bar — hidden from md up, where the sidebar shows. */}
       <nav className="mobile-tabbar md:hidden fixed bottom-0 inset-x-0 z-40 flex"
         style={{ background: 'rgba(17,24,39,.97)', backdropFilter: 'blur(12px)', borderTop: '1px solid var(--border)' }}>
-        {MOBILE_TABS.map(({ label, to, icon: Icon, badgeKey }) => (
+        {(user?.role === 'telecaller' ? TELECALLER_TABS : MOBILE_TABS).map(({ label, to, icon: Icon, badgeKey }) => (
           <NavLink
             key={to}
             to={to}
