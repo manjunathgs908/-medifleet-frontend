@@ -19,23 +19,23 @@ const NO_RESPONSE_POLL_MS = 30000;
 
 const NAV = [
   { label: 'Dashboard',   to: '/',           icon: LayoutDashboard, roles: ['owner'] },
-  { label: 'Dispatch',    to: '/dispatch',   icon: Radio,           roles: ['owner'] },
-  { label: 'Fleet',       to: '/fleet',      icon: Truck,           roles: ['owner'] },
-  { label: 'Trips',       to: '/trips',      icon: FileText,        roles: ['owner'] },
+  { label: 'Dispatch',    to: '/dispatch',   icon: Radio,           roles: ['owner', 'telecaller'] },
+  { label: 'Fleet',       to: '/fleet',      icon: Truck,           roles: ['owner', 'telecaller'] },
+  { label: 'Trips',       to: '/trips',      icon: FileText,        roles: ['owner', 'telecaller'] },
   { label: 'Billing',     to: '/billing',    icon: Receipt,     roles: ['owner'] },
-  { label: 'SOS Alerts',  to: '/sos',        icon: AlertTriangle,   roles: ['owner'], badgeKey: 'sos' },
-  { label: 'Trip Alerts', to: '/trip-alerts', icon: PhoneMissed,    roles: ['owner'], badgeKey: 'noResponse' },
-  { label: 'Posting Alerts', to: '/posting-alerts', icon: MapPin,   roles: ['owner'] },
-  { label: 'WhatsApp Leads', to: '/whatsapp-leads', icon: MessageCircle, roles: ['owner'] },
-  { label: 'WhatsApp Chats', to: '/whatsapp-conversations', icon: MessageSquare, roles: ['owner'] },
+  { label: 'SOS Alerts',  to: '/sos',        icon: AlertTriangle,   roles: ['owner', 'telecaller'], badgeKey: 'sos' },
+  { label: 'Trip Alerts', to: '/trip-alerts', icon: PhoneMissed,    roles: ['owner', 'telecaller'], badgeKey: 'noResponse' },
+  { label: 'Posting Alerts', to: '/posting-alerts', icon: MapPin,   roles: ['owner', 'telecaller'] },
+  { label: 'WhatsApp Leads', to: '/whatsapp-leads', icon: MessageCircle, roles: ['owner', 'telecaller'] },
+  { label: 'WhatsApp Chats', to: '/whatsapp-conversations', icon: MessageSquare, roles: ['owner', 'telecaller'] },
   { label: 'Call Logs',   to: '/call-logs',  icon: PhoneCall,       roles: ['owner', 'telecaller'] },
   { label: 'SEO Studio',  to: '/seo-studio', icon: Sparkles,        roles: ['owner'] },
-  { label: 'Leads',       to: '/leads',      icon: Target,          roles: ['owner'] },
+  { label: 'Leads',       to: '/leads',      icon: Target,          roles: ['owner', 'telecaller'] },
   { label: 'Finance',     to: '/finance',    icon: TrendingUp,      roles: ['owner'] },{ label: 'Salaries',    to: '/salary',     icon: Users,           roles: ['owner'] },
   { label: 'Staff',       to: '/staff',      icon: Users,           roles: ['owner'] },
   { label: 'Advances',    to: '/advances',   icon: Users,           roles: ['owner'] },  { label: 'Compliance',  to: '/compliance', icon: ShieldCheck,     roles: ['owner'] },
   { label: 'Owners',      to: '/owners',     icon: UserCheck,       roles: ['owner'] },
-  { label: 'Hospitals',   to: '/hospitals',  icon: Building2,       roles: ['owner'] },
+  { label: 'Hospitals',   to: '/hospitals',  icon: Building2,       roles: ['owner', 'telecaller'] },
 ];
 
 // Phone-only bottom tab bar: the pages used most on the move, reachable
@@ -47,8 +47,11 @@ const MOBILE_TABS = [
   { label: 'WhatsApp', to: '/whatsapp-conversations', icon: MessageSquare },
 ];
 
-// Telecallers only answer and return customer calls: Call Logs is their tab.
+// Telecallers run operations: dispatch, SOS and calls on the phone tab bar.
 const TELECALLER_TABS = [
+  { label: 'Dispatch',  to: '/dispatch',  icon: Radio },
+  { label: 'Trips',     to: '/trips',     icon: FileText },
+  { label: 'SOS',       to: '/sos',       icon: AlertTriangle, badgeKey: 'sos' },
   { label: 'Call Logs', to: '/call-logs', icon: PhoneCall },
 ];
 const CALL_STAFF = ['owner', 'telecaller'];
@@ -162,7 +165,7 @@ export default function Shell({ children }) {
   // per-component polling convention DispatchPage already uses, just no
   // shared data layer exists in this codebase to hook into instead.
   useEffect(() => {
-    if (user?.role !== 'owner') return;
+    if (!CALL_STAFF.includes(user?.role)) return;
     const loadSos = async () => {
       try {
         const { data } = await sosApi.getAll();
@@ -196,7 +199,7 @@ export default function Shell({ children }) {
   // just a number, unlike SOS above. type: 'NO_RESPONSE' hits the cheap
   // live-snapshot-only path in getEvents (no persisted-events query at all).
   useEffect(() => {
-    if (user?.role !== 'owner') return;
+    if (!CALL_STAFF.includes(user?.role)) return;
     const loadNoResponse = async () => {
       try {
         const { data } = await tripCallEventsApi.getAll({ type: 'NO_RESPONSE' });
@@ -434,7 +437,7 @@ export default function Shell({ children }) {
                 as a repeatable test-tone button — an owner can confirm audio
                 actually works at the start of a shift without waiting for a
                 real SOS. */}
-            {user?.role === 'owner' && (
+            {CALL_STAFF.includes(user?.role) && (
               <button
                 onClick={enableSosSound}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"

@@ -76,13 +76,26 @@ export default function App() {
         </ProtectedRoute>
       } />
 
-      {/* Telecallers: Call Logs only — answer and return customer calls. */}
+      {/* Telecallers: operations pages only (calls, dispatch, trips, alerts,
+          WhatsApp, leads, hospitals). Dashboard, money and people pages are
+          not routed for them — any other URL lands on Call Logs. The
+          backend refuses those APIs too. */}
       {user?.role === 'telecaller' && (
         <Route path="/*" element={
           <ProtectedRoute roles={['telecaller']}>
             <Shell>
               <Routes>
-                <Route path="call-logs" element={<CallLogsPage />} />
+                <Route path="call-logs"              element={<CallLogsPage />} />
+                <Route path="dispatch"               element={<DispatchPage />} />
+                <Route path="fleet"                  element={<FleetPage />} />
+                <Route path="trips"                  element={<TripsPage />} />
+                <Route path="trip-alerts"            element={<TripAlertsPage />} />
+                <Route path="posting-alerts"         element={<PostingAlertsPage />} />
+                <Route path="sos"                    element={<SosAlertsPage />} />
+                <Route path="whatsapp-conversations" element={<WhatsappConversationsPage />} />
+                <Route path="whatsapp-leads"         element={<WhatsappLeadsPage />} />
+                <Route path="leads"                  element={<LeadsPage />} />
+                <Route path="hospitals"              element={<HospitalsPage />} />
                 <Route path="*" element={<Navigate to="/call-logs" replace />} />
               </Routes>
             </Shell>
