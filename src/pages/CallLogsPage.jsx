@@ -154,6 +154,41 @@ function LivePlivoCalls() {
   );
 }
 
+// TEMPORARY: the signed-in user's in-app devices (each has its own Plivo
+// endpoint) and which are checking in now — plus how many browser
+// sessions reported in the last few minutes.
+function MyInAppDevices() {
+  const [data, setData] = useState(null);
+  const load = () => callsApi.debugSessions().then(({ data: d }) => setData(d)).catch(() => {});
+  useEffect(() => { load(); }, []);
+  if (!data) return null;
+  const recent = (data.sessions || []).filter((s) => Date.now() - new Date(s.lastAt).getTime() < 5 * 60 * 1000);
+  const devices = data.devices || [];
+  return (
+    <div className="card-sm mb-4 text-xs" style={{ color: 'var(--text2)' }}>
+      <div className="flex items-center gap-2">
+        <span>
+          Your in-app devices: <b>{devices.filter((d) => d.online).length}</b> online of {devices.length}
+          <span style={{ color: 'var(--text3)' }}> · {recent.length} CRM session(s) active in the last 5 min</span>
+        </span>
+        <button onClick={load} className="ml-auto p-1.5 rounded-lg" style={{ background: 'var(--surface2)', color: 'var(--text3)' }}>
+          <RefreshCw size={12} />
+        </button>
+      </div>
+      {devices.length > 0 && (
+        <div className="mt-1.5 font-mono space-y-0.5">
+          {devices.map((d) => (
+            <div key={d.deviceKey}>
+              <span style={{ color: d.online ? 'var(--accent)' : 'var(--text3)' }}>{d.online ? '● online' : '○ offline'}</span>
+              {' '}{d.device || 'device'} [{String(d.deviceKey).slice(0, 8)}]
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CallLogsPage() {
   const [direction, setDirection] = useState('all');
   const [logs,      setLogs]      = useState([]);
@@ -214,6 +249,7 @@ export default function CallLogsPage() {
 
       {config?.webhooks && <WebhookStatus config={config} />}
       {config?.provider === 'plivo' && <LivePlivoCalls />}
+      {config?.provider === 'plivo' && <MyInAppDevices />}
 
       <Tabs tabs={DIRECTIONS} active={direction} onChange={setDirection} />
 

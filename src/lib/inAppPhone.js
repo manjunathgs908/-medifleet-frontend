@@ -14,7 +14,7 @@
 // and only while the SDK is really registered), and only for 15 seconds:
 // if the app does not answer, the backend rings the user's phone. Hiding
 // the tab does not log out; only going off duty or closing the page does.
-import { callsApi } from '../api/client';
+import { callsApi, setInAppDevice } from '../api/client';
 
 const HEARTBEAT_MS = 30 * 1000;
 const RELOGIN_DELAY_MS = 3 * 1000;
@@ -39,11 +39,34 @@ export const getState = () => state;
 // batches, to POST /api/calls/webrtc/debug (read back with GET). Each
 // page load is its own session, so two devices on one endpoint show up
 // as two sessions. Tokens never leave the browser in these records.
-const SESSION_ID = (window.crypto?.randomUUID?.() || `s${Date.now()}${Math.random().toString(36).slice(2)}`);
-const DEVICE = [
-  window.matchMedia?.('(display-mode: standalone)').matches ? 'installed-app' : 'browser-tab',
-  navigator.userAgent,
-].join(' · ');
+const randomId = () => (window.crypto?.randomUUID?.() || `s${Date.now()}${Math.random().toString(36).slice(2)}`);
+const SESSION_ID = randomId();
+
+// This device's own Plivo endpoint is keyed by a random id kept in
+// localStorage — stable across reloads, different per browser / installed
+// app — so each device has its own registration and an incoming call rings
+// all of them (one shared endpoint let Plivo deliver to just one).
+const DEVICE_KEY = (() => {
+  try {
+    const k = localStorage.getItem('slDeviceKey');
+    if (k && /^[A-Za-z0-9-]{8,64}$/.test(k)) return k;
+    const fresh = randomId().replace(/[^A-Za-z0-9-]/g, '');
+    localStorage.setItem('slDeviceKey', fresh);
+    return fresh;
+  } catch { return null; } // no storage: falls back to the shared endpoint
+})();
+
+// A readable label for Call Logs: "Windows · Chrome · browser tab".
+const DEVICE = (() => {
+  const ua = navigator.userAgent || '';
+  const os = /Android/.test(ua) ? 'Android' : /iPhone|iPad|iPod/.test(ua) ? 'iPhone/iPad'
+    : /Windows/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : 'Other';
+  const browser = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Chrome\//.test(ua) ? 'Chrome'
+    : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : 'Browser';
+  const mode = window.matchMedia?.('(display-mode: standalone)').matches ? 'installed app' : 'browser tab';
+  return `${os} - ${browser} - ${mode}`;
+})();
+setInAppDevice(DEVICE_KEY ? { key: DEVICE_KEY, label: DEVICE } : {});
 window.__plivoDebug = window.__plivoDebug || [];
 
 let debugQueue = [];
@@ -73,7 +96,7 @@ function record(event, args = []) {
     detail   : compact(typeof first === 'string' ? rest : args),
     at       : new Date().toISOString(),
     sessionId: SESSION_ID,
-    device   : DEVICE,
+    device   : DEVICE_KEY ? `${DEVICE} [${DEVICE_KEY.slice(0, 8)}]` : DEVICE,
   };
   window.__plivoDebug.push(entry);
   if (window.__plivoDebug.length > 300) window.__plivoDebug.splice(0, window.__plivoDebug.length - 300);
@@ -173,7 +196,11 @@ const onPageHide = (e) => {
     fetch('https://api.savelife.health/api/calls/webrtc/presence', {
       method   : 'POST',
       keepalive: true,
-      headers  : { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('accessToken') || ''}` },
+      headers  : {
+        'Content-Type': 'application/json',
+        Authorization : `Bearer ${localStorage.getItem('accessToken') || ''}`,
+        ...(DEVICE_KEY ? { 'X-Device-Key': DEVICE_KEY } : {}),
+      },
       body     : JSON.stringify({ online: false }),
     }).catch(() => {});
   } catch { /* best effort — the server's 75s window covers it anyway */ }
@@ -386,7 +413,38 @@ function watchRingtone(c) {
   }
 }
 
+// One registration per browser: tabs share the device's endpoint, and two
+// tabs registering it would split delivery again. A Web Lock lets one tab
+// hold the in-app phone; the others wait ("Ringing in another tab") and
+// one of them takes over the moment the holder closes or goes off duty.
+const LOCK_NAME = 'savelife-inapp-phone';
+let waitingForLock = false;
+let lockAbort = null;
+let releaseLock = null;
+let waitingChipTimer = null;
+
 export async function start() {
+  if (running || waitingForLock) return;
+  if (!navigator.locks?.request || !DEVICE_KEY) return startRegistered();
+
+  waitingForLock = true;
+  lockAbort = new AbortController();
+  set({ ...initial, status: 'starting' });
+  // Only say "another tab" if the lock is not ours almost at once.
+  waitingChipTimer = setTimeout(() => {
+    if (waitingForLock) { set({ status: 'other_tab' }); record('lock:waiting', ['another tab holds the in-app phone']); }
+  }, 600);
+
+  navigator.locks.request(LOCK_NAME, { signal: lockAbort.signal }, () => new Promise((resolve) => {
+    clearTimeout(waitingChipTimer);
+    waitingForLock = false;
+    releaseLock = resolve;
+    record('lock:acquired');
+    startRegistered();
+  })).catch(() => { waitingForLock = false; }); // aborted by stop() while waiting
+}
+
+async function startRegistered() {
   if (running) return;
   running = true;
   set({ ...initial, status: 'starting' });
@@ -435,6 +493,14 @@ export async function start() {
 // Only for going off duty, switching to "ring my phone", or signing out of
 // the CRM — never because the tab was hidden.
 export function stop() {
+  // Still waiting for another tab to let go: just stop waiting.
+  if (waitingForLock) {
+    clearTimeout(waitingChipTimer);
+    lockAbort?.abort();
+    waitingForLock = false;
+    set({ ...initial });
+    return;
+  }
   if (!running) return;
   running = false;
   stopping = true;
@@ -446,6 +512,9 @@ export function stop() {
   record('call:logout', ['stop']);
   try { if (client && !state.inCall) client.logout(); } catch { /* already gone */ }
   set({ ...initial });
+  // Then hand the in-app phone to another waiting tab, if there is one.
+  try { releaseLock?.(); } catch { /* already released */ }
+  releaseLock = null;
 }
 
 export function answer() {

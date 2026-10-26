@@ -147,6 +147,14 @@ export const quotesApi = {
 // { whatsappLeadId } | { callLogId } | { customerRef }. Plivo rings the
 // signed-in user's own phone, then connects them to the customer; both
 // sides see only the company number.
+// This device's in-app calling identity (set by lib/inAppPhone.js): each
+// device has its own Plivo endpoint, keyed by X-Device-Key.
+let inAppDevice = {};
+export const setInAppDevice = (d) => { inAppDevice = d || {}; };
+const deviceHeaders = () => (inAppDevice.key
+  ? { 'X-Device-Key': inAppDevice.key, 'X-Device-Label': inAppDevice.label || '' }
+  : {});
+
 export const callsApi = {
   clickToCall: (target)   => api.post('/calls/click-to-call', target),
   logs       : (params)   => api.get('/calls/logs', { params }),
@@ -168,7 +176,7 @@ export const callsApi = {
   // "this tab is open and can take calls" check-in, one call's masked
   // details for the ringing screen, and "I answered it".
   // sessionId tags which browser tab / device asked (TEMPORARY diagnostics).
-  webrtcToken: (sessionId) => api.get('/calls/webrtc/token', { skipErrorToast: true, headers: sessionId ? { 'X-Client-Session': sessionId } : {} }),
+  webrtcToken: (sessionId) => api.get('/calls/webrtc/token', { skipErrorToast: true, headers: { ...deviceHeaders(), ...(sessionId ? { 'X-Client-Session': sessionId } : {}) } }),
   // Which Plivo login to use ('token' | 'password'); for 'password' it
   // carries the user's own endpoint credentials. mode overrides the
   // server's PLIVO_WEBRTC_LOGIN for this browser.
@@ -176,12 +184,16 @@ export const callsApi = {
   // once after Plivo rejects a password login).
   webrtcLogin: (mode, sessionId, reset) => api.get('/calls/webrtc/login', {
     params: { ...(mode ? { mode } : {}), ...(reset ? { reset: 1 } : {}) }, skipErrorToast: true,
-    headers: sessionId ? { 'X-Client-Session': sessionId } : {},
+    headers: { ...deviceHeaders(), ...(sessionId ? { 'X-Client-Session': sessionId } : {}) },
   }),
   // TEMPORARY: Plivo SDK event capture (GET /calls/webrtc/debug reads it).
   debug      : (events)   => api.post('/calls/webrtc/debug', { events }, { skipErrorToast: true }),
-  presence   : (online)   => api.post('/calls/webrtc/presence', { online }, { skipErrorToast: true }),
+  presence   : (online)   => api.post('/calls/webrtc/presence', { online }, { skipErrorToast: true, headers: deviceHeaders() }),
   getCall    : (id)       => api.get(`/calls/${id}`, { skipErrorToast: true }),
+  // TEMPORARY: one call's in-app delivery timeline, per device.
+  trail      : (id)       => api.get(`/calls/${id}/trail`, { skipErrorToast: true }),
+  // TEMPORARY: sessions + this user's devices (online or not).
+  debugSessions: ()       => api.get('/calls/webrtc/debug', { params: { limit: 300 }, skipErrorToast: true }),
   answered   : (id)       => api.post(`/calls/${id}/answered`, {}, { skipErrorToast: true }),
   // The recording, streamed through the backend (which holds the Plivo
   // credentials). Fetched as a blob because an <audio src> cannot send the

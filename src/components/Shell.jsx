@@ -235,6 +235,7 @@ export default function Shell({ children }) {
   // What the in-app phone is doing, for the header chip.
   const appChip = onDuty && callMode === 'app' ? ({
     starting   : { text: 'Connecting…',                color: 'var(--text3)' },
+    other_tab  : { text: 'Ringing in another tab',     color: 'var(--text3)' },
     ready      : { text: 'Ringing in app',             color: 'var(--accent)' },
     mic_blocked: { text: 'Mic blocked → your phone',   color: 'var(--amber)' },
     unsupported: { text: 'No in-app calls → your phone', color: 'var(--amber)' },

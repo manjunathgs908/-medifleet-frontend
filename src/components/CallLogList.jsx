@@ -10,6 +10,7 @@ import { PhoneIncoming, PhoneOutgoing } from 'lucide-react';
 import { Badge, fmtDateTime } from './ui';
 import CallButton from './CallButton';
 import RecordingPlayer from './RecordingPlayer';
+import DeliveryTrail from './DeliveryTrail';
 
 // Backend status -> what the desk reads.
 const STATUS = {
@@ -85,6 +86,8 @@ export default function CallLogList({ logs, emptyText = 'No recorded calls yet.'
                     {log.hangup?.HangupSource && <> · ended by {log.hangup.HangupSource}</>}
                   </div>
                 )}
+                {/* TEMPORARY: how an incoming call reached (or missed) the app. */}
+                {inbound && <DeliveryTrail log={log} />}
               </div>
               {showCallBack && log.customerMasked && <CallButton target={{ callLogId: log._id }} label="Call back" />}
             </div>
