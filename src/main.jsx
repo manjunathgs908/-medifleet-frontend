@@ -7,10 +7,13 @@ import App from './App';
 import { AuthProvider } from './contexts/AuthContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import { startPwaUpdates } from './lib/pwaUpdate';
+import { startInstallCapture } from './lib/installApp';
 import './index.css';
 
 // Service worker + "New version available — Reload" (see lib/pwaUpdate.jsx).
 startPwaUpdates();
+// Keep Chrome's install prompt for the "Install app" button (lib/installApp.jsx).
+startInstallCapture();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

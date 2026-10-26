@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { ArrowRight, RefreshCw } from 'lucide-react';
+import { InstallAppButton } from '../lib/installApp';
 
 // Admin-only login — drivers use the mobile app (medifleet-app), never
 // this CRM, so there's no OTP tab here anymore. Single phone+password
@@ -51,6 +52,7 @@ export default function LoginPage() {
           <p className="text-sm mt-1.5" style={{ color: 'var(--text3)' }}>
             Ambulance CRM & Fleet Management
           </p>
+          <div className="mt-4 flex justify-center"><InstallAppButton /></div>
         </div>
 
         {/* Card */}

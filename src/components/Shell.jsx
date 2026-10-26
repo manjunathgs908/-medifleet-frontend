@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { sosApi, tripCallEventsApi, callsApi } from '../api/client';
+import { InstallAppButton } from '../lib/installApp';
 import InAppPhone, { useInAppPhone } from './InAppPhone';
 import { APP_BUILD } from '../lib/pwaUpdate';
 import { fmtDateTime } from './ui';
@@ -450,6 +451,8 @@ export default function Shell({ children }) {
                 <span className="hidden sm:inline">{sosSoundEnabled ? 'SOS Sound On' : 'Enable SOS sound'}</span>
               </button>
             )}
+
+            <InstallAppButton compact />
 
             {isCallStaff && onDuty !== null && (
               <button
