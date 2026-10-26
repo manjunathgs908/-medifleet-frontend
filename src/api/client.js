@@ -165,6 +165,13 @@ export const callsApi = {
   // details for the ringing screen, and "I answered it".
   // sessionId tags which browser tab / device asked (TEMPORARY diagnostics).
   webrtcToken: (sessionId) => api.get('/calls/webrtc/token', { skipErrorToast: true, headers: sessionId ? { 'X-Client-Session': sessionId } : {} }),
+  // Which Plivo login to use ('token' | 'password'); for 'password' it
+  // carries the user's own endpoint credentials. mode overrides the
+  // server's PLIVO_WEBRTC_LOGIN for this browser.
+  webrtcLogin: (mode, sessionId) => api.get('/calls/webrtc/login', {
+    params: mode ? { mode } : {}, skipErrorToast: true,
+    headers: sessionId ? { 'X-Client-Session': sessionId } : {},
+  }),
   // TEMPORARY: Plivo SDK event capture (GET /calls/webrtc/debug reads it).
   debug      : (events)   => api.post('/calls/webrtc/debug', { events }, { skipErrorToast: true }),
   presence   : (online)   => api.post('/calls/webrtc/presence', { online }, { skipErrorToast: true }),

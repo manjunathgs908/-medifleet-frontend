@@ -194,7 +194,31 @@ const tokenGenerator = {
   }),
 };
 
-function login() {
+// Two ways in, chosen by the server (PLIVO_WEBRTC_LOGIN) or, to compare
+// them on one machine, by localStorage.plivoLoginMode = 'token' | 'password':
+//   token    — access token from Plivo's JWT API (refreshed by the SDK);
+//   password — classic SIP registration with this user's own endpoint
+//              username and password.
+const localLoginMode = () => {
+  try { return localStorage.getItem('plivoLoginMode') || undefined; } catch { return undefined; }
+};
+
+async function login() {
+  let mode = 'token';
+  let creds = null;
+  try {
+    const { data } = await callsApi.webrtcLogin(localLoginMode(), SESSION_ID);
+    mode = data.mode;
+    if (mode === 'password') creds = data;
+  } catch (err) {
+    record('login:mode_failed', [err?.response?.data?.message || err?.message || 'login mode request failed', { status: err?.response?.status }]);
+  }
+
+  if (mode === 'password' && creds?.username && creds?.password) {
+    record('call:login', ['password', { endpointCheck: creds.endpointCheck }]);
+    client.login(creds.username, creds.password);
+    return;
+  }
   record('call:login', ['loginWithAccessTokenGenerator']);
   client.loginWithAccessTokenGenerator(tokenGenerator);
 }
@@ -203,7 +227,7 @@ function scheduleRelogin() {
   clearTimeout(reloginTimer);
   reloginTimer = setTimeout(() => {
     if (running && !isRegistered()) {
-      try { login(); } catch { set({ status: 'error', error: 'Could not reconnect in-app calling. Calls will ring your phone.' }); }
+      login().catch(() => set({ status: 'error', error: 'Could not reconnect in-app calling. Calls will ring your phone.' }));
     }
   }, RELOGIN_DELAY_MS);
 }
@@ -310,7 +334,7 @@ export async function start() {
     stopping = false;
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('pagehide', onPageHide);
-    login();
+    await login();
   } catch (err) {
     set({ status: 'error', error: err?.response?.data?.message || 'Could not start in-app calling. Calls will ring your phone.' });
     callsApi.presence(false).catch(() => {});
