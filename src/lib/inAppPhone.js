@@ -194,20 +194,29 @@ const tokenGenerator = {
   }),
 };
 
-// Two ways in, chosen by the server (PLIVO_WEBRTC_LOGIN) or, to compare
-// them on one machine, by localStorage.plivoLoginMode = 'token' | 'password':
-//   token    — access token from Plivo's JWT API (refreshed by the SDK);
+// Two ways in, chosen by the server (PLIVO_WEBRTC_LOGIN, default
+// 'password') or, to compare them on one machine, by
+// localStorage.plivoLoginMode = 'token' | 'password':
 //   password — classic SIP registration with this user's own endpoint
-//              username and password.
+//              username and password. The default, and the only one Plivo
+//              registers on our account.
+//   token    — access token from Plivo's JWT API (refreshed by the SDK);
+//              kept to switch back to.
 const localLoginMode = () => {
   try { return localStorage.getItem('plivoLoginMode') || undefined; } catch { return undefined; }
 };
 
-async function login() {
+// The server's default is 'password' — on our account it is the login
+// Plivo actually registers. The credentials are used here and nowhere
+// else: not stored, not logged, not put in __plivoDebug.
+let lastLoginMode = null;
+let passwordRetried = false;
+
+async function login({ reset = false } = {}) {
   let mode = 'token';
   let creds = null;
   try {
-    const { data } = await callsApi.webrtcLogin(localLoginMode(), SESSION_ID);
+    const { data } = await callsApi.webrtcLogin(localLoginMode(), SESSION_ID, reset);
     mode = data.mode;
     if (mode === 'password') creds = data;
   } catch (err) {
@@ -215,12 +224,24 @@ async function login() {
   }
 
   if (mode === 'password' && creds?.username && creds?.password) {
-    record('call:login', ['password', { endpointCheck: creds.endpointCheck }]);
+    lastLoginMode = 'password';
+    record('call:login', ['password', { endpointCheck: creds.endpointCheck, reset }]);
     client.login(creds.username, creds.password);
     return;
   }
+  lastLoginMode = 'token';
   record('call:login', ['loginWithAccessTokenGenerator']);
   client.loginWithAccessTokenGenerator(tokenGenerator);
+}
+
+// Plivo refused the stored password (changed in the Plivo console, say):
+// once per page, have the server set a fresh one and try again.
+function retryPasswordLogin() {
+  if (lastLoginMode !== 'password' || passwordRetried || !running) return false;
+  passwordRetried = true;
+  record('call:login_retry', ['password reset after rejected login']);
+  login({ reset: true }).catch(() => {});
+  return true;
 }
 
 function scheduleRelogin() {
@@ -245,12 +266,14 @@ function wire(c) {
 
   // Presence first, then state, so routing is never behind the browser.
   c.on('onLogin', () => {
+    passwordRetried = false;
     callsApi.presence(true).catch(() => {});
     set({ status: 'ready', error: '' });
     startHeartbeat();
   });
   c.on('onLoginFailed', (reason) => {
     callsApi.presence(false).catch(() => {});
+    if (retryPasswordLogin()) { set({ status: 'starting' }); return; }
     set({ status: 'error', error: `Plivo sign-in failed${reason ? ` (${reason})` : ''}. Calls will ring your phone.` });
   });
   c.on('onLogout', (reason) => {

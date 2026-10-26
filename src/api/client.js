@@ -168,8 +168,10 @@ export const callsApi = {
   // Which Plivo login to use ('token' | 'password'); for 'password' it
   // carries the user's own endpoint credentials. mode overrides the
   // server's PLIVO_WEBRTC_LOGIN for this browser.
-  webrtcLogin: (mode, sessionId) => api.get('/calls/webrtc/login', {
-    params: mode ? { mode } : {}, skipErrorToast: true,
+  // reset: true asks the server to set a new endpoint password first (sent
+  // once after Plivo rejects a password login).
+  webrtcLogin: (mode, sessionId, reset) => api.get('/calls/webrtc/login', {
+    params: { ...(mode ? { mode } : {}), ...(reset ? { reset: 1 } : {}) }, skipErrorToast: true,
     headers: sessionId ? { 'X-Client-Session': sessionId } : {},
   }),
   // TEMPORARY: Plivo SDK event capture (GET /calls/webrtc/debug reads it).
