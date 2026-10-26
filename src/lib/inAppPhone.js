@@ -10,13 +10,14 @@
 // answer takes it. The call-log id arrives as the X-PH-logId SIP header and
 // is all we use to show the caller — masked, from GET /api/calls/:id.
 //
-// The backend only rings this tab while it keeps checking in (every 30s).
-// Mic blocked, SDK failure or the tab closing simply stops the check-ins,
-// and the user is rung on their phone instead.
+// The backend rings this tab only while it keeps checking in (every 30s,
+// and only while the SDK is really registered), and only for 15 seconds:
+// if the app does not answer, the backend rings the user's phone. Hiding
+// the tab does not log out; only going off duty or closing the page does.
 import { callsApi } from '../api/client';
 
 const HEARTBEAT_MS = 30 * 1000;
-const RENEW_BEFORE_MS = 10 * 60 * 1000;
+const RELOGIN_DELAY_MS = 3 * 1000;
 
 const initial = {
   status  : 'off',  // off | starting | ready | mic_blocked | unsupported | error
@@ -34,8 +35,9 @@ export const getState = () => state;
 
 let client = null;
 let heartbeatTimer = null;
-let renewTimer = null;
+let reloginTimer = null;
 let running = false;
+let stopping = false; // a logout we asked for, as opposed to one that happened to us
 
 const headerValue = (headers, name) => {
   const key = Object.keys(headers || {}).find((k) => k.toLowerCase() === name.toLowerCase());
@@ -52,37 +54,91 @@ async function loadCallInfo(logId) {
   }
 }
 
+// The server's routing reads these check-ins, so they must say what Plivo
+// actually knows: "online" only while the SDK reports itself registered.
+// Runs in background tabs too (browsers slow timers there, but well
+// inside the server's 75s window) — a hidden CRM tab keeps taking calls.
+const isRegistered = () => {
+  try { return !!(client?.isLoggedIn || client?.isRegistered?.()); } catch { return false; }
+};
+
+function beat() {
+  if (!running) return;
+  if (state.status === 'ready' && isRegistered()) {
+    callsApi.presence(true).catch(() => {});
+  } else if (state.status === 'ready') {
+    // Plivo dropped us without an onLogout — say so, then sign in again.
+    callsApi.presence(false).catch(() => {});
+    set({ status: 'starting' });
+    scheduleRelogin();
+  }
+}
+
 function startHeartbeat() {
   clearInterval(heartbeatTimer);
-  const beat = () => { if (running && state.status === 'ready') callsApi.presence(true).catch(() => {}); };
   beat();
   heartbeatTimer = setInterval(beat, HEARTBEAT_MS);
 }
 
-const onVisible = () => {
-  if (document.visibilityState === 'visible' && running && state.status === 'ready') callsApi.presence(true).catch(() => {});
+// Hiding the tab changes nothing about the Plivo session; coming back just
+// confirms presence at once rather than waiting for the next beat.
+const onVisible = () => { if (document.visibilityState === 'visible') beat(); };
+
+// The page is really going away (closed, reloaded, navigated off): tell
+// the server first, then leave Plivo. keepalive lets the request outlive
+// the page; it carries the CRM login the same way the API client does.
+const onPageHide = (e) => {
+  if (!running || e.persisted) return; // bfcache: the page may come back
+  try {
+    fetch('https://api.savelife.health/api/calls/webrtc/presence', {
+      method   : 'POST',
+      keepalive: true,
+      headers  : { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('accessToken') || ''}` },
+      body     : JSON.stringify({ online: false }),
+    }).catch(() => {});
+  } catch { /* best effort — the server's 75s window covers it anyway */ }
+  try { stopping = true; client?.logout(); } catch { /* page is closing */ }
 };
 
-async function login() {
-  const { data } = await callsApi.webrtcToken();
-  client.loginWithAccessToken(data.token);
-  // Renew before the token lapses, with a fresh login.
-  clearTimeout(renewTimer);
-  const renewIn = Math.max(60 * 1000, new Date(data.expiresAt).getTime() - Date.now() - RENEW_BEFORE_MS);
-  renewTimer = setTimeout(() => {
-    if (!running || state.inCall || state.incoming) { renewTimer = setTimeout(() => login().catch(() => {}), 60 * 1000); return; }
-    try { client.logout(); } catch { /* re-login below */ }
-    login().catch((err) => set({ status: 'error', error: err?.response?.data?.message || 'Could not renew in-app calling.' }));
-  }, renewIn);
+// Plivo asks for a token itself whenever it needs one — at sign-in and
+// before the current one expires — so renewal never logs out.
+const tokenGenerator = {
+  getAccessToken: () => callsApi.webrtcToken().then(({ data }) => data.token),
+};
+
+function login() {
+  client.loginWithAccessTokenGenerator(tokenGenerator);
+}
+
+function scheduleRelogin() {
+  clearTimeout(reloginTimer);
+  reloginTimer = setTimeout(() => {
+    if (running && !isRegistered()) {
+      try { login(); } catch { set({ status: 'error', error: 'Could not reconnect in-app calling. Calls will ring your phone.' }); }
+    }
+  }, RELOGIN_DELAY_MS);
 }
 
 function wire(c) {
-  c.on('onLogin', () => { set({ status: 'ready', error: '' }); startHeartbeat(); });
-  c.on('onLoginFailed', (reason) => {
-    set({ status: 'error', error: `Plivo sign-in failed${reason ? ` (${reason})` : ''}. Calls will ring your phone.` });
-    callsApi.presence(false).catch(() => {});
+  // Presence first, then state, so routing is never behind the browser.
+  c.on('onLogin', () => {
+    callsApi.presence(true).catch(() => {});
+    set({ status: 'ready', error: '' });
+    startHeartbeat();
   });
-  c.on('onLogout', () => { if (running && state.status === 'ready') set({ status: 'starting' }); });
+  c.on('onLoginFailed', (reason) => {
+    callsApi.presence(false).catch(() => {});
+    set({ status: 'error', error: `Plivo sign-in failed${reason ? ` (${reason})` : ''}. Calls will ring your phone.` });
+  });
+  c.on('onLogout', (reason) => {
+    callsApi.presence(false).catch(() => {});
+    if (stopping || !running) return;
+    // Not something we asked for: keep the user reachable by signing in
+    // again. Meanwhile the server rings their phone.
+    console.warn('[in-app phone] Plivo logged out unexpectedly', reason || '');
+    set({ status: 'starting' });
+    scheduleRelogin();
+  });
   c.on('onPermissionDenied', () => {
     set({ status: 'mic_blocked', error: 'Microphone is blocked for this site. Calls will ring your phone until you allow it.' });
     callsApi.presence(false).catch(() => {});
@@ -152,20 +208,26 @@ export async function start() {
       client = plivo.client;
       wire(client);
     }
+    stopping = false;
     document.addEventListener('visibilitychange', onVisible);
-    await login();
+    window.addEventListener('pagehide', onPageHide);
+    login();
   } catch (err) {
     set({ status: 'error', error: err?.response?.data?.message || 'Could not start in-app calling. Calls will ring your phone.' });
     callsApi.presence(false).catch(() => {});
   }
 }
 
+// Only for going off duty, switching to "ring my phone", or signing out of
+// the CRM — never because the tab was hidden.
 export function stop() {
   if (!running) return;
   running = false;
+  stopping = true;
   clearInterval(heartbeatTimer);
-  clearTimeout(renewTimer);
+  clearTimeout(reloginTimer);
   document.removeEventListener('visibilitychange', onVisible);
+  window.removeEventListener('pagehide', onPageHide);
   callsApi.presence(false).catch(() => {});
   try { if (client && !state.inCall) client.logout(); } catch { /* already gone */ }
   set({ ...initial });
