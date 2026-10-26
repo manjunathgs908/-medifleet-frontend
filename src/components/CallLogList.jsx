@@ -59,6 +59,7 @@ function PhoneLegLine({ log }) {
           Phone {leg.DialBLegTo || (ov?.phones || []).join(', ')}: rang <b>{rang === 'true' ? 'yes' : rang === 'false' ? 'NO' : '?'}</b>
           {' '}· {leg.DialStatus || '—'}
           {(leg.DialHangupCause || leg.DialBLegHangupCause) && <> · cause {leg.DialHangupCause || leg.DialBLegHangupCause}</>}
+          {v?.afterSec != null && <> · after {v.afterSec}s</>}
         </div>
       )}
       {v && v.code !== 'answered' && <div style={{ color: VERDICT_COLOR[v.code] || 'var(--text2)' }}>{v.text}</div>}
