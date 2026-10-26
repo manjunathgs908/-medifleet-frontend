@@ -88,6 +88,8 @@ export const authApi = {
   // Deactivation has its own route. PUT /auth/users/:id takes an explicit
   // field allowlist and isActive is deliberately not on it.
   deactivateUser: (id) => api.put(`/auth/users/${id}/deactivate`),
+  // Owner sets a telecaller's CRM login password. The response never echoes it.
+  setUserPassword: (id, password) => api.put(`/auth/users/${id}/password`, { password }),
   // Moving a driver between partners — its own endpoint because it changes
   // which fleet's roster they are on, which ambulances they can claim, and
   // whether they accrue attendance and payroll at all. Refused by the

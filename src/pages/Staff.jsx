@@ -3,6 +3,51 @@ import { authApi, ownersApi } from '../api/client';
 import toast from 'react-hot-toast';
 import MyCallSettings from '../components/MyCallSettings';
 
+// Telecaller logins: phone + password at the CRM. Passwords are typed or
+// generated here, saved hashed by the backend, and shown ONCE in a
+// credentials box for the owner to copy and share — never stored or shown
+// anywhere else.
+const MIN_PASSWORD = 8;
+const CRM_URL = 'crm.savelife.health';
+const passwordProblem = (p) =>
+  !p || p.length < MIN_PASSWORD ? `Password needs at least ${MIN_PASSWORD} characters`
+    : /\s/.test(p) ? 'No spaces in the password' : null;
+// 10 characters from an alphabet without look-alikes (0/O, 1/l/I).
+function generatePassword() {
+  const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  const bytes = crypto.getRandomValues(new Uint8Array(10));
+  return Array.from(bytes, (b) => abc[b % abc.length]).join('');
+}
+
+// Shown once after creating a telecaller or setting their password.
+function CredentialsBox({ creds, onClose }) {
+  const text = `SaveLife CRM login\n${CRM_URL}\nPhone: ${creds.phone}\nPassword: ${creds.password}`;
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(text); toast.success('Copied'); }
+    catch { toast.error('Copy failed — select and copy it by hand'); }
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,.6)' }}>
+      <div className="card w-full" style={{ maxWidth: 440 }}>
+        <h2 className="text-lg font-bold mb-1">Login for {creds.name}</h2>
+        <p className="text-xs mb-4" style={{ color: 'var(--amber)' }}>
+          Shown only now — copy it and send it to {creds.name}. It can't be shown again;
+          if it is lost, set a new password.
+        </p>
+        <div className="rounded-lg p-3 font-mono text-sm space-y-1 select-all" style={{ background: 'var(--surface2)' }}>
+          <div>{CRM_URL}</div>
+          <div>Phone: <b>{creds.phone}</b></div>
+          <div>Password: <b>{creds.password}</b></div>
+        </div>
+        <div className="flex justify-end gap-2 mt-4">
+          <button className="text-sm px-3 py-2 rounded-lg" style={{ background: 'var(--surface2)', color: 'var(--text2)' }} onClick={copy}>Copy</button>
+          <button className="text-sm px-3 py-2 rounded-lg" style={{ background: 'var(--accent)', color: '#00110d', fontWeight: 600 }} onClick={onClose}>Done</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const Staff = () => {
   const [staff, setStaff] = useState([]);
   const [showAdd, setShowAdd] = useState(false);
@@ -13,6 +58,10 @@ const Staff = () => {
   const [moveTarget, setMoveTarget] = useState(null);     // driver being moved, or null
   const [moveOwnerId, setMoveOwnerId] = useState('');
   const [moving, setMoving] = useState(false);
+  const [creds, setCreds] = useState(null);               // { name, phone, password } shown once, or null
+  const [pwTarget, setPwTarget] = useState(null);         // telecaller whose password is being set, or null
+  const [pwValue, setPwValue] = useState('');
+  const [pwSaving, setPwSaving] = useState(false);
   const [form, setForm] = useState({
     name: '', phone: '', password: '', role: 'driver',
     driverType: 'shift_driver', baseSalary: 15000, perTripBonus: 100,
@@ -31,6 +80,10 @@ const Staff = () => {
   const handleAdd = async () => {
     if (!form.name || !form.phone || !form.password) {
       toast.error('Name, Phone, Password ಹಾಕಿ'); return;
+    }
+    if (form.role === 'telecaller') {
+      const problem = passwordProblem(form.password);
+      if (problem) { toast.error(problem); return; }
     }
     setLoading(true);
     try {
@@ -52,6 +105,9 @@ const Staff = () => {
       }
 
       toast.success('Staff added!');
+      if (form.role === 'telecaller') {
+        setCreds({ name: data.user?.name || form.name, phone: data.user?.phone || form.phone, password: form.password });
+      }
       setShowAdd(false);
       setForm({
         name:'', phone:'', password:'', role:'driver', driverType:'shift_driver',
@@ -105,6 +161,19 @@ const Staff = () => {
     } catch (e) { toast.error(e.response?.data?.message || 'Failed'); }
   };
 
+  const savePassword = async () => {
+    const problem = passwordProblem(pwValue);
+    if (problem) { toast.error(problem); return; }
+    setPwSaving(true);
+    try {
+      await authApi.setUserPassword(pwTarget._id, pwValue);
+      setCreds({ name: pwTarget.name, phone: pwTarget.phone, password: pwValue });
+      setPwTarget(null);
+      setPwValue('');
+    } catch (e) { toast.error(e.response?.data?.message || 'Could not set the password'); }
+    finally { setPwSaving(false); }
+  };
+
   // ── Move a driver to another partner's fleet ──────────────────
   const openMove = async (s) => {
     setMoveTarget(s);
@@ -156,7 +225,18 @@ const Staff = () => {
             <div className="space-y-3">
               <input className="inp w-full" placeholder="Full Name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
               <input className="inp w-full" placeholder="Phone (10 digits)" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} />
-              <input className="inp w-full" placeholder="Password" type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
+              <div>
+                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--text2)' }}>
+                  Password <span style={{ color: 'var(--red)' }}>*</span>
+                  {form.role === 'telecaller' && <span style={{ color: 'var(--text3)' }}> — they log in to the CRM with their phone + this (min {MIN_PASSWORD})</span>}
+                </label>
+                <div className="flex gap-2">
+                  <input className="inp w-full font-mono" placeholder="Password" type="text" autoComplete="new-password" required
+                    value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
+                  <button type="button" className="text-xs px-3 rounded-lg whitespace-nowrap" style={{ background: 'var(--surface2)', color: 'var(--text2)' }}
+                    onClick={() => setForm({ ...form, password: generatePassword() })}>Generate</button>
+                </div>
+              </div>
               <select className="inp w-full" value={form.role} onChange={e => setForm({...form, role: e.target.value})}>
                 <option value="driver">Driver</option>
                 <option value="telecaller">Telecaller</option>
@@ -299,6 +379,13 @@ const Staff = () => {
                           Move fleet
                         </button>
                       )}
+                      {s.role === 'telecaller' && (
+                        <button onClick={() => { setPwTarget(s); setPwValue(''); }}
+                          className="text-xs px-2 py-1 rounded-lg"
+                          style={{ background: 'var(--surface2)', color: 'var(--text2)' }}>
+                          Set password
+                        </button>
+                      )}
                       <button onClick={() => handleDeactivate(s._id)}
                         className="text-xs px-3 py-1 rounded-lg"
                         style={{ background: 'rgba(255,77,109,.1)', color: 'var(--red)' }}>
@@ -315,6 +402,35 @@ const Staff = () => {
           <div className="text-center py-12 text-sm" style={{ color: 'var(--text3)' }}>No staff found</div>
         )}
       </div>
+
+      {/* Set / reset a telecaller's CRM login password. */}
+      {pwTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,.6)' }}>
+          <div className="card w-full" style={{ maxWidth: 440 }}>
+            <h2 className="text-lg font-bold mb-1">Set password — {pwTarget.name}</h2>
+            <p className="text-xs mb-4" style={{ color: 'var(--text3)' }}>
+              They log in at {CRM_URL} with phone <span className="font-mono">{pwTarget.phone}</span> and this password.
+              Any session they have open is signed out.
+            </p>
+            <div className="flex gap-2 mb-4">
+              <input className="inp w-full font-mono" placeholder={`New password (min ${MIN_PASSWORD})`} type="text" autoComplete="new-password"
+                value={pwValue} onChange={e => setPwValue(e.target.value)} />
+              <button type="button" className="text-xs px-3 rounded-lg whitespace-nowrap" style={{ background: 'var(--surface2)', color: 'var(--text2)' }}
+                onClick={() => setPwValue(generatePassword())}>Generate</button>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button className="text-sm px-3 py-2 rounded-lg" style={{ background: 'var(--surface2)', color: 'var(--text2)' }}
+                onClick={() => { setPwTarget(null); setPwValue(''); }}>Cancel</button>
+              <button className="text-sm px-3 py-2 rounded-lg" style={{ background: 'var(--accent)', color: '#00110d', fontWeight: 600 }}
+                disabled={pwSaving} onClick={savePassword}>
+                {pwSaving ? 'Saving…' : 'Save password'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {creds && <CredentialsBox creds={creds} onClose={() => setCreds(null)} />}
 
       {/* Move a driver to another partner's fleet. */}
       {moveTarget && (
