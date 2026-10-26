@@ -1,13 +1,15 @@
 // src/components/CallLogList.jsx
 //
 // Masked, recorded calls (medifleet-backend's CallLog), shared by the Call
-// Logs page and the WhatsApp customer history. Numbers arrive masked; the
-// recording plays straight from Plivo. "Call back" re-dials the same
-// customer through the masked call, by the log's id.
+// Logs page and the WhatsApp customer history. Numbers arrive masked; a
+// recording plays through the backend (RecordingPlayer), never from a
+// Plivo URL. "Call back" re-dials the same customer through the masked
+// call, by the log's id.
 import React from 'react';
 import { PhoneIncoming, PhoneOutgoing } from 'lucide-react';
 import { Badge, fmtDateTime } from './ui';
 import CallButton from './CallButton';
+import RecordingPlayer from './RecordingPlayer';
 
 // Backend status -> what the desk reads.
 const STATUS = {
@@ -70,9 +72,8 @@ export default function CallLogList({ logs, emptyText = 'No recorded calls yet.'
               </div>
               {showCallBack && log.customerMasked && <CallButton target={{ callLogId: log._id }} label="Call back" />}
             </div>
-            {log.recordingUrl && (
-              <audio controls preload="none" src={log.recordingUrl} className="w-full mt-2" style={{ height: 36 }} />
-            )}
+            {/* Streamed through the backend; the Plivo URL is never sent here. */}
+            {log.hasRecording && <RecordingPlayer callLogId={log._id} />}
           </div>
         );
       })}

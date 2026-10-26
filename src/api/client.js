@@ -152,6 +152,10 @@ export const callsApi = {
   logs       : (params)   => api.get('/calls/logs', { params }),
   getDuty    : ()         => api.get('/calls/duty', { skipErrorToast: true }),
   setDuty    : (onDuty)   => api.put('/calls/duty', { onDuty }),
+  // The recording, streamed through the backend (which holds the Plivo
+  // credentials). Fetched as a blob because an <audio src> cannot send the
+  // login token; the Plivo URL itself never reaches the browser.
+  recording  : (id)       => api.get(`/calls/${id}/recording`, { responseType: 'blob', skipErrorToast: true, timeout: 60000 }),
 };
 
 // Google Places / Directions, proxied by the backend so the Maps key stays
