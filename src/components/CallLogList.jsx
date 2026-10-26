@@ -76,6 +76,15 @@ export default function CallLogList({ logs, emptyText = 'No recorded calls yet.'
                   ].filter(Boolean).join(' · ')}
                 </div>
                 {log.error && <div className="text-[11px] mt-0.5" style={{ color: 'var(--red)' }}>{log.error}</div>}
+                {/* Plivo's own reason the call ended, e.g. Busy Line or code
+                    5030 (its simultaneous-call limit). */}
+                {(log.hangup?.HangupCauseName || log.hangupCause) && log.status !== 'completed' && (
+                  <div className="text-[11px] mt-0.5 font-mono" style={{ color: 'var(--text3)' }}>
+                    Plivo: {log.hangup?.HangupCauseName || log.hangupCause}
+                    {log.hangup?.HangupCauseCode && <> ({log.hangup.HangupCauseCode})</>}
+                    {log.hangup?.HangupSource && <> · ended by {log.hangup.HangupSource}</>}
+                  </div>
+                )}
               </div>
               {showCallBack && log.customerMasked && <CallButton target={{ callLogId: log._id }} label="Call back" />}
             </div>

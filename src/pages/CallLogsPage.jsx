@@ -79,6 +79,81 @@ function WebhookStatus({ config }) {
   );
 }
 
+// What Plivo has live on the account right now. Every ringing or connected
+// phone leg counts toward its simultaneous-call limit; a leg here that no
+// call log knows about, or one far older than any real call, is stuck and
+// can be hung up — one at a time, after a confirm.
+function LivePlivoCalls() {
+  const [data,    setData]    = useState(null);
+  const [error,   setError]   = useState('');
+  const [loading, setLoading] = useState(false);
+  const [busyId,  setBusyId]  = useState(null);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const { data: d } = await callsApi.liveCalls();
+      setData(d);
+      setError('');
+    } catch (e) {
+      setError(e.response?.data?.message || 'Could not read live calls from Plivo.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const hangup = async (c) => {
+    if (!window.confirm(`Hang up this Plivo call (${c.direction || 'call'} · ${c.from || '?'} → ${c.to || '?'})?`)) return;
+    setBusyId(c.callUuid);
+    try { await callsApi.hangupLive(c.callUuid); await load(); } catch { /* toast from client */ }
+    finally { setBusyId(null); }
+  };
+
+  const ageText = (s) => (s == null ? '—' : s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`);
+
+  return (
+    <div className="card-sm mb-4 text-xs" style={{ color: 'var(--text2)' }}>
+      <div className="flex items-center gap-2">
+        <span>
+          Live Plivo calls: <b className="font-mono">{data ? data.total : '…'}</b>
+          <span style={{ color: 'var(--text3)' }}> · each ringing or connected phone leg counts toward Plivo's simultaneous-call limit</span>
+        </span>
+        <button onClick={load} disabled={loading} className="ml-auto p-1.5 rounded-lg" style={{ background: 'var(--surface2)', color: 'var(--text3)' }}>
+          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+        </button>
+      </div>
+      {error && <div className="mt-2" style={{ color: 'var(--red)' }}>{error}</div>}
+      {data?.calls?.length > 0 && (
+        <div className="overflow-x-auto mt-2">
+          <table className="tbl">
+            <thead><tr><th>Direction</th><th>From → To</th><th>Status</th><th>Age</th><th>Our call log</th><th></th></tr></thead>
+            <tbody>
+              {data.calls.map((c) => (
+                <tr key={c.callUuid}>
+                  <td>{c.direction || '—'}</td>
+                  <td className="font-mono">{c.from || '?'} → {c.to || '?'}</td>
+                  <td>{c.status || '—'}</td>
+                  <td className="font-mono" style={{ color: c.ageSec > 3600 ? 'var(--red)' : undefined }}>{ageText(c.ageSec)}</td>
+                  <td>{c.callLog ? `${c.callLog.direction} · ${c.callLog.status}` : <span style={{ color: 'var(--amber)' }}>none</span>}</td>
+                  <td>
+                    <button onClick={() => hangup(c)} disabled={busyId === c.callUuid}
+                      className="px-2 py-1 rounded-lg font-semibold"
+                      style={{ background: 'rgba(255,77,109,.1)', color: 'var(--red)', border: '1px solid rgba(255,77,109,.25)' }}>
+                      {busyId === c.callUuid ? '…' : 'Hang up'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CallLogsPage() {
   const [direction, setDirection] = useState('all');
   const [logs,      setLogs]      = useState([]);
@@ -138,6 +213,7 @@ export default function CallLogsPage() {
       )}
 
       {config?.webhooks && <WebhookStatus config={config} />}
+      {config?.provider === 'plivo' && <LivePlivoCalls />}
 
       <Tabs tabs={DIRECTIONS} active={direction} onChange={setDirection} />
 

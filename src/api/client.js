@@ -156,6 +156,10 @@ export const callsApi = {
   // separate from your login number ('' clears it back to the login one).
   getMe      : ()         => api.get('/calls/me'),
   setMe      : (callPhone) => api.put('/calls/me', { callPhone }),
+  // Calls Plivo has live right now (each counts toward its simultaneous-
+  // call limit), and hanging up one stuck call by its Plivo id.
+  liveCalls  : ()         => api.get('/calls/plivo/live', { skipErrorToast: true }),
+  hangupLive : (uuid)     => api.post(`/calls/plivo/live/${encodeURIComponent(uuid)}/hangup`),
   // 'app' (ring inside the CRM) or 'phone' (ring my call ring number).
   setMode    : (callMode) => api.put('/calls/me', { callMode }),
   // Which provider is live and the caller ID customers see.
