@@ -160,6 +160,8 @@ const deviceHeaders = () => (inAppDevice.key
 export const callsApi = {
   clickToCall: (target)   => api.post('/calls/click-to-call', target),
   logs       : (params)   => api.get('/calls/logs', { params }),
+  // { from, to } ISO. Every person for the owner; only yourself otherwise.
+  performance: (params)   => api.get('/calls/performance', { params }),
   getDuty    : ()         => api.get('/calls/duty', { skipErrorToast: true }),
   setDuty    : (onDuty)   => api.put('/calls/duty', { onDuty }),
   // Your own call settings: the "call ring number" Plivo rings for you,

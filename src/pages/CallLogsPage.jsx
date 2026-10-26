@@ -191,6 +191,100 @@ function MyInAppDevices() {
   );
 }
 
+// Period presets for the performance card, in the browser's local time.
+const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
+const startOfWeek = () => { const d = startOfToday(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d; }; // Monday
+const PERIODS = [
+  { key: 'today', label: 'Today' },
+  { key: 'week',  label: 'This week' },
+  { key: 'custom', label: 'Custom' },
+];
+const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+function periodRange(period, custom) {
+  if (period === 'today') return { from: startOfToday(), to: new Date() };
+  if (period === 'week') return { from: startOfWeek(), to: new Date() };
+  const from = new Date(`${custom.from}T00:00:00`);
+  const to = new Date(`${custom.to}T00:00:00`);
+  to.setDate(to.getDate() + 1); // through the end of the "to" day
+  return { from, to };
+}
+
+const fmtSecs = (s) => (s == null ? '—' : s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`);
+
+// Who took the calls. The owner sees every telecaller (and themselves);
+// a telecaller sees only their own numbers — the server decides which.
+function Performance({ isOwner, onPeople }) {
+  const [period, setPeriod] = useState('today');
+  const [custom, setCustom] = useState({ from: isoDay(startOfWeek()), to: isoDay(new Date()) });
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const { from, to } = periodRange(period, custom);
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from >= to) return;
+    callsApi.performance({ from: from.toISOString(), to: to.toISOString() })
+      .then(({ data: d }) => { setData(d); setError(''); onPeople?.(d.people || []); })
+      .catch((e) => setError(e.response?.data?.message || 'Could not load call performance.'));
+  }, [period, custom.from, custom.to]);
+
+  const t = data?.team;
+  return (
+    <div className="card-sm mb-4 text-xs" style={{ color: 'var(--text2)' }}>
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        <span className="font-semibold text-sm" style={{ color: 'var(--text)' }}>{isOwner ? 'Telecaller performance' : 'My calls'}</span>
+        <div className="flex gap-1 ml-auto">
+          {PERIODS.map((p) => (
+            <button key={p.key} onClick={() => setPeriod(p.key)} className="px-2 py-1 rounded-lg"
+              style={period === p.key
+                ? { background: 'rgba(0,212,170,.12)', color: 'var(--accent)', border: '1px solid rgba(0,212,170,.35)' }
+                : { background: 'var(--surface2)', color: 'var(--text3)', border: '1px solid transparent' }}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+        {period === 'custom' && (
+          <div className="flex items-center gap-1 w-full sm:w-auto">
+            <input type="date" className="inp py-1" value={custom.from} max={custom.to} onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))} />
+            <span>to</span>
+            <input type="date" className="inp py-1" value={custom.to} min={custom.from} onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))} />
+          </div>
+        )}
+      </div>
+      {error && <div style={{ color: 'var(--red)' }}>{error}</div>}
+      {t && (
+        <div className="flex flex-wrap gap-x-4 gap-y-1 mb-2">
+          <span>Incoming: <b style={{ color: 'var(--text)' }}>{t.incoming}</b></span>
+          <span>Answered: <b style={{ color: 'var(--accent)' }}>{t.answered}</b></span>
+          <span>Missed (team): <b style={{ color: t.missed ? 'var(--red)' : 'var(--text)' }}>{t.missed}</b></span>
+          {t.inProgress > 0 && <span>Ringing now: <b>{t.inProgress}</b></span>}
+          {isOwner && t.answeredUnattributed > 0 && (
+            <span style={{ color: 'var(--text3)' }}>{t.answeredUnattributed} answered before "answered by" was recorded</span>
+          )}
+        </div>
+      )}
+      {data?.people?.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="tbl">
+            <thead><tr><th>{isOwner ? 'Staff' : 'You'}</th><th>Answered</th><th>Avg time to answer</th><th>Calls made</th><th>Connected</th></tr></thead>
+            <tbody>
+              {data.people.map((p) => (
+                <tr key={p.user}>
+                  <td>{p.name}{isOwner && <span style={{ color: 'var(--text3)' }}> · {p.role === 'owner' ? 'owner' : 'telecaller'}</span>}</td>
+                  <td className="font-mono">{p.answered}</td>
+                  <td className="font-mono">{fmtSecs(p.avgAnswerSec)}</td>
+                  <td className="font-mono">{p.placed}</td>
+                  <td className="font-mono">{p.connected}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CallLogsPage() {
   const { user } = useAuth();
   const isOwner = user?.role === 'owner';
@@ -199,6 +293,10 @@ export default function CallLogsPage() {
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState(null);
   const [config,    setConfig]    = useState(null);
+  // Calls of one staff member ('' = everyone). Owner: anyone from the
+  // performance card; telecaller: only themselves (the server enforces it).
+  const [agent,     setAgent]     = useState('');
+  const [people,    setPeople]    = useState([]);
   const intervalRef = useRef();
 
   useEffect(() => {
@@ -211,7 +309,7 @@ export default function CallLogsPage() {
     // shows up without reloading the page.
     callsApi.config().then(({ data }) => setConfig(data)).catch(() => {});
     try {
-      const { data } = await callsApi.logs({ direction: direction === 'all' ? undefined : direction, limit: 100 });
+      const { data } = await callsApi.logs({ direction: direction === 'all' ? undefined : direction, agent: agent || undefined, limit: 100 });
       setLogs(data.logs || []);
       setError(null);
     } catch (e) {
@@ -225,7 +323,7 @@ export default function CallLogsPage() {
     load();
     intervalRef.current = setInterval(() => load({ silent: true }), POLL_MS);
     return () => clearInterval(intervalRef.current);
-  }, [direction]);
+  }, [direction, agent]);
 
   return (
     <div className="page-enter">
@@ -238,6 +336,8 @@ export default function CallLogsPage() {
           </button>
         }
       />
+
+      <Performance isOwner={isOwner} onPeople={setPeople} />
 
       {/* What is actually live on the server, not what we expect. */}
       {config && (
@@ -258,7 +358,20 @@ export default function CallLogsPage() {
       {isOwner && config?.provider === 'plivo' && <LivePlivoCalls />}
       {config?.provider === 'plivo' && <MyInAppDevices />}
 
-      <Tabs tabs={DIRECTIONS} active={direction} onChange={setDirection} />
+      <div className="flex flex-wrap items-center gap-3">
+        <Tabs tabs={DIRECTIONS} active={direction} onChange={setDirection} />
+        {isOwner ? (
+          <select className="inp py-1 text-xs mb-4" style={{ maxWidth: 220 }} value={agent} onChange={(e) => setAgent(e.target.value)}>
+            <option value="">All staff</option>
+            {people.map((p) => <option key={p.user} value={p.user}>{p.name}</option>)}
+          </select>
+        ) : (
+          <label className="text-xs flex items-center gap-1.5 mb-4" style={{ color: 'var(--text2)' }}>
+            <input type="checkbox" checked={!!agent} onChange={(e) => setAgent(e.target.checked ? String(user?._id || user?.id || '') : '')} />
+            Only my calls
+          </label>
+        )}
+      </div>
 
       {error && (
         <div className="card mb-4" style={{ borderColor: 'rgba(255,77,109,.35)' }}>
