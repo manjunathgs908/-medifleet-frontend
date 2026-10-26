@@ -294,28 +294,96 @@ function wire(c) {
     callsApi.presence(false).catch(() => {});
   });
 
-  c.on('onIncomingCall', async (callerName, extraHeaders, callInfo) => {
-    const logId = headerValue(extraHeaders, 'X-PH-logId');
-    const callUUID = callInfo?.callUUID || null;
-    set({ incoming: { callUUID, logId, log: null } });
-    const log = await loadCallInfo(logId);
-    if (state.incoming?.callUUID === callUUID) set({ incoming: { callUUID, logId, log } });
+  // Every call is tracked by its own callUUID, and an event only ever
+  // touches the call it is about. A late "ended" from one call must never
+  // wipe the ringing screen of the next — the bug where the second call
+  // rang but showed no Answer screen.
+  c.on('onIncomingCall', (callerName, extraHeaders, callInfo) => {
+    showIncoming(callInfo?.callUUID || null, extraHeaders, 'onIncomingCall');
   });
   // Someone else on duty answered first, or the caller hung up.
-  c.on('onIncomingCallCanceled', (callInfo) => {
-    if (!callInfo?.callUUID || state.incoming?.callUUID === callInfo.callUUID) set({ incoming: null });
-  });
-  c.on('onIncomingCallIgnored', () => set({ incoming: null }));
+  c.on('onIncomingCallCanceled', (callInfo) => clearIncoming(callInfo?.callUUID, 'canceled'));
+  c.on('onIncomingCallIgnored', (callInfo) => clearIncoming(callInfo?.callUUID, 'ignored'));
   c.on('onCallAnswered', (callInfo) => {
     const from = state.incoming || {};
+    const callUUID = callInfo?.callUUID || from.callUUID;
+    record('ui:in_call', [{ callUUID }]);
     set({
       incoming: null,
-      inCall: { callUUID: callInfo?.callUUID || from.callUUID, logId: from.logId, log: from.log, startedAt: Date.now(), muted: false },
+      inCall: { callUUID, logId: from.logId, log: from.log, startedAt: Date.now(), muted: false },
     });
   });
-  const ended = () => set({ incoming: null, inCall: null });
-  c.on('onCallTerminated', ended);
-  c.on('onCallFailed', ended);
+  // onCallTerminated is ({originator, reason}, callInfo); onCallFailed is
+  // (cause, callInfo). Only the call named is cleared.
+  c.on('onCallTerminated', (_why, callInfo) => endCall(callInfo?.callUUID, 'terminated'));
+  c.on('onCallFailed', (_cause, callInfo) => endCall(callInfo?.callUUID, 'failed'));
+
+  watchRingtone(c);
+}
+
+// Shows the ringing screen for one call. Safe to call twice for the same
+// call (the SDK event and the ring-tone fallback below may both fire).
+async function showIncoming(callUUID, extraHeaders, source) {
+  if (callUUID && state.incoming?.callUUID === callUUID) return;
+  if (callUUID && state.inCall?.callUUID === callUUID) return;
+  const logId = headerValue(extraHeaders, 'X-PH-logId');
+  record('ui:incoming_shown', [{ callUUID, logId, source }]);
+  set({ incoming: { callUUID, logId, log: null } });
+  const log = await loadCallInfo(logId);
+  if (state.incoming?.callUUID === callUUID) set({ incoming: { callUUID, logId, log } });
+}
+
+// Clears the ringing screen only if it is for this call (or the event
+// names no call and nothing has been answered since).
+function clearIncoming(callUUID, why) {
+  if (!state.incoming) return;
+  if (callUUID && state.incoming.callUUID && state.incoming.callUUID !== callUUID) {
+    record('ui:clear_ignored', [{ why, eventCall: callUUID, showing: state.incoming.callUUID }]);
+    return;
+  }
+  record('ui:incoming_cleared', [{ why, callUUID: callUUID || state.incoming.callUUID }]);
+  set({ incoming: null });
+}
+
+function endCall(callUUID, why) {
+  const patch = {};
+  if (state.inCall && (!callUUID || !state.inCall.callUUID || state.inCall.callUUID === callUUID)) patch.inCall = null;
+  if (state.incoming && (!callUUID || !state.incoming.callUUID || state.incoming.callUUID === callUUID)) patch.incoming = null;
+  record('ui:call_ended', [{ why, callUUID, cleared: Object.keys(patch) }]);
+  if (Object.keys(patch).length) set(patch);
+}
+
+// Fallback for the SDK ringing without telling us: it starts the ring tone
+// BEFORE emitting onIncomingCall, and only emits once a fresh microphone
+// stream is ready — which can lag or stall. If the ring tone is playing
+// and no ringing screen is up shortly after, build it from the SDK's own
+// list of incoming calls, so a ringing call can always be answered.
+function watchRingtone(c) {
+  const attach = () => {
+    const el = c.ringToneView || document.getElementById('plivo_ringtone');
+    if (!el || el.__slWatched) return !!el;
+    el.__slWatched = true;
+    el.addEventListener('play', () => {
+      setTimeout(() => {
+        if (!running || state.incoming || state.inCall) return;
+        // The ringing sessions themselves carry the X-PH-logId header;
+        // getIncomingCalls() (call info only) is the fallback.
+        let calls = [];
+        try {
+          calls = c.incomingInvites instanceof Map ? [...c.incomingInvites.values()] : (c.getIncomingCalls?.() || []);
+        } catch { /* SDK internals */ }
+        const call = calls[calls.length - 1];
+        record('ui:ringtone_without_event', [{ incomingCalls: calls.length, callUUID: call?.callUUID || null }]);
+        if (call) showIncoming(call.callUUID || null, call.extraHeaders || {}, 'ringtone_fallback');
+      }, 1500);
+    });
+    return true;
+  };
+  // The SDK creates its audio elements during login; look again until found.
+  if (!attach()) {
+    let tries = 0;
+    const t = setInterval(() => { if (attach() || ++tries > 20) clearInterval(t); }, 1000);
+  }
 }
 
 export async function start() {
