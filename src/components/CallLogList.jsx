@@ -40,6 +40,47 @@ const fmtSec = (s) => {
   return n < 60 ? `${n}s` : `${Math.floor(n / 60)}m ${n % 60}s`;
 };
 
+// TEMPORARY: the phone <Dial> of an incoming call — did the phone ring
+// (Plivo's DialRingStatus), Plivo's exact cause, the backend's plain-words
+// verdict, and whether anything of ours was already on that number.
+const VERDICT_COLOR = { answered: 'var(--accent)', busy_no_ring: 'var(--amber)', busy_overlap: 'var(--red)' };
+
+function PhoneLegLine({ log }) {
+  const leg = log.phoneLeg;
+  const ov = log.overlap;
+  const v = log.phoneVerdict;
+  if (!leg && !ov && !log.routing?.callerIsRingPhone) return null;
+  const rang = String(leg?.DialRingStatus ?? '');
+  const others = (ov?.ourCalls?.length || 0) + (ov?.liveLegs?.length || 0);
+  return (
+    <div className="text-[11px] mt-1 space-y-0.5" style={{ color: 'var(--text3)' }}>
+      {leg && (
+        <div className="font-mono">
+          Phone {leg.DialBLegTo || (ov?.phones || []).join(', ')}: rang <b>{rang === 'true' ? 'yes' : rang === 'false' ? 'NO' : '?'}</b>
+          {' '}· {leg.DialStatus || '—'}
+          {(leg.DialHangupCause || leg.DialBLegHangupCause) && <> · cause {leg.DialHangupCause || leg.DialBLegHangupCause}</>}
+        </div>
+      )}
+      {v && v.code !== 'answered' && <div style={{ color: VERDICT_COLOR[v.code] || 'var(--text2)' }}>{v.text}</div>}
+      {v?.advice && <div style={{ color: 'var(--text2)' }}>→ {v.advice}</div>}
+      {ov && (
+        <div>
+          At dial: {others
+            ? <span style={{ color: 'var(--red)' }}>{others} other leg(s) of ours already on this number
+                {ov.liveLegs?.length > 0 && <> ({ov.liveLegs.map((l) => `${l.status || '?'} ${l.ageSec ?? '?'}s`).join(', ')})</>}</span>
+            : 'no other call of ours on this number'}
+          {ov.liveCheck && <> · live check {ov.liveCheck}</>}
+          {ov.autoHungUp?.length > 0 && <> · hung up {ov.autoHungUp.length} stuck leg(s)</>}
+          {ov.releasedAtHangup?.length > 0 && <> · released {ov.releasedAtHangup.length} leg(s) left after the call</>}
+        </div>
+      )}
+      {(ov?.callerIsRingPhone || log.routing?.callerIsRingPhone) && (
+        <div style={{ color: 'var(--amber)' }}>The caller is one of the ring numbers — that phone was left out of this call.</div>
+      )}
+    </div>
+  );
+}
+
 export default function CallLogList({ logs, emptyText = 'No recorded calls yet.', showCallBack = true }) {
   if (!logs?.length) return <div className="text-sm" style={{ color: 'var(--text3)' }}>{emptyText}</div>;
 
@@ -86,6 +127,7 @@ export default function CallLogList({ logs, emptyText = 'No recorded calls yet.'
                     {log.hangup?.HangupSource && <> · ended by {log.hangup.HangupSource}</>}
                   </div>
                 )}
+                {inbound && <PhoneLegLine log={log} />}
                 {/* TEMPORARY: how an incoming call reached (or missed) the app. */}
                 {inbound && <DeliveryTrail log={log} />}
               </div>
