@@ -24,7 +24,12 @@ export default function CallLogsPage() {
   const [logs,      setLogs]      = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState(null);
+  const [config,    setConfig]    = useState(null);
   const intervalRef = useRef();
+
+  useEffect(() => {
+    callsApi.config().then(({ data }) => setConfig(data)).catch(() => {});
+  }, []);
 
   const load = async ({ silent } = {}) => {
     if (!silent) setLoading(true);
@@ -56,6 +61,18 @@ export default function CallLogsPage() {
           </button>
         }
       />
+
+      {/* What is actually live on the server, not what we expect. */}
+      {config && (
+        <div className="card-sm mb-4 text-xs flex flex-wrap items-center gap-2"
+          style={config.provider === 'plivo'
+            ? { borderColor: 'rgba(0,212,170,.3)', color: 'var(--text2)' }
+            : { borderColor: 'rgba(255,77,109,.35)', color: 'var(--red)' }}>
+          {config.provider === 'plivo'
+            ? <>✅ Calls go through <b>Plivo</b> · customers see <span className="font-mono">{config.callerId}</span></>
+            : <>⚠️ Plivo is not configured on the server — masked calls are switched off.</>}
+        </div>
+      )}
 
       <Tabs tabs={DIRECTIONS} active={direction} onChange={setDirection} />
 

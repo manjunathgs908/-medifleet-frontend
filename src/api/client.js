@@ -152,6 +152,12 @@ export const callsApi = {
   logs       : (params)   => api.get('/calls/logs', { params }),
   getDuty    : ()         => api.get('/calls/duty', { skipErrorToast: true }),
   setDuty    : (onDuty)   => api.put('/calls/duty', { onDuty }),
+  // Your own call settings: the "call ring number" Plivo rings for you,
+  // separate from your login number ('' clears it back to the login one).
+  getMe      : ()         => api.get('/calls/me'),
+  setMe      : (callPhone) => api.put('/calls/me', { callPhone }),
+  // Which provider is live and the caller ID customers see.
+  config     : ()         => api.get('/calls/config', { skipErrorToast: true }),
   // The recording, streamed through the backend (which holds the Plivo
   // credentials). Fetched as a blob because an <audio src> cannot send the
   // login token; the Plivo URL itself never reaches the browser.

@@ -61,6 +61,10 @@ export default function CallLogList({ logs, emptyText = 'No recorded calls yet.'
                 <div className="text-[11px] mt-1 font-mono" style={{ color: 'var(--text3)' }}>
                   {fmtDateTime(log.startedAt || log.createdAt)}
                   {fmtSec(log.talkSec) && <> · talk {fmtSec(log.talkSec)}</>}
+                  {/* Which provider placed it and the number the customer
+                      saw, as recorded on the call itself. */}
+                  {log.provider && <> · via {log.provider === 'plivo' ? 'Plivo' : 'Exotel'}</>}
+                  {log.callerId && <> · caller ID {log.callerId}</>}
                 </div>
                 <div className="text-[11px] mt-0.5" style={{ color: 'var(--text3)' }}>
                   {[

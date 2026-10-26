@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { authApi, ownersApi } from '../api/client';
 import toast from 'react-hot-toast';
+import MyCallSettings from '../components/MyCallSettings';
 
 const Staff = () => {
   const [staff, setStaff] = useState([]);
@@ -144,6 +145,8 @@ const Staff = () => {
           + Add Staff
         </button>
       </div>
+
+      <MyCallSettings />
 
       {/* Add Modal */}
       {showAdd && (
