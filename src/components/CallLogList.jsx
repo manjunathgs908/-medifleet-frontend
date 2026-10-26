@@ -26,6 +26,9 @@ const STATUS = {
   no_agents      : { color: 'red',   label: 'Nobody on duty' },
   failed         : { color: 'red',   label: 'Failed' },
   cancelled      : { color: 'gray',  label: 'Cancelled' },
+  // Plivo told us about the hang-up, but our incoming webhook never ran for
+  // it, so the CRM did not route it (see Call Logs' webhook status).
+  not_routed     : { color: 'amber', label: 'Not routed by CRM' },
 };
 
 const AGENT_TYPE = { driver: 'Driver', staff: 'Desk', fleet_owner: 'Partner' };
