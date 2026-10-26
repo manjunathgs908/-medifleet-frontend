@@ -4,6 +4,8 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { sosApi, tripCallEventsApi, callsApi } from '../api/client';
 import InAppPhone, { useInAppPhone } from './InAppPhone';
+import { APP_BUILD } from '../lib/pwaUpdate';
+import { fmtDateTime } from './ui';
 import toast from 'react-hot-toast';
 import {
   LayoutDashboard, Radio, Truck, FileText, Receipt,
@@ -302,6 +304,11 @@ export default function Shell({ children }) {
           <span className="text-xs font-mono" style={{ color: 'var(--text3)' }}>
             {clock.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
           </span>
+        </div>
+        {/* Which build this page is running — to confirm a deploy took. */}
+        <div className="text-[10px] font-mono mb-3" style={{ color: 'var(--text3)' }}
+          title={APP_BUILD.builtAt ? `Built ${fmtDateTime(APP_BUILD.builtAt)}` : undefined}>
+          Build {APP_BUILD.commit}
         </div>
         <div className="flex items-center gap-2 mb-3">
           <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"

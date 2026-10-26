@@ -88,8 +88,13 @@ export default function CallLogList({ logs, emptyText = 'No recorded calls yet.'
               </div>
               {showCallBack && log.customerMasked && <CallButton target={{ callLogId: log._id }} label="Call back" />}
             </div>
-            {/* Streamed through the backend; the Plivo URL is never sent here. */}
+            {/* Streamed through the backend; the Plivo URL is never sent here.
+                Only answered calls are recorded, so a missed one just says so
+                — no Play button, no error. */}
             {log.hasRecording && <RecordingPlayer callLogId={log._id} />}
+            {!log.hasRecording && log.recordingState === 'not_answered' && !['ringing', 'initiated', 'agent_answered'].includes(log.status) && (
+              <div className="text-[11px] mt-1.5" style={{ color: 'var(--text3)' }}>No recording — call not answered</div>
+            )}
           </div>
         );
       })}

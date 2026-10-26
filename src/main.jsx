@@ -6,7 +6,11 @@ import { Toaster } from 'react-hot-toast';
 import App from './App';
 import { AuthProvider } from './contexts/AuthContext';
 import ErrorBoundary from './components/ErrorBoundary';
+import { startPwaUpdates } from './lib/pwaUpdate';
 import './index.css';
+
+// Service worker + "New version available — Reload" (see lib/pwaUpdate.jsx).
+startPwaUpdates();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
