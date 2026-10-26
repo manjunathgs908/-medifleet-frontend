@@ -4,9 +4,9 @@
 // their click-to-calls and, while On call duty, for incoming customer
 // calls. Separate from the login number. Customers never see it — every
 // masked call shows them the company number, shown here as "Customers see".
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import { PhoneCall } from 'lucide-react';
+import { BellRing, PhoneCall } from 'lucide-react';
 import { callsApi } from '../api/client';
 import { Btn } from './ui';
 
@@ -113,6 +113,87 @@ export default function MyCallSettings() {
           <Btn variant="ghost" onClick={() => save('')} disabled={saving}>Use login number</Btn>
         )}
       </div>
+
+      <TestRing ringPhone={me.ringPhone} />
+    </div>
+  );
+}
+
+// "Ring my phone now (test)": Plivo calls the ring number from the company
+// number and, if answered, says it is a test and hangs up. Polls the test's
+// call log for the outcome, so the phone path can be checked from one
+// device — no second phone needed to call in from.
+const TEST_POLL_MS = 2000;
+const TEST_MAX_MS = 90 * 1000;
+const TEST_OUTCOME = {
+  initiated  : { label: 'Ringing…',                         color: 'var(--blue)' },
+  completed  : { label: 'Answered — your ring number works', color: 'var(--accent)' },
+  agent_busy : { label: 'Busy',                             color: 'var(--red)' },
+  agent_missed: { label: 'Rang, not answered',             color: 'var(--amber)' },
+  failed     : { label: 'Failed',                           color: 'var(--red)' },
+  cancelled  : { label: 'Cancelled',                        color: 'var(--text3)' },
+};
+
+function TestRing({ ringPhone }) {
+  const [log,  setLog]  = useState(null);
+  const [busy, setBusy] = useState(false);
+  const timer = useRef(null);
+
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  const poll = (id, startedAt) => {
+    timer.current = setTimeout(async () => {
+      try {
+        const { data } = await callsApi.getCall(id);
+        setLog(data.log);
+        // Ended once Plivo's hang-up report is in.
+        if (data.log.endedAt || Date.now() - startedAt > TEST_MAX_MS) { setBusy(false); return; }
+      } catch { /* keep polling */ }
+      poll(id, startedAt);
+    }, TEST_POLL_MS);
+  };
+
+  const start = async () => {
+    clearTimeout(timer.current);
+    setBusy(true);
+    setLog(null);
+    try {
+      const { data } = await callsApi.testRing();
+      setLog({ _id: data.callLogId, status: 'initiated' });
+      poll(data.callLogId, Date.now());
+    } catch {
+      setBusy(false); // the API client shows the backend's message
+    }
+  };
+
+  const outcome = log && (TEST_OUTCOME[log.status] || { label: log.status, color: 'var(--text2)' });
+  const h = log?.hangup || {};
+  return (
+    <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--border2)' }}>
+      <div className="flex flex-wrap items-center gap-2">
+        <Btn variant="ghost" onClick={start} disabled={busy}>
+          <BellRing size={14} className="inline mr-1" />{busy ? 'Test call in progress…' : 'Ring my phone now (test)'}
+        </Btn>
+        <span className="text-[11px]" style={{ color: 'var(--text3)' }}>
+          Plivo calls {fmt(ringPhone)} from the company number and plays a short test message. Nothing is recorded.
+        </span>
+      </div>
+      {outcome && (
+        <div className="mt-2 text-xs">
+          <span className="font-semibold" style={{ color: outcome.color }}>{outcome.label}</span>
+          {log.endedAt && (h.CallStatus || h.HangupCauseName || h.HangupCause) && (
+            <span className="font-mono" style={{ color: 'var(--text3)' }}>
+              {' '}· Plivo: {[h.CallStatus, h.HangupCauseName || h.HangupCause, h.HangupCauseCode && `(${h.HangupCauseCode})`, h.HangupSource && `ended by ${h.HangupSource}`].filter(Boolean).join(' · ')}
+            </span>
+          )}
+          {log.error && <div style={{ color: 'var(--red)' }}>{log.error}</div>}
+          {log.status === 'agent_busy' && (
+            <div className="mt-1" style={{ color: 'var(--text2)' }}>
+              If the phone never rang, the busy came from the carrier or handset: usually call forwarding (dial ##002# on that phone to clear it), DND/call barring, or the phone was already on a call.
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

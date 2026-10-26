@@ -49,7 +49,7 @@ function PhoneLegLine({ log }) {
   const leg = log.phoneLeg;
   const ov = log.overlap;
   const v = log.phoneVerdict;
-  if (!leg && !ov && !log.routing?.callerIsRingPhone) return null;
+  if (!leg && !ov && !log.routing?.callerIsRingPhone && !log.routing?.skippedCaller) return null;
   const rang = String(leg?.DialRingStatus ?? '');
   const others = (ov?.ourCalls?.length || 0) + (ov?.liveLegs?.length || 0);
   return (
@@ -74,9 +74,11 @@ function PhoneLegLine({ log }) {
           {ov.releasedAtHangup?.length > 0 && <> · released {ov.releasedAtHangup.length} leg(s) left after the call</>}
         </div>
       )}
-      {(ov?.callerIsRingPhone || log.routing?.callerIsRingPhone) && (
-        <div style={{ color: 'var(--amber)' }}>The caller is one of the ring numbers — that phone was left out of this call.</div>
-      )}
+      {log.routing?.skippedCaller?.message
+        ? <div className="font-semibold" style={{ color: 'var(--amber)' }}>{log.routing.skippedCaller.message}</div>
+        : (ov?.callerIsRingPhone || log.routing?.callerIsRingPhone) && (
+          <div style={{ color: 'var(--amber)' }}>The caller is one of the ring numbers — that phone was left out of this call.</div>
+        )}
     </div>
   );
 }
@@ -87,7 +89,9 @@ export default function CallLogList({ logs, emptyText = 'No recorded calls yet.'
   return (
     <div className="flex flex-col gap-2">
       {logs.map((log) => {
-        const st = STATUS[log.status] || { color: 'gray', label: log.status };
+        const st = log.routing?.skippedCaller?.leftNobody && ['no_agents', 'missed'].includes(log.status)
+          ? { color: 'amber', label: 'Not rung — called from the ring phone' }
+          : STATUS[log.status] || { color: 'gray', label: log.status };
         const inbound = log.direction === 'inbound';
         const about = log.trip?.tripNumber
           ? `Trip ${log.trip.tripNumber}${log.trip.patientName ? ` · ${log.trip.patientName}` : ''}`
@@ -100,7 +104,9 @@ export default function CallLogList({ logs, emptyText = 'No recorded calls yet.'
                   {inbound
                     ? <PhoneIncoming size={14} style={{ color: 'var(--blue)' }} />
                     : <PhoneOutgoing size={14} style={{ color: 'var(--accent)' }} />}
-                  <span className="font-mono">{log.customerMasked || 'Unknown number'}</span>
+                  {log.context === 'test_ring'
+                    ? <span>Test ring to {log.agentName ? `${log.agentName}'s` : 'your'} phone</span>
+                    : <span className="font-mono">{log.customerMasked || 'Unknown number'}</span>}
                   <Badge color={st.color}>{st.label}</Badge>
                 </div>
                 <div className="text-[11px] mt-1 font-mono" style={{ color: 'var(--text3)' }}>

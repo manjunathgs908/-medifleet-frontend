@@ -170,6 +170,7 @@ export const callsApi = {
   hangupLive : (uuid)     => api.post(`/calls/plivo/live/${encodeURIComponent(uuid)}/hangup`),
   // 'app' (ring inside the CRM) or 'phone' (ring my call ring number).
   setMode    : (callMode) => api.put('/calls/me', { callMode }),
+  testRing   : ()         => api.post('/calls/test-ring'),
   // Which provider is live and the caller ID customers see.
   config     : ()         => api.get('/calls/config', { skipErrorToast: true }),
   // In-app (WebRTC) calling: a receive-only Plivo access token, the
