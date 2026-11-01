@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { tripsApi, billingApi, hospitalsApi, financeApi, salaryApi, leadsApi, vehiclesApi, authApi } from '../api/client';
 import api from '../api/client';
 import { PageHeader, StatusBadge, Btn, Modal, StatCard, Tabs, Spinner, Empty, rupee, fmtDateTime, fmtDate, custPhone } from '../components/ui';
@@ -560,28 +560,43 @@ export function SalaryPage() {
 // src/pages/LeadsPage.jsx
 // ─────────────────────────────────────────────────────────────
 export function LeadsPage() {
-  const [leads,   setLeads]   = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState(null);
-  const [filter,  setFilter]  = useState('new');
+  // `leads` always belongs to `leadsFor` — the filter it was fetched for —
+  // so rows from one filter are never shown under another one's tab.
+  const [leads,    setLeads]    = useState([]);
+  const [leadsFor, setLeadsFor] = useState(null);
+  const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState(null);
+  const [filter,   setFilter]   = useState('new');
+  // Only the newest request may update the list: on quick filter changes an
+  // older, slower response must not land on top of the current filter.
+  const requestSeq = useRef(0);
 
-  useEffect(() => { load(); }, [filter]);
+  useEffect(() => { load(filter); }, [filter]);
 
-  const load = async () => {
+  const load = async (forFilter = filter) => {
+    const seq = ++requestSeq.current;
     setLoading(true);
     try {
-      const { data } = await leadsApi.getAll(filter!=='all'?{status:filter}:{});
-      setLeads(data.leads || []);
+      const { data } = await leadsApi.getAll(forFilter !== 'all' ? { status: forFilter } : {});
+      if (seq !== requestSeq.current) return;
+      // The server filters by status; checked here too, so the tab can never
+      // show other statuses (e.g. against a server that ignores ?status).
+      const rows = data.leads || [];
+      setLeads(forFilter === 'all' ? rows : rows.filter((l) => l.status === forFilter));
+      setLeadsFor(forFilter);
       setError(null);
     } catch (e) {
-      // Previously this had no catch at all -- any thrown error left
-      // `leads` at its last value with zero visible trace, which on first
-      // load is `[]` -- indistinguishable from "no leads" even when the
-      // backend genuinely returned data. Does NOT clear `leads` on
-      // failure -- a failed refetch must never look like "no leads" either.
+      if (seq !== requestSeq.current) return;
+      // A failed fetch shows the error — never an empty "no leads" list, and
+      // never the previous filter's rows under this tab.
       setError(e.response?.data?.message || e.message || 'Could not load leads.');
-    } finally { setLoading(false); }
+    } finally {
+      if (seq === requestSeq.current) setLoading(false);
+    }
   };
+
+  const shown = leadsFor === filter ? leads : [];
+  const emptyMessage = filter === 'all' ? 'No leads yet' : `No ${filter} leads`;
 
   const update = async (id, status) => {
     try {
@@ -623,11 +638,11 @@ export function LeadsPage() {
       )}
 
       <div className="card overflow-x-auto">
-        {loading ? <Spinner /> : leads.length===0 ? <Empty icon={<Target size={36} />} message="No leads found" /> :
+        {loading ? <Spinner /> : leadsFor !== filter ? null : shown.length===0 ? <Empty icon={<Target size={36} />} message={emptyMessage} /> :
           <table className="tbl">
             <thead><tr><th>Source</th><th>Name</th><th>Phone</th><th>Message</th><th>Campaign</th><th>Status</th><th>Received</th><th>Action</th></tr></thead>
             <tbody>
-              {leads.map(l => (
+              {shown.map(l => (
                 <tr key={l._id}>
                   <td><span title={l.source}>{SRC_ICONS[l.source]||<Mail size={14} />}</span> <span className="text-xs" style={{color:'var(--text3)'}}>{l.source?.replace('_',' ')||'-'}</span></td>
                   <td><div className="font-medium text-sm">{l.patientName||'Unknown'}</div></td>
