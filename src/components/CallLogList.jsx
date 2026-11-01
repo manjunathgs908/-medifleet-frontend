@@ -37,6 +37,8 @@ export const STATUS = {
   // Plivo told us about the hang-up, but our incoming webhook never ran for
   // it, so the CRM did not route it (see Call Logs' webhook status).
   not_routed     : { color: 'amber', label: 'Not routed by CRM' },
+  // Callback queue only: answered, transferred, and nobody took the transfer.
+  transfer_unanswered: { color: 'amber', label: 'Transfer not taken' },
 };
 
 // Why a call still stored as ringing is known to be over (backend liveState).
