@@ -31,6 +31,7 @@ import WhatsappConversationsPage from './pages/WhatsappConversationsPage';
 import SeoStudioPage from './pages/SeoStudioPage';
 import QuotePage from './pages/QuotePage';
 import CallLogsPage from './pages/CallLogsPage';
+import CallbacksPage from './pages/CallbacksPage';
 
 // Driver mobile app pages
 import DriverApp       from './pages/driver/DriverApp';
@@ -86,6 +87,7 @@ export default function App() {
             <Shell>
               <Routes>
                 <Route path="call-logs"              element={<CallLogsPage />} />
+                <Route path="callbacks"              element={<CallbacksPage />} />
                 <Route path="dispatch"               element={<DispatchPage />} />
                 <Route path="fleet"                  element={<FleetPage />} />
                 <Route path="trips"                  element={<TripsPage />} />
@@ -177,6 +179,11 @@ export default function App() {
               <Route path="call-logs" element={
                 <ProtectedRoute roles={['owner']}>
                   <CallLogsPage />
+                </ProtectedRoute>
+              } />
+              <Route path="callbacks" element={
+                <ProtectedRoute roles={['owner']}>
+                  <CallbacksPage />
                 </ProtectedRoute>
               } />
               <Route path="whatsapp-conversations" element={

@@ -157,6 +157,22 @@ const deviceHeaders = () => (inAppDevice.key
   ? { 'X-Device-Key': inAppDevice.key, 'X-Device-Label': inAppDevice.label || '' }
   : {});
 
+// Missed-call callback queue (owner + telecaller). Every change sends the
+// task's `rev`; a 409 means someone else changed it first and carries the
+// current task. Calling back goes through callsApi.clickToCall({ callbackTaskId })
+// and never resolves a task.
+export const callbacksApi = {
+  list        : (state)  => api.get('/callbacks', { params: { state } }),
+  summary     : ()       => api.get('/callbacks/summary', { skipErrorToast: true }),
+  assignees   : ()       => api.get('/callbacks/assignees'),
+  assign      : (id, userId, rev)        => api.patch(`/callbacks/${id}/assign`, { userId, rev }),
+  schedule    : (id, at, rev)            => api.patch(`/callbacks/${id}/schedule`, { at, rev }),
+  resolve     : (id, outcome, note, rev) => api.post(`/callbacks/${id}/resolve`, { outcome, note, rev }),
+  notRouted   : ()       => api.get('/callbacks/not-routed'),
+  queueNotRouted  : (callId)       => api.post(`/callbacks/not-routed/${callId}/queue`),
+  dismissNotRouted: (callId, note) => api.post(`/callbacks/not-routed/${callId}/dismiss`, { note }),
+};
+
 export const callsApi = {
   clickToCall: (target)   => api.post('/calls/click-to-call', target),
   logs       : (params)   => api.get('/calls/logs', { params }),

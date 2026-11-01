@@ -19,8 +19,8 @@ import CallButton from './CallButton';
 import RecordingPlayer from './RecordingPlayer';
 import DeliveryTrail from './DeliveryTrail';
 
-// Backend status -> what the desk reads.
-const STATUS = {
+// Backend status -> what the desk reads (also used by the callback queue).
+export const STATUS = {
   completed      : { color: 'green', label: 'Connected' },
   initiated      : { color: 'blue',  label: 'Ringing agent' },
   agent_answered : { color: 'blue',  label: 'Dialling customer' },
@@ -51,7 +51,7 @@ const AGENT_TYPE = { driver: 'Driver', staff: 'Desk', fleet_owner: 'Partner' };
 // Phone-leg verdicts worth acting on, shown on the card itself.
 const ACTIONABLE_VERDICTS = ['busy_no_ring', 'busy_no_ring_unchecked', 'busy_overlap', 'not_reached'];
 
-const fmtSec = (s) => {
+export const fmtSec = (s) => {
   if (s === null || s === undefined || !Number.isFinite(Number(s))) return null;
   const n = Math.round(Number(s));
   return n < 60 ? `${n}s` : `${Math.floor(n / 60)}m ${n % 60}s`;

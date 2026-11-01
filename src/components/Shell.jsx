@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { sosApi, tripCallEventsApi, callsApi } from '../api/client';
+import { sosApi, tripCallEventsApi, callsApi, callbacksApi } from '../api/client';
 import { InstallAppButton } from '../lib/installApp';
 import InAppPhone, { useInAppPhone } from './InAppPhone';
 import { APP_BUILD } from '../lib/pwaUpdate';
@@ -12,7 +12,7 @@ import {
   LayoutDashboard, Radio, Truck, FileText, Receipt,
   TrendingUp, Users, Target, ShieldCheck, Building2, UserCheck,
   LogOut, Menu, X, Bell, BellOff, ChevronRight, ChevronDown, AlertTriangle, PhoneMissed, MapPin, MessageCircle, MessageSquare, Sparkles,
-  PhoneCall, Headphones, Wallet, Banknote
+  PhoneCall, PhoneForwarded, Headphones, Wallet, Banknote
 } from 'lucide-react';
 
 const SOS_POLL_MS = 30000;
@@ -40,6 +40,7 @@ const NAV_GROUPS = [
     { label: 'Leads',       to: '/leads',      icon: Target,          roles: ['owner', 'telecaller'] },
     { label: 'WhatsApp Leads', to: '/whatsapp-leads', icon: MessageCircle, roles: ['owner', 'telecaller'] },
     { label: 'WhatsApp Chats', to: '/whatsapp-conversations', icon: MessageSquare, roles: ['owner', 'telecaller'] },
+    { label: 'Callbacks',   to: '/callbacks',  icon: PhoneForwarded,  roles: ['owner', 'telecaller'], badgeKey: 'callbacks' },
     { label: 'Call Logs',   to: '/call-logs',  icon: PhoneCall,       roles: ['owner', 'telecaller'] },
   ] },
   { id: 'finance', label: 'Finance', items: [
@@ -249,6 +250,19 @@ export default function Shell({ children }) {
     return () => clearInterval(noResponseIntervalRef.current);
   }, [user?.role]);
 
+  // Customers waiting for a callback (the Callbacks badge). The CRM's own
+  // reminder — no sound, no notification. The Callbacks page announces its
+  // changes so the badge follows at once.
+  const [callbacksCount, setCallbacksCount] = useState(0);
+  useEffect(() => {
+    if (!CALL_STAFF.includes(user?.role)) return;
+    const loadCallbacks = () => callbacksApi.summary().then(({ data }) => setCallbacksCount(data.open || 0)).catch(() => {});
+    loadCallbacks();
+    const t = setInterval(loadCallbacks, NO_RESPONSE_POLL_MS);
+    window.addEventListener('callbacks:changed', loadCallbacks);
+    return () => { clearInterval(t); window.removeEventListener('callbacks:changed', loadCallbacks); };
+  }, [user?.role]);
+
   // "On call duty": while on, customer calls to the company number ring
   // this user — in this app or on their phone, as they chose on the Staff
   // page (callMode). Stored on the server, so it follows the user across
@@ -294,7 +308,7 @@ export default function Shell({ children }) {
   const visibleGroups = NAV_GROUPS
     .map((g) => ({ ...g, items: g.items.filter((n) => n.roles.includes(user?.role)) }))
     .filter((g) => g.items.length > 0);
-  const badgeCounts = { sos: sosCount, noResponse: noResponseCount };
+  const badgeCounts = { sos: sosCount, noResponse: noResponseCount, callbacks: callbacksCount };
   const activeGroupId = visibleGroups.find((g) => g.items.some((n) => isActivePath(n.to, pathname)))?.id;
 
   // The current page's group opens by itself (and stays open; the operator
