@@ -261,6 +261,9 @@ export const billingApi = {
   getReceipt       : (id)     => api.get(`/billing/payments/${id}`),
   getAdvances      : ()       => api.get('/billing/advances'),
   getProviderIssues: ()       => api.get('/billing/provider-issues', { skipErrorToast: true }),
+  // Owner only: reverse a mistaken staff-recorded receipt (accounting
+  // correction — no money is refunded). Same requestId = same reversal.
+  reversePayment   : (id, reason, requestId) => api.post(`/billing/payments/${id}/reverse`, { reason, requestId }, { skipErrorToast: true }),
   // Header for customer bills/receipts (business name, GSTIN, address, contact).
   issuer           : ()       => api.get('/billing/issuer', { skipErrorToast: true }),
   generateInvoice  : (data)   => api.post('/billing/hospital-invoice/generate', data),

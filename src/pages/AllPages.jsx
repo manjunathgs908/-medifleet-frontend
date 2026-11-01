@@ -229,6 +229,9 @@ export function FinancePage() {
               {collections.collectionTimingUnverifiedPaise > 0 && (
                 <div><strong>{paise(collections.collectionTimingUnverifiedPaise)}</strong> on {collections.collectionTimingUnverifiedBills} older bill{collections.collectionTimingUnverifiedBills === 1 ? '' : 's'}: collection timing unverified — recorded as received before itemised receipts, so it is not counted in any month's collections (it does reduce those bills' balances).</div>
               )}
+              {collections.reversalsCount > 0 && (
+                <div>Collected is net of <strong>{paise(collections.reversedPaise)}</strong> in {collections.reversalsCount} receipt reversal{collections.reversalsCount === 1 ? '' : 's'} made this month (accounting corrections dated when made — no money was refunded).</div>
+              )}
               {collections.providerIssues > 0 && <div style={{color:'var(--amber)'}}>{collections.providerIssues} online payment{collections.providerIssues === 1 ? ' needs' : 's need'} review in Billing.</div>}
               <div style={{color:'var(--text3)'}}>Customer outstanding and hospital invoices are counted separately — a bill on a hospital invoice is never in both. The Income ledger below is not reconciled with these figures.</div>
             </div>

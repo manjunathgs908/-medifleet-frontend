@@ -153,18 +153,39 @@ function PaymentForm({ tripId, kind, maxPaise, onDone, onCancel }) {
 // ── Receipt: preview, print or download (one layout for all three) ─
 // Customer-facing: the business header (name, GSTIN, address, contact)
 // and no staff name — who recorded it stays in the CRM's receipt list.
+// Reversal status is shown (number and date) — never the owner's reason or
+// any staff name.
+const signed = (paise) => (paise < 0 ? `−${rs(-paise)}` : rs(paise));
 function receiptHtml(r) {
   const p = r.payment;
+  if (p.kind === 'reversal') return correctionHtml(r);
+  const reversed = p.reversedBy;
   return page(p.receiptNumber, `${issuerHeader(r.issuer)}
 <h2>Payment receipt ${esc(p.receiptNumber)}</h2>
-<div class="amt">${esc(rs(p.amountPaise))}</div><table>
+${reversed ? `<div style="display:inline-block;border:2px solid #b91c1c;color:#b91c1c;font-weight:700;padding:2px 10px;margin:4px 0 8px;letter-spacing:.08em">REVERSED</div>` : ''}
+<div class="amt"${reversed ? ' style="text-decoration:line-through;color:#666"' : ''}>${esc(rs(p.amountPaise))}</div><table>
+${reversed ? row('Status', `Reversed on ${fmtIst(reversed.at)} — accounting correction ${reversed.receiptNumber}`) : ''}
 ${row('Received on', fmtIst(p.receivedAt))}${row('Method', METHOD_LABEL[p.method] || p.method)}${p.reference ? row('Reference', p.reference) : ''}
 ${row('For', p.kind === 'advance' && !p.bill ? `Advance for trip ${p.trip?.tripNumber}` : `Trip ${p.trip?.tripNumber}${p.bill ? ` · Bill ${p.bill.billNumber}` : ''}`)}
 ${row('Patient', p.trip?.patientName)}
 ${r.balance ? row('Bill total', rs(r.balance.totalPaise)) + row('Received to date', rs(r.balance.paidPaise)) + row('Balance outstanding', `${rs(r.balance.outstandingPaise)} (as of ${fmtIst(new Date())})`) : ''}
 ${row('Confirmation', p.verification === 'provider_verified' ? 'Verified by Razorpay' : `Recorded by our staff on ${fmtIst(p.recordedAt)}`)}
 ${p.note ? row('Note', p.note) : ''}</table>
-<div class="foot">This receipt confirms money received.</div>`);
+<div class="foot">${reversed ? 'This receipt was reversed as an accounting correction and no longer counts as money received. No money was refunded by this correction.' : 'This receipt confirms money received.'}</div>`);
+}
+
+function correctionHtml(r) {
+  const p = r.payment;
+  const o = p.reversesReceipt || {};
+  return page(p.receiptNumber, `${issuerHeader(r.issuer)}
+<h2>Accounting correction ${esc(p.receiptNumber)}</h2>
+<div class="amt">${esc(signed(p.amountPaise))}</div><table>
+${row('Reverses receipt', o.receiptNumber || '—')}${row('Original amount', o.amountPaise ? rs(o.amountPaise) : '—')}${row('Originally received on', fmtIst(o.receivedAt))}
+${row('Corrected on', fmtIst(p.receivedAt))}
+${row('For', `Trip ${p.trip?.tripNumber}${p.bill ? ` · Bill ${p.bill.billNumber}` : ' (advance)'}`)}
+${row('Patient', p.trip?.patientName)}
+${r.balance ? row('Bill total', rs(r.balance.totalPaise)) + row('Received to date', rs(r.balance.paidPaise)) + row('Balance outstanding', `${rs(r.balance.outstandingPaise)} (as of ${fmtIst(new Date())})`) : ''}</table>
+<div class="foot">This corrects an accounting record: the receipt above was entered by mistake. It is not a refund — no money was refunded or transferred.</div>`);
 }
 
 function ReceiptModal({ paymentId, onClose }) {
@@ -194,24 +215,92 @@ function ReceiptModal({ paymentId, onClose }) {
   );
 }
 
-function ReceiptRows({ list, onOpen }) {
+// ── Reversing a mistaken receipt (owner only; the server checks) ─
+const REVERSE_WARNING = 'Correct accounting record only — no money will be refunded.';
+function ReverseForm({ p, onDone, onCancel }) {
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const key = useRef(newKey());
+  const inFlight = useRef(false);
+  const clean = reason.trim().replace(/\s+/g, ' ');
+  const id = `rev-${p._id}`;
+  const submit = async (e) => {
+    e.preventDefault();
+    if (inFlight.current) return;
+    inFlight.current = true; setBusy(true); setError(null);
+    try {
+      const { data } = await billingApi.reversePayment(p._id, clean, key.current);
+      toast.success(data.message);
+      onDone(data.reversal);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Could not reach the server — press Reverse again (it will not be reversed twice).');
+    } finally {
+      inFlight.current = false; setBusy(false);
+    }
+  };
+  return (
+    <form onSubmit={submit} className="basis-full rounded-lg p-3 mt-1 space-y-2" style={{ background: 'var(--surface)', border: '1px solid rgba(255,77,109,.35)' }} aria-label={`Reverse receipt ${p.receiptNumber}`}>
+      <div className="text-xs" style={{ color: 'var(--text2)' }}>
+        Reverse receipt <strong className="font-mono">{p.receiptNumber}</strong> — {rs(p.amountPaise)} {METHOD_LABEL[p.method] || p.method}, received {fmtIst(p.receivedAt)}.
+        The receipt stays on record, marked reversed, and a linked correction is added.
+      </div>
+      <div role="note" className="rounded-md px-2.5 py-2 text-xs font-semibold" style={{ background: 'rgba(255,184,48,.12)', color: 'var(--amber)', border: '1px solid rgba(255,184,48,.3)' }}>
+        {REVERSE_WARNING}
+      </div>
+      <div>
+        <label htmlFor={`${id}-reason`} className="block text-[11px] font-semibold mb-1" style={{ color: 'var(--text2)' }}>Why is this receipt a mistake? (required, at least 10 characters — kept internal)</label>
+        <textarea id={`${id}-reason`} className="inp text-xs" rows={2} maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} required
+          placeholder="e.g. Cash was counted twice at the desk" aria-describedby={`${id}-count`} />
+        <div id={`${id}-count`} className="text-[10px] mt-0.5" style={{ color: clean.length >= 10 ? 'var(--text3)' : 'var(--amber)' }}>{clean.length}/300{clean.length < 10 ? ` — ${10 - clean.length} more needed` : ''}</div>
+      </div>
+      {error && <div role="alert" className="text-xs" style={{ color: 'var(--red)' }}>{error}</div>}
+      <div className="flex flex-wrap gap-2">
+        <Btn type="submit" size="sm" variant="danger" disabled={busy || clean.length < 10}>{busy ? 'Reversing…' : 'Reverse receipt'}</Btn>
+        <Btn type="button" size="sm" variant="ghost" onClick={onCancel} disabled={busy}>Cancel</Btn>
+      </div>
+    </form>
+  );
+}
+
+// Internal receipt history: every receipt and every correction, with who
+// and why (staff only — customer documents show neither).
+function ReceiptRows({ list, onOpen, onChanged }) {
+  const [reversing, setReversing] = useState(null);
   if (!list?.length) return null;
   return (
     <ul className="space-y-1.5" aria-label="Receipts">
-      {list.map((p) => (
-        <li key={p._id} className="rounded-lg px-3 py-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style={{ background: 'var(--surface2)' }} data-receipt={p.receiptNumber}>
-          <span className="font-mono font-bold" style={{ color: 'var(--accent)' }}>{rs(p.amountPaise)}</span>
-          <span>{METHOD_LABEL[p.method] || p.method}{p.reference ? ` · ${p.reference}` : ''}</span>
-          {p.kind === 'advance' && <Badge color="blue">Advance</Badge>}
-          <VerifiedBadge p={p} />
-          <span className="basis-full sm:basis-auto" style={{ color: 'var(--text3)' }}>
-            Received {fmtIst(p.receivedAt)}{p.recordedByName ? ` · by ${p.recordedByName}` : ''}
-          </span>
-          <button type="button" onClick={() => onOpen(p._id)} className="ml-auto font-mono underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded" style={{ color: 'var(--blue)' }}>
-            {p.receiptNumber}
-          </button>
-        </li>
-      ))}
+      {list.map((p) => {
+        const isRev = p.kind === 'reversal';
+        return (
+          <li key={p._id} className="rounded-lg px-3 py-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" data-receipt={p.receiptNumber}
+            style={{ background: 'var(--surface2)', ...(isRev ? { borderLeft: '3px solid var(--red)' } : {}) }}>
+            <span className="font-mono font-bold" style={{ color: isRev ? 'var(--red)' : p.reversedBy ? 'var(--text3)' : 'var(--accent)', textDecoration: p.reversedBy ? 'line-through' : undefined }}>{signed(p.amountPaise)}</span>
+            {isRev
+              ? <span>Reversal of <span className="font-mono">{p.reversesReceipt?.receiptNumber || '—'}</span></span>
+              : <span>{METHOD_LABEL[p.method] || p.method}{p.reference ? ` · ${p.reference}` : ''}</span>}
+            {p.kind === 'advance' && <Badge color="blue">Advance</Badge>}
+            {isRev ? <Badge color="red">Accounting correction</Badge> : <VerifiedBadge p={p} />}
+            {p.reversedBy && <Badge color="red">Reversed · {p.reversedBy.receiptNumber}</Badge>}
+            <span className="basis-full sm:basis-auto" style={{ color: 'var(--text3)' }}>
+              {isRev ? 'Reversed' : 'Received'} {fmtIst(p.receivedAt)}{p.recordedByName ? ` · by ${p.recordedByName}` : ''}
+            </span>
+            <span className="ml-auto flex items-center gap-2">
+              {p.canReverse && onChanged && reversing !== p._id && (
+                <button type="button" onClick={() => setReversing(p._id)} className="font-semibold rounded px-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]" style={{ color: 'var(--red)' }}>Reverse…</button>
+              )}
+              <button type="button" onClick={() => onOpen(p._id)} className="font-mono underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded" style={{ color: 'var(--blue)' }}>
+                {p.receiptNumber}
+              </button>
+            </span>
+            {isRev && p.reason && <div className="basis-full italic" style={{ color: 'var(--text2)' }}>Reason (internal): “{p.reason}”</div>}
+            {!isRev && !p.canReverse && !p.reversedBy && p.verification === 'staff_recorded' && p.reverseBlockedWhy && (
+              <div className="basis-full text-[11px]" style={{ color: 'var(--text3)' }}>Can't be reversed here: {p.reverseBlockedWhy}</div>
+            )}
+            {reversing === p._id && <ReverseForm p={p} onCancel={() => setReversing(null)} onDone={() => { setReversing(null); onChanged(); }} />}
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -255,14 +344,14 @@ function BillModal({ billId, onClose, onChanged, openReceipt }) {
           )}
           <div>
             <h3 className="text-xs font-semibold mb-2" style={{ color: 'var(--text2)' }}>Payments received</h3>
-            {data.payments.length ? <ReceiptRows list={data.payments} onOpen={openReceipt} />
+            {data.payments.length ? <ReceiptRows list={data.payments} onOpen={openReceipt} onChanged={() => { load(); onChanged(); }} />
               : <div className="text-xs" style={{ color: 'var(--text3)' }}>No itemised payments yet.</div>}
           </div>
           {canRecord && (form
             ? <PaymentForm tripId={bill.trip?._id} kind="payment" maxPaise={bal.outstandingPaise} onCancel={() => setForm(false)} onDone={() => { setForm(false); load(); onChanged(); }} />
             : <Btn size="sm" onClick={() => setForm(true)}>Record payment</Btn>)}
           <div className="text-[11px]" style={{ color: 'var(--text3)' }}>
-            Receipts can't be edited or deleted here. To correct one, note it and contact the account owner — corrections aren't part of this version.
+            Receipts are never edited or deleted. The owner can reverse a mistaken staff-recorded receipt — an accounting correction only; no money is refunded.
           </div>
         </div>
       )}
@@ -450,7 +539,7 @@ function AdvancesTab({ openReceipt }) {
               </div>
               {t.reconcile.length > 0 && <div className="mt-2"><ReconcileNote reasons={t.reconcile} /></div>}
               {!t.estimatePaise && t.status !== 'cancelled' && <div className="text-[11px] mt-1" style={{ color: 'var(--text3)' }}>No fare estimate on this booking, so an advance can't be checked against it.</div>}
-              {t.payments.length > 0 && <div className="mt-2"><ReceiptRows list={t.payments} onOpen={openReceipt} /></div>}
+              {t.payments.length > 0 && <div className="mt-2"><ReceiptRows list={t.payments} onOpen={openReceipt} onChanged={load} /></div>}
               {formFor === t._id && (
                 <div className="mt-2">
                   <PaymentForm tripId={t._id} kind="advance" maxPaise={t.coverRemainingPaise} onCancel={() => setFormFor(null)} onDone={() => { setFormFor(null); load(); }} />
