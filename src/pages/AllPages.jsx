@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { tripsApi, billingApi, hospitalsApi, financeApi, salaryApi, vehiclesApi, authApi } from '../api/client';
+import { tripsApi, hospitalsApi, financeApi, salaryApi, vehiclesApi, authApi } from '../api/client';
 import api from '../api/client';
 import { PageHeader, StatusBadge, Btn, Modal, StatCard, Tabs, Spinner, Empty, rupee, fmtDateTime, fmtDate, custPhone } from '../components/ui';
 import toast from 'react-hot-toast';
 import {
-  FileText, Receipt, FileStack, Wallet, Landmark, Users, Building2,
+  FileText, Wallet, Landmark, Users, Building2,
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────
@@ -168,124 +168,6 @@ useEffect(() => { load(); }, [filter]);
 }
 
 
-// ──────────────────────────────────────────────────────────────
-// src/pages/BillingPage.jsx//
-// ──────────────────────────────────────────────────────────────
-export function BillingPage() {
-  const [tab,      setTab]      = useState('bills');
-  const [bills,    setBills]    = useState([]);
-  const [invoices, setInvoices] = useState([]);
-  const [hospitals,setHospitals]= useState([]);
-  const [loading,  setLoading]  = useState(true);
-  const [invForm,  setInvForm]  = useState({ hospitalId:'', month: new Date().getMonth()+1, year: new Date().getFullYear() });
-
-  
-
-  useEffect(() => { loadAll(); }, []);
-
-  const loadAll = async () => {
-    setLoading(true);
-    try {
-      const [b, i, h] = await Promise.all([billingApi.getBills(), billingApi.getInvoices(), hospitalsApi.getAll()]);
-      setBills(b.data.bills);
-      setInvoices(i.data.invoices);
-      setHospitals(h.data.hospitals);
-    } finally { setLoading(false); }
-  };
-
-  const genInvoice = async () => {
-    if (!invForm.hospitalId) { toast.error('Select a hospital'); return; }
-    await billingApi.generateInvoice(invForm);
-    toast.success('Invoice generated!');
-    loadAll();
-  };
-
-  
-
-  const MONTHS = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-  return (
-    <div className="page-enter">
-      <PageHeader title="Billing & Invoices" subtitle="Trip bills · Monthly hospital invoices" />
-      <Tabs tabs={[{key:'bills',label:'Trip Bills'},{key:'invoices',label:'Hospital Invoices'}]}
-        active={tab} onChange={setTab} />
-
-      {tab === 'bills' && (
-        <div className="card overflow-x-auto">
-          {loading ? <Spinner /> : bills.length === 0 ? <Empty icon={<Receipt size={36} />} message="No bills yet" /> :
-            <table className="tbl">
-              <thead><tr><th>Bill No.</th><th>Patient</th><th>Hospital</th><th>Date</th><th>Amount</th><th>Status</th></tr></thead>
-              <tbody>
-                {bills.map(b => (
-                  <tr key={b._id}>
-                    <td className="font-mono text-xs" style={{ color:'var(--accent)' }}>{b.billNumber}</td>
-                    <td className="text-sm font-medium">{b.patient}</td>
-                    <td className="text-sm" style={{ color:'var(--text2)' }}>{b.hospital?.name}</td>
-                    <td className="text-xs font-mono whitespace-nowrap" style={{ color:'var(--text3)' }}>{fmtDateTime(b.createdAt)}</td>
-                    <td className="font-bold font-mono" style={{ color:'var(--accent)' }}>{rupee(b.grandTotal)}</td>
-                    <td><StatusBadge status={b.paymentStatus} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          }
-        </div>
-      )}
-
-      {tab === 'invoices' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          <div className="card">
-            <h3 className="font-bold font-display mb-4">Generate Invoice</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color:'var(--text2)' }}>Hospital</label>
-                <select className="inp" value={invForm.hospitalId} onChange={e => setInvForm(f=>({...f,hospitalId:e.target.value}))}>
-                  <option value="">-- Select --</option>
-                  {hospitals.filter(h=>h.tieUp?.isActive).map(h=><option key={h._id} value={h._id}>{h.name}</option>)}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color:'var(--text2)' }}>Month</label>
-                  <select className="inp" value={invForm.month} onChange={e=>setInvForm(f=>({...f,month:Number(e.target.value)}))}>
-                    {MONTHS.slice(1).map((m,i)=><option key={i+1} value={i+1}>{m}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color:'var(--text2)' }}>Year</label>
-                  <input className="inp" type="number" value={invForm.year} onChange={e=>setInvForm(f=>({...f,year:Number(e.target.value)}))} />
-                </div>
-              </div>
-              <Btn className="w-full" onClick={genInvoice}>Generate Invoice</Btn>
-            </div>
-          </div>
-          <div className="md:col-span-2 card overflow-x-auto">
-            <h3 className="font-bold font-display mb-4">Invoice History</h3>
-            {invoices.length === 0 ? <Empty icon={<FileStack size={36} />} message="No invoices yet" /> :
-              <table className="tbl">
-                <thead><tr><th>Invoice</th><th>Hospital</th><th>Period</th><th>Trips</th><th>Net Payable</th><th>Status</th></tr></thead>
-                <tbody>
-                  {invoices.map(i=>(
-                    <tr key={i._id}>
-                      <td className="font-mono text-xs" style={{color:'var(--accent)'}}>{i._id.slice(-8).toUpperCase()}</td>
-                      <td className="text-sm font-medium">{i.hospital?.name}</td>
-                      <td className="text-xs font-mono" style={{color:'var(--text3)'}}>{MONTHS[i.billingPeriod?.month]} {i.billingPeriod?.year}</td>
-                      <td className="text-center">{i.totalTrips}</td>
-                      <td className="font-bold font-mono" style={{color:'var(--accent)'}}>{rupee(i.netPayable)}</td>
-                      <td><StatusBadge status={i.status}/></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            }
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-
 // ─────────────────────────────────────────────────────────────
 // src/pages/FinancePage.jsx
 // ─────────────────────────────────────────────────────────────
@@ -300,16 +182,24 @@ export function FinancePage() {
   
   
 
+  // Billed vs collected this month — the same figures as Dashboard and Billing.
+  const [collections, setCollections] = useState(null);
+  const [collectionsError, setCollectionsError] = useState(null);
+
   useEffect(() => { loadAll(); }, []);
 
   const loadAll = async () => {
     setLoading(true);
+    financeApi.summary()
+      .then(({ data }) => { setCollections(data.summary?.collections || null); setCollectionsError(null); })
+      .catch((err) => setCollectionsError(err.response?.data?.message || 'Could not load collections.'));
     try {
       const [e, l] = await Promise.all([financeApi.getExpenses(), financeApi.getLoans()]);
       setEntries(e.data.expenses || []);
       setLoans(l.data.loans || []);
     } finally { setLoading(false); }
   };
+  const paise = (p) => rupee((p || 0) / 100);
 
   const totalExpenses = entries.filter(e=>e.category!=='salary').reduce((s,e)=>s+e.amount,0);
   const diesel = entries.filter(e=>e.category==='diesel').reduce((s,e)=>s+e.amount,0);
@@ -318,6 +208,33 @@ export function FinancePage() {
     <div className="page-enter">
       <PageHeader title="Finance" subtitle="Income · Expenses · Loans & EMI"
         action={<Btn onClick={()=>setAddModal(true)}><span>+</span> Add Entry</Btn>} />
+      <h2 className="text-xs font-semibold tracking-widest mb-2" style={{color:'var(--text3)'}}>COLLECTIONS · THIS MONTH (INDIA TIME)</h2>
+      {collectionsError ? (
+        <div className="card-sm mb-6 text-xs" role="alert" style={{color:'var(--red)'}}>Collections unavailable: {collectionsError}</div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-3" data-testid="collections">
+            <StatCard label="Billed" value={collections ? paise(collections.billedPaise) : '…'} color="blue"
+              sub={collections ? `${collections.billedCount} bill${collections.billedCount === 1 ? '' : 's'} raised` : undefined} />
+            <StatCard label="Collected (verified)" value={collections ? paise(collections.collectedPaise) : '…'} color="green"
+              sub={collections ? `${paise(collections.collectedStaffRecordedPaise)} staff-recorded · ${paise(collections.collectedProviderVerifiedPaise)} online` : undefined} />
+            <StatCard label="Outstanding (customers)" value={collections ? paise(collections.outstandingPaise) : '…'} color="red"
+              sub={collections?.reconcileCount ? `${collections.reconcileCount} need reconciliation` : 'Bills not billed to a hospital'} />
+            <StatCard label="Hospital invoices due" value={collections ? paise(collections.hospital.receivablePaise) : '…'} color="amber"
+              sub={collections ? `${collections.hospital.openInvoices} open invoice${collections.hospital.openInvoices === 1 ? '' : 's'} (net of discount)` : undefined} />
+            <StatCard label="Advances held" value={collections ? paise(collections.advancesHeldPaise) : '…'} color="amber" sub="Not yet on a bill" />
+          </div>
+          {collections && (
+            <div className="card-sm mb-6 text-xs space-y-1" style={{color:'var(--text2)'}} data-testid="collections-notes">
+              {collections.collectionTimingUnverifiedPaise > 0 && (
+                <div><strong>{paise(collections.collectionTimingUnverifiedPaise)}</strong> on {collections.collectionTimingUnverifiedBills} older bill{collections.collectionTimingUnverifiedBills === 1 ? '' : 's'}: collection timing unverified — recorded as received before itemised receipts, so it is not counted in any month's collections (it does reduce those bills' balances).</div>
+              )}
+              {collections.providerIssues > 0 && <div style={{color:'var(--amber)'}}>{collections.providerIssues} online payment{collections.providerIssues === 1 ? ' needs' : 's need'} review in Billing.</div>}
+              <div style={{color:'var(--text3)'}}>Customer outstanding and hospital invoices are counted separately — a bill on a hospital invoice is never in both. The Income ledger below is not reconciled with these figures.</div>
+            </div>
+          )}
+        </>
+      )}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <StatCard label="Total Expenses" value={rupee(totalExpenses)} color="red" />
         <StatCard label="Diesel"         value={rupee(diesel)}        color="amber" />

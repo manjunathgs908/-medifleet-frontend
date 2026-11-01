@@ -64,7 +64,9 @@ export default function DashboardPage() {
         <StatCard label="Active Trips"      value={live?.counts?.active || 0}        color="amber" icon={<Clock size={16}/>}
           sub={live?.counts?.overdue ? `⚠️ ${live.counts.overdue} overdue, no crew` : undefined} />
         <StatCard label="Available Units"   value={live?.counts?.available || 0}     color="green" icon={<Truck size={16}/>} />
-        <StatCard label="Month Revenue"     value={rupee(dm.collectedRevenue || 0)}  color="green" icon={<TrendingUp size={16}/>} />
+        {/* Money received this month (India time); billed is shown apart. */}
+        <StatCard label="Collected (Month)" value={rupee(dm.collectedRevenue || 0)}  color="green" icon={<TrendingUp size={16}/>}
+          sub={dm.billedRevenue != null ? `Billed ${rupee(dm.billedRevenue)}` : undefined} />
         <StatCard label="Trips This Month"  value={dm.completedTrips || 0}           color="blue"  icon={<CheckCircle size={16}/>} />
       </div>
 
@@ -131,7 +133,12 @@ export default function DashboardPage() {
       {/* Quick stats row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard label="Avg Fare"         value={rupee(dm.avgFare || 0)}           color="blue"  />
-        <StatCard label="Pending Revenue"  value={rupee(dm.pendingRevenue || 0)}    color="amber" />
+        <StatCard label="Outstanding"      value={rupee(dash?.outstanding ?? dm.pendingRevenue ?? 0)} color="amber"
+          sub={[
+            'Customers',
+            dash?.hospitalReceivable ? `hospital invoices ${rupee(dash.hospitalReceivable)} separate` : null,
+            dash?.needsReconciliation ? `${dash.needsReconciliation} need reconciliation` : null,
+          ].filter(Boolean).join(' · ')} />
         <StatCard label="Pending Invoices" value={dash?.pendingInvoices || 0}        color="red"   />
         <StatCard label="Fleet Health"     value="View →" color="green" />
       </div>

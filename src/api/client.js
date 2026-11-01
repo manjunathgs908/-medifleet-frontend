@@ -250,10 +250,19 @@ export const ambulancesApi = {
 };
 
 // Billing
+// Payments are receipts: an advance before the trip is billed, a payment
+// after. Each submission carries a one-time requestId, so a double click or
+// a retry returns the same receipt. Money is received elsewhere (cash, UPI,
+// bank) — nothing here collects, refunds or sends anything.
 export const billingApi = {
   getBills         : (params) => api.get('/billing/bills', { params }),
   getBill          : (id)     => api.get(`/billing/bills/${id}`),
-  recordPayment    : (id, d)  => api.put(`/billing/bills/${id}/payment`, d),
+  recordPayment    : (d)      => api.post('/billing/payments', d, { skipErrorToast: true }),
+  getReceipt       : (id)     => api.get(`/billing/payments/${id}`),
+  getAdvances      : ()       => api.get('/billing/advances'),
+  getProviderIssues: ()       => api.get('/billing/provider-issues', { skipErrorToast: true }),
+  // Header for customer bills/receipts (business name, GSTIN, address, contact).
+  issuer           : ()       => api.get('/billing/issuer', { skipErrorToast: true }),
   generateInvoice  : (data)   => api.post('/billing/hospital-invoice/generate', data),
   getInvoices      : (params) => api.get('/billing/hospital-invoices', { params }),
   updateInvoice    : (id, status) => api.put(`/billing/hospital-invoices/${id}/status`, { status }),

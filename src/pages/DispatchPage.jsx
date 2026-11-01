@@ -1,6 +1,7 @@
 // src/pages/DispatchPage.jsx
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { tripsApi, hospitalsApi, pricingApi, quotesApi } from '../api/client';
+import { tripsApi, hospitalsApi, pricingApi, quotesApi, billingApi } from '../api/client';
+import { billHtml, printHtml } from '../lib/customerDocs';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import CallButton from '../components/CallButton';
 import { ambulanceTypeLabel, servicesFromPricing, fmtDuration } from '../utils/serviceTypes';
@@ -1187,7 +1188,14 @@ export default function DispatchPage() {
               <span className="font-mono" style={{ color: 'var(--accent)'}}>{rupee(billModal.grandTotal)}</span>
             </div>
             <div className="flex gap-2 pt-2">
-              <Btn variant="primary" className="flex-1" onClick={() => window.print()}>🖨️ Print</Btn>
+              {/* Prints the bill alone, under the business header — never the
+                  CRM screen (which shows the signed-in staff member). */}
+              <Btn variant="primary" className="flex-1" onClick={async () => {
+                try {
+                  const { data } = await billingApi.issuer();
+                  printHtml(billHtml(billModal, data.issuer));
+                } catch { toast.error('Could not load the business details — the bill was not printed. Try again.'); }
+              }}>🖨️ Print</Btn>
               <Btn variant="ghost" className="flex-1" onClick={() => setBillModal(null)}>Close</Btn>
             </div>
           </div>

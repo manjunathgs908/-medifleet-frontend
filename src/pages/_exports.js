@@ -3,7 +3,7 @@
 
 export { default }     from './DashboardPage';
 export { TripsPage as default_trips }       from './AllPages';
-export { BillingPage as default_billing }   from './AllPages';
+export { default     as default_billing }   from './BillingPage';
 export { FinancePage as default_finance }   from './AllPages';
 export { SalaryPage  as default_salary  }   from './AllPages';
 export { default     as default_leads   }   from './LeadsPage';
