@@ -5,8 +5,15 @@
 // recording plays through the backend (RecordingPlayer), never from a
 // Plivo URL. "Call back" re-dials the same customer through the masked
 // call, by the log's id.
-import React from 'react';
-import { PhoneIncoming, PhoneOutgoing } from 'lucide-react';
+//
+// Each card shows what the desk acts on — who, which way, when, the
+// outcome, who answered, Call back, the recording, and any problem worth
+// acting on. Provider codes, phone/app legs, the routing trail and the
+// in-app delivery diagnostics sit under a collapsed "Technical details".
+// Nothing is inferred: a name, a staff member or a talk time shows only when
+// the call log has it.
+import React, { useState } from 'react';
+import { PhoneIncoming, PhoneOutgoing, ChevronDown } from 'lucide-react';
 import { Badge, fmtDateTime, custPhone } from './ui';
 import CallButton from './CallButton';
 import RecordingPlayer from './RecordingPlayer';
@@ -41,6 +48,9 @@ const UNCONFIRMED_WHY = {
 
 const AGENT_TYPE = { driver: 'Driver', staff: 'Desk', fleet_owner: 'Partner' };
 
+// Phone-leg verdicts worth acting on, shown on the card itself.
+const ACTIONABLE_VERDICTS = ['busy_no_ring', 'busy_no_ring_unchecked', 'busy_overlap', 'not_reached'];
+
 const fmtSec = (s) => {
   if (s === null || s === undefined || !Number.isFinite(Number(s))) return null;
   const n = Math.round(Number(s));
@@ -60,7 +70,7 @@ function PhoneLegLine({ log }) {
   const rang = String(leg?.DialRingStatus ?? '');
   const others = (ov?.ourCalls?.length || 0) + (ov?.liveLegs?.length || 0);
   return (
-    <div className="text-[11px] mt-1 space-y-0.5" style={{ color: 'var(--text3)' }}>
+    <div className="space-y-0.5">
       {leg && (
         <div className="font-mono">
           Phone {leg.DialBLegTo || (ov?.phones || []).join(', ')}: rang <b>{rang === 'true' ? 'yes' : rang === 'false' ? 'NO' : '?'}</b>
@@ -82,11 +92,58 @@ function PhoneLegLine({ log }) {
           {ov.releasedAtHangup?.length > 0 && <> · released {ov.releasedAtHangup.length} leg(s) left after the call</>}
         </div>
       )}
-      {log.routing?.skippedCaller?.message
-        ? <div className="font-semibold" style={{ color: 'var(--amber)' }}>{log.routing.skippedCaller.message}</div>
-        : (ov?.callerIsRingPhone || log.routing?.callerIsRingPhone) && (
-          <div style={{ color: 'var(--amber)' }}>The caller is one of the ring numbers — that phone was left out of this call.</div>
-        )}
+      {!log.routing?.skippedCaller?.message && (ov?.callerIsRingPhone || log.routing?.callerIsRingPhone) && (
+        <div style={{ color: 'var(--amber)' }}>The caller is one of the ring numbers — that phone was left out of this call.</div>
+      )}
+    </div>
+  );
+}
+
+// Everything the desk does not need at a glance. Opening it only shows what
+// the card already holds — no call, no recording, no request (the in-app
+// delivery trail inside loads only on its own button).
+function TechnicalDetails({ log, inbound }) {
+  const [open, setOpen] = useState(false);
+  const panelId = `call-tech-${log._id}`;
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-controls={panelId}
+        className="inline-flex items-center gap-1 text-[11px] font-semibold rounded px-1 -mx-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+        style={{ color: 'var(--text3)' }}
+      >
+        <ChevronDown size={12} aria-hidden="true" style={{ transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform .15s' }} />
+        Technical details
+      </button>
+      {open && (
+        <div id={panelId} className="mt-1.5 rounded-lg p-2.5 space-y-1.5 text-[11px] break-words" style={{ background: 'var(--surface2)', color: 'var(--text3)' }}>
+          {/* Which provider placed it and the number the customer saw, as
+              recorded on the call itself. */}
+          <div className="font-mono">
+            {log.provider ? `via ${log.provider === 'plivo' ? 'Plivo' : 'Exotel'}` : 'Provider not recorded'}
+            {log.callerId && <> · caller ID {log.callerId}</>}
+            {log.agentName && <> · {AGENT_TYPE[log.agentType] || 'Agent'}: {log.agentName}</>}
+          </div>
+          {/* Plivo's own reason the call ended, e.g. Busy Line or code 5030
+              (its simultaneous-call limit). */}
+          {(log.hangup?.HangupCauseName || log.hangupCause) && log.status !== 'completed' && (
+            <div className="font-mono">
+              Plivo: {log.hangup?.HangupCauseName || log.hangupCause}
+              {log.hangup?.HangupCauseCode && <> ({log.hangup.HangupCauseCode})</>}
+              {log.hangup?.HangupSource && <> · ended by {log.hangup.HangupSource}</>}
+            </div>
+          )}
+          {log.statusUnconfirmed && (
+            <div>Why unconfirmed: {UNCONFIRMED_WHY[log.statusUnconfirmedReason] || 'the call has ended'}; stored status “{log.status}”.</div>
+          )}
+          {inbound && <PhoneLegLine log={log} />}
+          {/* TEMPORARY: how an incoming call reached (or missed) the app. */}
+          {inbound && <DeliveryTrail log={log} />}
+        </div>
+      )}
     </div>
   );
 }
@@ -105,56 +162,55 @@ export default function CallLogList({ logs, emptyText = 'No recorded calls yet.'
               ? { color: 'amber', label: 'Not rung — called from the ring phone' }
               : STATUS[log.status] || { color: 'gray', label: log.status };
         const inbound = log.direction === 'inbound';
-        const about = log.trip?.tripNumber
-          ? `Trip ${log.trip.tripNumber}${log.trip.patientName ? ` · ${log.trip.patientName}` : ''}`
-          : log.lead?.patientName ? `Lead · ${log.lead.patientName}` : null;
+        const testRing = log.context === 'test_ring';
+        // The name only when a linked trip or lead has one — never guessed.
+        const name = log.trip?.patientName || log.lead?.patientName || null;
+        const phone = custPhone(log.customerPhone, log.customerMasked, 'Unknown number');
+        const about = log.trip?.tripNumber ? `Trip ${log.trip.tripNumber}` : log.lead ? 'Lead' : null;
+        // Staff only when recorded: who answered an incoming call (it was
+        // answered), or who placed an outgoing one.
+        const staff = log.agentName
+          ? (inbound
+              ? ((log.status === 'completed' || log.liveState === 'in_call') ? `Answered by ${log.agentName}` : null)
+              : `${AGENT_TYPE[log.agentType] || 'Agent'}: ${log.agentName}`)
+          : null;
+        const verdict = inbound && ACTIONABLE_VERDICTS.includes(log.phoneVerdict?.code) ? log.phoneVerdict.text : null;
+        const meta = [
+          inbound ? 'Incoming' : 'Outgoing',
+          fmtDateTime(log.startedAt || log.createdAt),
+          fmtSec(log.talkSec) && `talk ${fmtSec(log.talkSec)}`,
+          staff,
+          about,
+        ].filter(Boolean);
+
         return (
-          <div key={log._id} className="card-sm">
-            <div className="flex items-start justify-between gap-2 flex-wrap">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 text-sm font-semibold">
+          <div key={log._id} className="card-sm" data-call-id={log._id}>
+            <div className="flex items-start justify-between gap-x-3 gap-y-2 flex-wrap">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap text-sm font-semibold">
                   {inbound
-                    ? <PhoneIncoming size={14} style={{ color: 'var(--blue)' }} />
-                    : <PhoneOutgoing size={14} style={{ color: 'var(--accent)' }} />}
-                  {log.context === 'test_ring'
+                    ? <PhoneIncoming size={14} className="flex-shrink-0" style={{ color: 'var(--blue)' }} aria-label="Incoming call" />
+                    : <PhoneOutgoing size={14} className="flex-shrink-0" style={{ color: 'var(--accent)' }} aria-label="Outgoing call" />}
+                  {testRing
                     ? <span>Test ring to {log.agentName ? `${log.agentName}'s` : 'your'} phone</span>
-                    : <span className="font-mono">{custPhone(log.customerPhone, log.customerMasked, 'Unknown number')}</span>}
+                    : name
+                      ? <><span className="truncate">{name}</span><span className="font-mono text-xs font-normal" style={{ color: 'var(--text3)' }}>{phone}</span></>
+                      : <span className="font-mono">{phone}</span>}
                   <Badge color={st.color}>{st.label}</Badge>
                 </div>
-                <div className="text-[11px] mt-1 font-mono" style={{ color: 'var(--text3)' }}>
-                  {fmtDateTime(log.startedAt || log.createdAt)}
-                  {fmtSec(log.talkSec) && <> · talk {fmtSec(log.talkSec)}</>}
-                  {/* Which provider placed it and the number the customer
-                      saw, as recorded on the call itself. */}
-                  {log.provider && <> · via {log.provider === 'plivo' ? 'Plivo' : 'Exotel'}</>}
-                  {log.callerId && <> · caller ID {log.callerId}</>}
-                </div>
-                <div className="text-[11px] mt-0.5" style={{ color: 'var(--text3)' }}>
-                  {[
-                    inbound ? 'Incoming' : log.agentName ? `${AGENT_TYPE[log.agentType] || 'Agent'}: ${log.agentName}` : null,
-                    about,
-                  ].filter(Boolean).join(' · ')}
-                </div>
-                {log.error && <div className="text-[11px] mt-0.5" style={{ color: 'var(--red)' }}>{log.error}</div>}
-                {/* Plivo's own reason the call ended, e.g. Busy Line or code
-                    5030 (its simultaneous-call limit). */}
-                {(log.hangup?.HangupCauseName || log.hangupCause) && log.status !== 'completed' && (
-                  <div className="text-[11px] mt-0.5 font-mono" style={{ color: 'var(--text3)' }}>
-                    Plivo: {log.hangup?.HangupCauseName || log.hangupCause}
-                    {log.hangup?.HangupCauseCode && <> ({log.hangup.HangupCauseCode})</>}
-                    {log.hangup?.HangupSource && <> · ended by {log.hangup.HangupSource}</>}
-                  </div>
-                )}
-                {/* The call is over but Plivo's final report never reached
-                    us, so whether it was answered is not known. */}
+                <div className="text-[11px] mt-1" style={{ color: 'var(--text3)' }}>{meta.join(' · ')}</div>
+
+                {/* Problems worth acting on stay on the card. */}
+                {log.error && <div className="text-[11px] mt-1" style={{ color: 'var(--red)' }}>{log.error}</div>}
                 {log.statusUnconfirmed && (
-                  <div className="text-[11px] mt-0.5" style={{ color: 'var(--amber)' }}>
-                    {UNCONFIRMED_WHY[log.statusUnconfirmedReason] || 'This call has ended'}, but its final outcome never reached the CRM — answered or missed is not known.
+                  <div className="text-[11px] mt-1" style={{ color: 'var(--amber)' }}>
+                    The call has ended, but its final outcome never reached the CRM — whether it was answered is not known.
                   </div>
                 )}
-                {inbound && <PhoneLegLine log={log} />}
-                {/* TEMPORARY: how an incoming call reached (or missed) the app. */}
-                {inbound && <DeliveryTrail log={log} />}
+                {log.routing?.skippedCaller?.message && (
+                  <div className="text-[11px] mt-1 font-semibold" style={{ color: 'var(--amber)' }}>{log.routing.skippedCaller.message}</div>
+                )}
+                {verdict && <div className="text-[11px] mt-1" style={{ color: 'var(--amber)' }}>{verdict}</div>}
               </div>
               {showCallBack && log.customerMasked && <CallButton target={{ callLogId: log._id }} label="Call back" />}
             </div>
@@ -165,6 +221,7 @@ export default function CallLogList({ logs, emptyText = 'No recorded calls yet.'
             {!log.hasRecording && log.recordingState === 'not_answered' && !['ringing', 'initiated', 'agent_answered'].includes(log.status) && (
               <div className="text-[11px] mt-1.5" style={{ color: 'var(--text3)' }}>No recording — call not answered</div>
             )}
+            <TechnicalDetails log={log} inbound={inbound} />
           </div>
         );
       })}
