@@ -1,6 +1,6 @@
 // src/components/Shell.jsx
 import React, { useEffect, useRef, useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { sosApi, tripCallEventsApi, callsApi } from '../api/client';
 import { InstallAppButton } from '../lib/installApp';
@@ -11,33 +11,63 @@ import toast from 'react-hot-toast';
 import {
   LayoutDashboard, Radio, Truck, FileText, Receipt,
   TrendingUp, Users, Target, ShieldCheck, Building2, UserCheck,
-  LogOut, Menu, X, Bell, BellOff, ChevronRight, AlertTriangle, PhoneMissed, MapPin, MessageCircle, MessageSquare, Sparkles,
-  PhoneCall, Headphones
+  LogOut, Menu, X, Bell, BellOff, ChevronRight, ChevronDown, AlertTriangle, PhoneMissed, MapPin, MessageCircle, MessageSquare, Sparkles,
+  PhoneCall, Headphones, Wallet, Banknote
 } from 'lucide-react';
 
 const SOS_POLL_MS = 30000;
 const NO_RESPONSE_POLL_MS = 30000;
 
-const NAV = [
-  { label: 'Dashboard',   to: '/',           icon: LayoutDashboard, roles: ['owner'] },
-  { label: 'Dispatch',    to: '/dispatch',   icon: Radio,           roles: ['owner', 'telecaller'] },
-  { label: 'Fleet',       to: '/fleet',      icon: Truck,           roles: ['owner', 'telecaller'] },
-  { label: 'Trips',       to: '/trips',      icon: FileText,        roles: ['owner', 'telecaller'] },
-  { label: 'Billing',     to: '/billing',    icon: Receipt,     roles: ['owner'] },
-  { label: 'SOS Alerts',  to: '/sos',        icon: AlertTriangle,   roles: ['owner', 'telecaller'], badgeKey: 'sos' },
-  { label: 'Trip Alerts', to: '/trip-alerts', icon: PhoneMissed,    roles: ['owner', 'telecaller'], badgeKey: 'noResponse' },
-  { label: 'Posting Alerts', to: '/posting-alerts', icon: MapPin,   roles: ['owner', 'telecaller'] },
-  { label: 'WhatsApp Leads', to: '/whatsapp-leads', icon: MessageCircle, roles: ['owner', 'telecaller'] },
-  { label: 'WhatsApp Chats', to: '/whatsapp-conversations', icon: MessageSquare, roles: ['owner', 'telecaller'] },
-  { label: 'Call Logs',   to: '/call-logs',  icon: PhoneCall,       roles: ['owner', 'telecaller'] },
-  { label: 'SEO Studio',  to: '/seo-studio', icon: Sparkles,        roles: ['owner'] },
-  { label: 'Leads',       to: '/leads',      icon: Target,          roles: ['owner', 'telecaller'] },
-  { label: 'Finance',     to: '/finance',    icon: TrendingUp,      roles: ['owner'] },{ label: 'Salaries',    to: '/salary',     icon: Users,           roles: ['owner'] },
-  { label: 'Staff',       to: '/staff',      icon: Users,           roles: ['owner'] },
-  { label: 'Advances',    to: '/advances',   icon: Users,           roles: ['owner'] },  { label: 'Compliance',  to: '/compliance', icon: ShieldCheck,     roles: ['owner'] },
-  { label: 'Owners',      to: '/owners',     icon: UserCheck,       roles: ['owner'] },
-  { label: 'Hospitals',   to: '/hospitals',  icon: Building2,       roles: ['owner', 'telecaller'] },
+// Sidebar, grouped. Every link keeps its route, roles and badge exactly as
+// before; a group a role can see nothing in is not shown. Overview sits at
+// the top, always visible (not collapsible); Operations — Dispatch first —
+// starts open. Posting Alerts is under Operations: it is the live feed of
+// drivers leaving / returning to their fixed duty posting (geofence), i.e.
+// crew supervision next to SOS and Trip Alerts, not marketing.
+const NAV_GROUPS = [
+  { id: 'overview', label: 'Overview', pinned: true, items: [
+    { label: 'Dashboard',   to: '/',           icon: LayoutDashboard, roles: ['owner'] },
+  ] },
+  { id: 'operations', label: 'Operations', items: [
+    { label: 'Dispatch',    to: '/dispatch',   icon: Radio,           roles: ['owner', 'telecaller'] },
+    { label: 'Trips',       to: '/trips',      icon: FileText,        roles: ['owner', 'telecaller'] },
+    { label: 'Fleet',       to: '/fleet',      icon: Truck,           roles: ['owner', 'telecaller'] },
+    { label: 'SOS Alerts',  to: '/sos',        icon: AlertTriangle,   roles: ['owner', 'telecaller'], badgeKey: 'sos' },
+    { label: 'Trip Alerts', to: '/trip-alerts', icon: PhoneMissed,    roles: ['owner', 'telecaller'], badgeKey: 'noResponse' },
+    { label: 'Posting Alerts', to: '/posting-alerts', icon: MapPin,   roles: ['owner', 'telecaller'] },
+  ] },
+  { id: 'customers', label: 'Customers', items: [
+    { label: 'Leads',       to: '/leads',      icon: Target,          roles: ['owner', 'telecaller'] },
+    { label: 'WhatsApp Leads', to: '/whatsapp-leads', icon: MessageCircle, roles: ['owner', 'telecaller'] },
+    { label: 'WhatsApp Chats', to: '/whatsapp-conversations', icon: MessageSquare, roles: ['owner', 'telecaller'] },
+    { label: 'Call Logs',   to: '/call-logs',  icon: PhoneCall,       roles: ['owner', 'telecaller'] },
+  ] },
+  { id: 'finance', label: 'Finance', items: [
+    { label: 'Billing',     to: '/billing',    icon: Receipt,         roles: ['owner'] },
+    { label: 'Finance',     to: '/finance',    icon: TrendingUp,      roles: ['owner'] },
+    { label: 'Salaries',    to: '/salary',     icon: Wallet,          roles: ['owner'] },
+    { label: 'Advances',    to: '/advances',   icon: Banknote,        roles: ['owner'] },
+  ] },
+  { id: 'management', label: 'Management', items: [
+    { label: 'Staff',       to: '/staff',      icon: Users,           roles: ['owner'] },
+    { label: 'Owners',      to: '/owners',     icon: UserCheck,       roles: ['owner'] },
+    { label: 'Hospitals',   to: '/hospitals',  icon: Building2,       roles: ['owner', 'telecaller'] },
+    { label: 'Compliance',  to: '/compliance', icon: ShieldCheck,     roles: ['owner'] },
+  ] },
+  { id: 'marketing', label: 'Marketing', items: [
+    { label: 'SEO Studio',  to: '/seo-studio', icon: Sparkles,        roles: ['owner'] },
+  ] },
 ];
+
+// Which groups are open — remembered per browser. Used day to day open
+// first; the rest start closed until opened once.
+const NAV_OPEN_KEY = 'medifleet.nav.openGroups.v1';
+const NAV_OPEN_DEFAULT = { operations: true, customers: true, finance: false, management: false, marketing: false };
+const readOpenGroups = () => {
+  try { return { ...NAV_OPEN_DEFAULT, ...JSON.parse(localStorage.getItem(NAV_OPEN_KEY) || '{}') }; }
+  catch { return { ...NAV_OPEN_DEFAULT }; }
+};
+const isActivePath = (to, pathname) => (to === '/' ? pathname === '/' : pathname === to || pathname.startsWith(`${to}/`));
 
 // Phone-only bottom tab bar: the pages used most on the move, reachable
 // with one thumb. "More" opens the full drawer, so nothing is out of reach.
@@ -60,7 +90,14 @@ const CALL_STAFF = ['owner', 'telecaller'];
 export default function Shell({ children }) {
   const { user, logout } = useAuth();
   const navigate  = useNavigate();
+  const { pathname } = useLocation();
   const [sideOpen, setSideOpen] = useState(false);
+  const [openGroups, setOpenGroups] = useState(readOpenGroups);
+  const toggleGroup = (id) => setOpenGroups((prev) => {
+    const next = { ...prev, [id]: !prev[id] };
+    try { localStorage.setItem(NAV_OPEN_KEY, JSON.stringify(next)); } catch { /* private mode: not remembered */ }
+    return next;
+  });
   const [clock,    setClock]    = useState(new Date());
   const [sosCount, setSosCount] = useState(0);
   const sosIntervalRef = useRef();
@@ -254,12 +291,60 @@ export default function Shell({ children }) {
     error      : { text: 'In-app off → your phone',    color: 'var(--amber)' },
   })[phoneState.status] : null;
 
-  const visibleNav = NAV.filter(n => n.roles.includes(user?.role));
+  const visibleGroups = NAV_GROUPS
+    .map((g) => ({ ...g, items: g.items.filter((n) => n.roles.includes(user?.role)) }))
+    .filter((g) => g.items.length > 0);
   const badgeCounts = { sos: sosCount, noResponse: noResponseCount };
+  const activeGroupId = visibleGroups.find((g) => g.items.some((n) => isActivePath(n.to, pathname)))?.id;
 
-  const Sidebar = ({ mobile = false }) => (
+  // The current page's group opens by itself (and stays open; the operator
+  // can still close it).
+  useEffect(() => {
+    if (activeGroupId && !openGroups[activeGroupId]) setOpenGroups((prev) => ({ ...prev, [activeGroupId]: true }));
+  }, [activeGroupId]);
+
+  // The current page's link in view: when the phone drawer opens, and when
+  // the desktop sidebar first shows a page far down the list.
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      document.querySelectorAll('nav[data-sidebar-nav] a[aria-current="page"]')
+        .forEach((a) => { if (a.getClientRects().length) a.scrollIntoView({ block: 'nearest' }); });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [sideOpen, pathname, activeGroupId]);
+
+  const navLink = ({ label, to, icon: Icon, badgeKey }, mobile) => (
+    <NavLink
+      key={to}
+      to={to}
+      end={to === '/'}
+      onClick={() => mobile && setSideOpen(false)}
+      className={({ isActive }) =>
+        `flex items-center gap-3 px-3 ${mobile ? 'py-3 text-sm' : 'py-2 text-[13px]'} rounded-lg mb-0.5 font-medium transition-all
+         focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]
+         ${isActive
+           ? 'text-[var(--accent)] bg-[rgba(0,212,170,.1)] shadow-[inset_3px_0_0_var(--accent)]'
+           : 'text-[var(--text2)] hover:text-[var(--text)] hover:bg-[rgba(255,255,255,.04)]'
+         }`
+      }
+    >
+      <Icon size={15} className="flex-shrink-0" />
+      <span className="truncate">{label}</span>
+      {badgeKey && badgeCounts[badgeKey] > 0 && (
+        <span className="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold"
+          style={{ background: 'var(--red)', color: '#fff', minWidth: 18, textAlign: 'center' }}>
+          {badgeCounts[badgeKey]}
+        </span>
+      )}
+    </NavLink>
+  );
+
+  // A function, not a component: rendering <Sidebar /> made a new component
+  // every second (the clock re-renders Shell), remounting the whole menu and
+  // throwing keyboard focus out of it.
+  const renderSidebar = ({ mobile = false } = {}) => (
     <aside
-      className={`flex flex-col ${mobile ? 'w-full h-full' : 'w-56 min-h-screen fixed left-0 top-0 z-50'}`}
+      className={`flex flex-col ${mobile ? 'w-full h-full' : 'w-56 h-screen fixed left-0 top-0 z-50'}`}
       style={{ background: 'var(--ink2)', borderRight: '1px solid var(--border)' }}
     >
       {/* Logo */}
@@ -281,32 +366,42 @@ export default function Shell({ children }) {
         )}
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 py-3 overflow-y-auto px-2">
-        {visibleNav.map(({ label, to, icon: Icon, badgeKey }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={to === '/'}
-            onClick={() => mobile && setSideOpen(false)}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 ${mobile ? 'py-3 text-sm' : 'py-2.5 text-[13px]'} rounded-lg mb-0.5 font-medium transition-all
-               ${isActive
-                 ? 'text-[var(--accent)] bg-[rgba(0,212,170,.1)]'
-                 : 'text-[var(--text2)] hover:text-[var(--text)] hover:bg-[rgba(255,255,255,.04)]'
-               }`
-            }
-          >
-            <Icon size={15} />
-            {label}
-            {badgeKey && badgeCounts[badgeKey] > 0 && (
-              <span className="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold"
-                style={{ background: 'var(--red)', color: '#fff', minWidth: 18, textAlign: 'center' }}>
-                {badgeCounts[badgeKey]}
-              </span>
-            )}
-          </NavLink>
-        ))}
+      {/* Nav: grouped, collapsible; the current page's group opens itself. */}
+      <nav className="flex-1 min-h-0 py-3 overflow-y-auto overscroll-contain px-2" aria-label="Main" data-sidebar-nav>
+        {visibleGroups.map((g) => {
+          if (g.pinned) return <div key={g.id} className="mb-2">{g.items.map((n) => navLink(n, mobile))}</div>;
+          const open = !!openGroups[g.id];
+          const hidden = g.items.reduce((sum, n) => sum + (n.badgeKey ? badgeCounts[n.badgeKey] || 0 : 0), 0);
+          const listId = `nav-group-${g.id}${mobile ? '-m' : ''}`;
+          return (
+            <div key={g.id} className="mb-1">
+              <button
+                type="button"
+                onClick={() => toggleGroup(g.id)}
+                aria-expanded={open}
+                aria-controls={listId}
+                className={`w-full flex items-center gap-2 px-3 ${mobile ? 'py-2.5' : 'py-2'} rounded-lg text-[11px] font-semibold uppercase tracking-wider transition-all
+                  focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] hover:bg-[rgba(255,255,255,.04)]`}
+                style={{ color: g.id === activeGroupId ? 'var(--text)' : 'var(--text3)' }}
+              >
+                <span>{g.label}</span>
+                {!open && hidden > 0 && (
+                  <span className="px-1.5 rounded-full text-[10px] font-bold leading-4 normal-case tracking-normal"
+                    style={{ background: 'var(--red)', color: '#fff', minWidth: 16, textAlign: 'center' }}
+                    aria-label={`${hidden} alerts`}>
+                    {hidden}
+                  </span>
+                )}
+                <ChevronDown size={14} className="ml-auto transition-transform" style={{ transform: open ? 'rotate(0deg)' : 'rotate(-90deg)' }} aria-hidden="true" />
+              </button>
+              {open && (
+                <div id={listId} className="mt-0.5">
+                  {g.items.map((n) => navLink(n, mobile))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </nav>
 
       {/* Bottom: clock + logout */}
@@ -402,13 +497,13 @@ export default function Shell({ children }) {
 
       {/* Desktop sidebar */}
       <div className="hidden md:block w-56 flex-shrink-0">
-        <Sidebar />
+        {renderSidebar()}
       </div>
 
       {/* Mobile sidebar overlay */}
       {sideOpen && (
         <div className="fixed inset-0 z-50 flex md:hidden">
-          <div className="w-72 max-w-[85vw] h-full"><Sidebar mobile /></div>
+          <div className="w-72 max-w-[85vw] h-full">{renderSidebar({ mobile: true })}</div>
           <div className="flex-1 bg-black/50" onClick={() => setSideOpen(false)} />
         </div>
       )}
