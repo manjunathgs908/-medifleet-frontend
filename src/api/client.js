@@ -291,9 +291,17 @@ export const attendanceApi = {
 };
 
 // Leads
+// Assignment, follow-up and status changes send the lead's `rev`; a 409
+// means someone else changed it first and carries the current lead. A
+// follow-up time without a zone ("2026-11-02T10:30") is India time.
 export const leadsApi = {
-  getAll : (params) => api.get('/leads', { params }),
-  update : (id, d)  => api.put(`/leads/${id}`, d),
+  getAll   : (params) => api.get('/leads', { params }),
+  summary  : ()       => api.get('/leads/summary', { skipErrorToast: true }),
+  assignees: ()       => api.get('/leads/assignees'),
+  assign   : (id, userId, rev)         => api.patch(`/leads/${id}/assign`, { userId, rev }),
+  followUp : (id, at, rev)             => api.patch(`/leads/${id}/follow-up`, { at, rev }),
+  setStatus: (id, status, reason, rev) => api.patch(`/leads/${id}/status`, { status, reason, rev }),
+  addNote  : (id, text)                => api.post(`/leads/${id}/notes`, { text }),
 };
 
 // Hospitals

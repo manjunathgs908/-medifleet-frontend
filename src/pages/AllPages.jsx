@@ -1,13 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
-import { tripsApi, billingApi, hospitalsApi, financeApi, salaryApi, leadsApi, vehiclesApi, authApi } from '../api/client';
+import { useState, useEffect } from 'react';
+import { tripsApi, billingApi, hospitalsApi, financeApi, salaryApi, vehiclesApi, authApi } from '../api/client';
 import api from '../api/client';
 import { PageHeader, StatusBadge, Btn, Modal, StatCard, Tabs, Spinner, Empty, rupee, fmtDateTime, fmtDate, custPhone } from '../components/ui';
 import toast from 'react-hot-toast';
-import CallButton from '../components/CallButton';
 import {
-  FileText, Receipt, FileStack, Wallet, Landmark, Users, Target,
-  Megaphone, Search, PhoneIncoming, PenLine, Footprints, MessageCircle,
-  Mail, Building2,
+  FileText, Receipt, FileStack, Wallet, Landmark, Users, Building2,
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────
@@ -551,122 +548,6 @@ export function SalaryPage() {
           </div>
         )}
       </Modal>
-    </div>
-  );
-}
-
-
-// ─────────────────────────────────────────────────────────────
-// src/pages/LeadsPage.jsx
-// ─────────────────────────────────────────────────────────────
-export function LeadsPage() {
-  // `leads` always belongs to `leadsFor` — the filter it was fetched for —
-  // so rows from one filter are never shown under another one's tab.
-  const [leads,    setLeads]    = useState([]);
-  const [leadsFor, setLeadsFor] = useState(null);
-  const [loading,  setLoading]  = useState(true);
-  const [error,    setError]    = useState(null);
-  const [filter,   setFilter]   = useState('new');
-  // Only the newest request may update the list: on quick filter changes an
-  // older, slower response must not land on top of the current filter.
-  const requestSeq = useRef(0);
-
-  useEffect(() => { load(filter); }, [filter]);
-
-  const load = async (forFilter = filter) => {
-    const seq = ++requestSeq.current;
-    setLoading(true);
-    try {
-      const { data } = await leadsApi.getAll(forFilter !== 'all' ? { status: forFilter } : {});
-      if (seq !== requestSeq.current) return;
-      // The server filters by status; checked here too, so the tab can never
-      // show other statuses (e.g. against a server that ignores ?status).
-      const rows = data.leads || [];
-      setLeads(forFilter === 'all' ? rows : rows.filter((l) => l.status === forFilter));
-      setLeadsFor(forFilter);
-      setError(null);
-    } catch (e) {
-      if (seq !== requestSeq.current) return;
-      // A failed fetch shows the error — never an empty "no leads" list, and
-      // never the previous filter's rows under this tab.
-      setError(e.response?.data?.message || e.message || 'Could not load leads.');
-    } finally {
-      if (seq === requestSeq.current) setLoading(false);
-    }
-  };
-
-  const shown = leadsFor === filter ? leads : [];
-  const emptyMessage = filter === 'all' ? 'No leads yet' : `No ${filter} leads`;
-
-  const update = async (id, status) => {
-    try {
-      await leadsApi.update(id, { status });
-      toast.success('Lead updated');
-      load();
-    } catch (e) {
-      toast.error(e.response?.data?.message || 'Could not update this lead');
-    }
-  };
-
-  const SRC_ICONS = {
-    facebook_ad: <Megaphone size={14} />,
-    google_ad: <Search size={14} />,
-    inbound_call: <PhoneIncoming size={14} />,
-    manual: <PenLine size={14} />,
-    walk_in: <Footprints size={14} />,
-    referral: <Users size={14} />,
-    whatsapp: <MessageCircle size={14} />,
-  };
-  const FILTERS = ['all','new','contacted','converted','lost'];
-
-  return (
-    <div className="page-enter">
-      <PageHeader title="Leads Dashboard" subtitle="FB Ads · Google Ads · Inbound Calls · WhatsApp" />
-
-      <div className="flex gap-1 flex-wrap mb-5 p-1 rounded-xl" style={{background:'var(--surface)',width:'fit-content'}}>
-        {FILTERS.map(f=>(
-          <button key={f} onClick={()=>setFilter(f)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all capitalize
-              ${filter===f?'bg-[var(--surface2)] text-[var(--text)]':'text-[var(--text3)]'}`}>{f}</button>
-        ))}
-      </div>
-
-      {error && (
-        <div className="card mb-4" style={{ borderColor: 'rgba(255,77,109,.35)' }}>
-          <div className="text-sm" style={{ color: 'var(--red)' }}>Error: {error}</div>
-        </div>
-      )}
-
-      <div className="card overflow-x-auto">
-        {loading ? <Spinner /> : leadsFor !== filter ? null : shown.length===0 ? <Empty icon={<Target size={36} />} message={emptyMessage} /> :
-          <table className="tbl">
-            <thead><tr><th>Source</th><th>Name</th><th>Phone</th><th>Message</th><th>Campaign</th><th>Status</th><th>Received</th><th>Action</th></tr></thead>
-            <tbody>
-              {shown.map(l => (
-                <tr key={l._id}>
-                  <td><span title={l.source}>{SRC_ICONS[l.source]||<Mail size={14} />}</span> <span className="text-xs" style={{color:'var(--text3)'}}>{l.source?.replace('_',' ')||'-'}</span></td>
-                  <td><div className="font-medium text-sm">{l.patientName||'Unknown'}</div></td>
-                  <td className="font-mono text-xs whitespace-nowrap">
-                    <div className="font-mono">{custPhone(l.phone, l.phoneMasked, '-')}</div>
-                    {l.phoneMasked && <CallButton target={{ leadId: l._id }} className="mt-1" />}
-                  </td>
-                  <td className="text-xs max-w-xs truncate" style={{color:'var(--text2)'}}>{l.message||'—'}</td>
-                  <td className="text-xs" style={{color:'var(--text3)'}}>{l.adName||l.formName||'—'}</td>
-                  <td><StatusBadge status={l.status}/></td>
-                  <td className="text-xs font-mono whitespace-nowrap" style={{color:'var(--text3)'}}>{fmtDateTime(l.receivedAt)}</td>
-                  <td>
-                    <div className="flex gap-1">
-                      {l.status==='new'       && <Btn size="sm" variant="blue"  onClick={()=>update(l._id,'contacted')}>Contact</Btn>}
-                      {l.status==='contacted' && <Btn size="sm"                 onClick={()=>update(l._id,'converted')}>Convert</Btn>}
-                      {!['lost','spam'].includes(l.status) && <Btn size="sm" variant="ghost" onClick={()=>update(l._id,'lost')}>✕</Btn>}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        }
-      </div>
     </div>
   );
 }

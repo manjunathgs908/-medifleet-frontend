@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { sosApi, tripCallEventsApi, callsApi, callbacksApi } from '../api/client';
+import { sosApi, tripCallEventsApi, callsApi, callbacksApi, leadsApi } from '../api/client';
 import { InstallAppButton } from '../lib/installApp';
 import InAppPhone, { useInAppPhone } from './InAppPhone';
 import { APP_BUILD } from '../lib/pwaUpdate';
@@ -37,7 +37,7 @@ const NAV_GROUPS = [
     { label: 'Posting Alerts', to: '/posting-alerts', icon: MapPin,   roles: ['owner', 'telecaller'] },
   ] },
   { id: 'customers', label: 'Customers', items: [
-    { label: 'Leads',       to: '/leads',      icon: Target,          roles: ['owner', 'telecaller'] },
+    { label: 'Leads',       to: '/leads',      icon: Target,          roles: ['owner', 'telecaller'], badgeKey: 'leads' },
     { label: 'WhatsApp Leads', to: '/whatsapp-leads', icon: MessageCircle, roles: ['owner', 'telecaller'] },
     { label: 'WhatsApp Chats', to: '/whatsapp-conversations', icon: MessageSquare, roles: ['owner', 'telecaller'] },
     { label: 'Callbacks',   to: '/callbacks',  icon: PhoneForwarded,  roles: ['owner', 'telecaller'], badgeKey: 'callbacks' },
@@ -263,6 +263,18 @@ export default function Shell({ children }) {
     return () => { clearInterval(t); window.removeEventListener('callbacks:changed', loadCallbacks); };
   }, [user?.role]);
 
+  // Lead follow-ups overdue or due later today (the Leads badge) — the same
+  // kind of in-CRM reminder, kept apart from missed-call callbacks.
+  const [leadsDueCount, setLeadsDueCount] = useState(0);
+  useEffect(() => {
+    if (!CALL_STAFF.includes(user?.role)) return;
+    const loadLeads = () => leadsApi.summary().then(({ data }) => setLeadsDueCount((data.counts?.overdue || 0) + (data.counts?.dueToday || 0))).catch(() => {});
+    loadLeads();
+    const t = setInterval(loadLeads, NO_RESPONSE_POLL_MS * 2);
+    window.addEventListener('leads:changed', loadLeads);
+    return () => { clearInterval(t); window.removeEventListener('leads:changed', loadLeads); };
+  }, [user?.role]);
+
   // "On call duty": while on, customer calls to the company number ring
   // this user — in this app or on their phone, as they chose on the Staff
   // page (callMode). Stored on the server, so it follows the user across
@@ -308,7 +320,7 @@ export default function Shell({ children }) {
   const visibleGroups = NAV_GROUPS
     .map((g) => ({ ...g, items: g.items.filter((n) => n.roles.includes(user?.role)) }))
     .filter((g) => g.items.length > 0);
-  const badgeCounts = { sos: sosCount, noResponse: noResponseCount, callbacks: callbacksCount };
+  const badgeCounts = { sos: sosCount, noResponse: noResponseCount, callbacks: callbacksCount, leads: leadsDueCount };
   const activeGroupId = visibleGroups.find((g) => g.items.some((n) => isActivePath(n.to, pathname)))?.id;
 
   // The current page's group opens by itself (and stays open; the operator
