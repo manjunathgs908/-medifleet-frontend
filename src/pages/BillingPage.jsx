@@ -159,6 +159,7 @@ const signed = (paise) => (paise < 0 ? `−${rs(-paise)}` : rs(paise));
 function receiptHtml(r) {
   const p = r.payment;
   if (p.kind === 'reversal') return correctionHtml(r);
+  if (p.kind === 'refund') return refundHtml(r);
   const reversed = p.reversedBy;
   return page(p.receiptNumber, `${issuerHeader(r.issuer)}
 <h2>Payment receipt ${esc(p.receiptNumber)}</h2>
@@ -172,6 +173,18 @@ ${r.balance ? row('Bill total', rs(r.balance.totalPaise)) + row('Received to dat
 ${row('Confirmation', p.verification === 'provider_verified' ? 'Verified by Razorpay' : `Recorded by our staff on ${fmtIst(p.recordedAt)}`)}
 ${p.note ? row('Note', p.note) : ''}</table>
 <div class="foot">${reversed ? 'This receipt was reversed as an accounting correction and no longer counts as money received. No money was refunded by this correction.' : 'This receipt confirms money received.'}</div>`);
+}
+
+function refundHtml(r) {
+  const p = r.payment;
+  return page(p.receiptNumber, `${issuerHeader(r.issuer)}
+<h2>Refund note ${esc(p.receiptNumber)}</h2>
+<div class="amt">${esc(rs(-p.amountPaise))}</div><table>
+${row('Refunded on', fmtIst(p.receivedAt))}${row('Paid back by', METHOD_LABEL[p.method] || p.method)}${p.payoutReference ? row('Reference', p.payoutReference) : ''}
+${row('For', `Trip ${p.trip?.tripNumber}${p.bill ? ` · Bill ${p.bill.billNumber}` : ' (advance)'}`)}
+${row('Patient', p.trip?.patientName)}
+${r.balance ? row('Bill total', rs(r.balance.totalPaise)) + row('Received to date (after refunds)', rs(r.balance.paidPaise)) : ''}</table>
+<div class="foot">This note records money paid back to you.</div>`);
 }
 
 function correctionHtml(r) {
@@ -212,6 +225,84 @@ function ReceiptModal({ paymentId, onClose }) {
         </div>
       )}
     </Modal>
+  );
+}
+
+// ── Recording a refund already paid back (owner only; record only) ─
+const REFUND_NOTICE = 'Records a refund you have already paid outside the CRM — nothing is sent and no money moves here.';
+function RefundForm({ tripId, maxPaise, onBill, onDone, onCancel }) {
+  const [amount, setAmount] = useState('');
+  const [method, setMethod] = useState('upi');
+  const [reference, setReference] = useState('');
+  const [when, setWhen] = useState(istInput(Date.now()));
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const key = useRef(newKey());
+  const inFlight = useRef(false);
+  const clean = reason.trim().replace(/\s+/g, ' ');
+  const needsRef = method === 'bank_transfer';
+  const id = `rfd-${tripId}`;
+  const submit = async (e) => {
+    e.preventDefault();
+    if (inFlight.current) return;
+    inFlight.current = true; setBusy(true); setError(null);
+    try {
+      const { data } = await billingApi.recordRefund({
+        tripId, amount: amount.trim(), method, payoutReference: method === 'cash' ? undefined : reference.trim() || undefined,
+        paidOutAt: when, reason: clean, requestId: key.current,
+      });
+      toast.success(data.message);
+      key.current = newKey();
+      onDone(data.refund);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Could not reach the server — press Record again (it will not be recorded twice).');
+    } finally { inFlight.current = false; setBusy(false); }
+  };
+  return (
+    <form onSubmit={submit} className="rounded-xl p-3 space-y-3" style={{ background: 'var(--surface2)', border: '1px solid rgba(167,139,250,.35)' }} aria-label="Record a refund">
+      <div role="note" className="rounded-md px-2.5 py-2 text-xs font-semibold" style={{ background: 'rgba(167,139,250,.12)', color: '#a78bfa', border: '1px solid rgba(167,139,250,.3)' }}>{REFUND_NOTICE}</div>
+      <div className="text-[11px]" style={{ color: 'var(--text3)' }}>
+        Up to {rs(maxPaise)} (what was received{onBill ? ' on this bill' : ' as advance'}).{onBill ? ' The refunded amount stops counting as received, so the bill shows it as outstanding again.' : ''}
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label htmlFor={`${id}-amount`} className="block text-[11px] font-semibold mb-1" style={{ color: 'var(--text2)' }}>Refund amount (₹)</label>
+          <input id={`${id}-amount`} className="inp" inputMode="decimal" autoComplete="off" value={amount} onChange={(e) => setAmount(e.target.value)} required placeholder="0.00" />
+        </div>
+        <div>
+          <label htmlFor={`${id}-when`} className="block text-[11px] font-semibold mb-1" style={{ color: 'var(--text2)' }}>Paid back at (India time, IST)</label>
+          <input id={`${id}-when`} type="datetime-local" className="inp" value={when} max={istInput(Date.now() + 5 * 60000)} onChange={(e) => setWhen(e.target.value)} required />
+        </div>
+      </div>
+      <fieldset>
+        <legend className="block text-[11px] font-semibold mb-1" style={{ color: 'var(--text2)' }}>Paid back by</legend>
+        <div className="flex flex-wrap gap-2">
+          {['cash', 'upi', 'bank_transfer'].map((m) => (
+            <label key={m} className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border focus-within:ring-2 focus-within:ring-[var(--accent)] ${method === m ? 'text-[var(--text)]' : 'text-[var(--text3)]'}`}
+              style={{ background: 'var(--surface)', borderColor: method === m ? 'var(--accent)' : 'rgba(255,255,255,.06)' }}>
+              <input type="radio" name={`${id}-method`} value={m} checked={method === m} onChange={() => setMethod(m)} className="sr-only" />
+              {METHOD_LABEL[m]}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      {method !== 'cash' && (
+        <div>
+          <label htmlFor={`${id}-ref`} className="block text-[11px] font-semibold mb-1" style={{ color: 'var(--text2)' }}>{method === 'upi' ? 'UPI reference of the refund (recommended)' : 'Bank UTR of the refund (required)'}</label>
+          <input id={`${id}-ref`} className="inp" autoComplete="off" maxLength={48} value={reference} onChange={(e) => setReference(e.target.value)} required={needsRef} />
+        </div>
+      )}
+      <div>
+        <label htmlFor={`${id}-reason`} className="block text-[11px] font-semibold mb-1" style={{ color: 'var(--text2)' }}>Why was it refunded? (required, at least 10 characters — kept internal)</label>
+        <textarea id={`${id}-reason`} className="inp text-xs" rows={2} maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} required placeholder="e.g. Booking cancelled, advance returned" />
+      </div>
+      {error && <div role="alert" className="text-xs" style={{ color: 'var(--red)' }}>{error}</div>}
+      <div className="flex gap-2">
+        <Btn type="submit" size="sm" disabled={busy || !amount.trim() || clean.length < 10 || (needsRef && !reference.trim())}>{busy ? 'Recording…' : 'Record refund'}</Btn>
+        <Btn type="button" size="sm" variant="ghost" onClick={onCancel} disabled={busy}>Cancel</Btn>
+      </div>
+    </form>
   );
 }
 
@@ -272,18 +363,21 @@ function ReceiptRows({ list, onOpen, onChanged }) {
     <ul className="space-y-1.5" aria-label="Receipts">
       {list.map((p) => {
         const isRev = p.kind === 'reversal';
+        const isRefund = p.kind === 'refund';
         return (
           <li key={p._id} className="rounded-lg px-3 py-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" data-receipt={p.receiptNumber}
-            style={{ background: 'var(--surface2)', ...(isRev ? { borderLeft: '3px solid var(--red)' } : {}) }}>
-            <span className="font-mono font-bold" style={{ color: isRev ? 'var(--red)' : p.reversedBy ? 'var(--text3)' : 'var(--accent)', textDecoration: p.reversedBy ? 'line-through' : undefined }}>{signed(p.amountPaise)}</span>
-            {isRev
+            style={{ background: 'var(--surface2)', ...(isRev ? { borderLeft: '3px solid var(--red)' } : isRefund ? { borderLeft: '3px solid #a78bfa' } : {}) }}>
+            <span className="font-mono font-bold" style={{ color: isRev ? 'var(--red)' : isRefund ? '#a78bfa' : p.reversedBy ? 'var(--text3)' : 'var(--accent)', textDecoration: p.reversedBy ? 'line-through' : undefined }}>{signed(p.amountPaise)}</span>
+            {isRefund
+              ? <span>Refund paid out · {METHOD_LABEL[p.method] || p.method}{p.payoutReference ? ` · ${p.payoutReference}` : ''}</span>
+              : isRev
               ? <span>Reversal of <span className="font-mono">{p.reversesReceipt?.receiptNumber || '—'}</span></span>
               : <span>{METHOD_LABEL[p.method] || p.method}{p.reference ? ` · ${p.reference}` : ''}</span>}
             {p.kind === 'advance' && <Badge color="blue">Advance</Badge>}
-            {isRev ? <Badge color="red">Accounting correction</Badge> : <VerifiedBadge p={p} />}
+            {isRefund ? <span className="badge" style={{ background: 'rgba(167,139,250,.15)', color: '#a78bfa', border: '1px solid rgba(167,139,250,.3)' }}>Refund</span> : isRev ? <Badge color="red">Accounting correction</Badge> : <VerifiedBadge p={p} />}
             {p.reversedBy && <Badge color="red">Reversed · {p.reversedBy.receiptNumber}</Badge>}
             <span className="basis-full sm:basis-auto" style={{ color: 'var(--text3)' }}>
-              {isRev ? 'Reversed' : 'Received'} {fmtIst(p.receivedAt)}{p.recordedByName ? ` · by ${p.recordedByName}` : ''}
+              {isRev ? 'Reversed' : isRefund ? 'Paid back' : 'Received'} {fmtIst(p.receivedAt)}{p.recordedByName ? ` · by ${p.recordedByName}` : ''}
             </span>
             <span className="ml-auto flex items-center gap-2">
               {p.canReverse && onChanged && reversing !== p._id && (
@@ -293,8 +387,8 @@ function ReceiptRows({ list, onOpen, onChanged }) {
                 {p.receiptNumber}
               </button>
             </span>
-            {isRev && p.reason && <div className="basis-full italic" style={{ color: 'var(--text2)' }}>Reason (internal): “{p.reason}”</div>}
-            {!isRev && !p.canReverse && !p.reversedBy && p.verification === 'staff_recorded' && p.reverseBlockedWhy && (
+            {(isRev || isRefund) && p.reason && <div className="basis-full italic" style={{ color: 'var(--text2)' }}>Reason (internal): “{p.reason}”</div>}
+            {!isRev && !isRefund && !p.canReverse && !p.reversedBy && p.verification === 'staff_recorded' && p.reverseBlockedWhy && (
               <div className="basis-full text-[11px]" style={{ color: 'var(--text3)' }}>Can't be reversed here: {p.reverseBlockedWhy}</div>
             )}
             {reversing === p._id && <ReverseForm p={p} onCancel={() => setReversing(null)} onDone={() => { setReversing(null); onChanged(); }} />}
@@ -310,8 +404,9 @@ function BillModal({ billId, onClose, onChanged, openReceipt }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [form, setForm] = useState(false);
+  const [refunding, setRefunding] = useState(false);
   const load = () => billingApi.getBill(billId).then(({ data: d }) => { setData(d); setError(null); }).catch((e) => setError(e.response?.data?.message || 'Could not load this bill.'));
-  useEffect(() => { if (billId) { setData(null); setForm(false); load(); } }, [billId]);
+  useEffect(() => { if (billId) { setData(null); setForm(false); setRefunding(false); load(); } }, [billId]);
   const bill = data?.bill;
   const bal = bill?.balance;
   const canRecord = bal && bal.outstandingPaise > 0 && !bal.reconcile.length && !bal.onHospitalInvoice && bal.state !== 'waived';
@@ -350,6 +445,9 @@ function BillModal({ billId, onClose, onChanged, openReceipt }) {
           {canRecord && (form
             ? <PaymentForm tripId={bill.trip?._id} kind="payment" maxPaise={bal.outstandingPaise} onCancel={() => setForm(false)} onDone={() => { setForm(false); load(); onChanged(); }} />
             : <Btn size="sm" onClick={() => setForm(true)}>Record payment</Btn>)}
+          {bal.paidPaise > 0 && !form && (refunding
+            ? <RefundForm tripId={bill.trip?._id} maxPaise={bal.paidPaise} onBill onCancel={() => setRefunding(false)} onDone={() => { setRefunding(false); load(); onChanged(); }} />
+            : <Btn size="sm" variant="ghost" onClick={() => setRefunding(true)}>Record refund…</Btn>)}
           <div className="text-[11px]" style={{ color: 'var(--text3)' }}>
             Receipts are never edited or deleted. The owner can reverse a mistaken staff-recorded receipt — an accounting correction only; no money is refunded.
           </div>
@@ -370,26 +468,109 @@ const FILTERS = [
 ];
 // Online payments Razorpay took that could not simply be recorded — money
 // may have been received, so they are listed until a person deals with them.
-function ProviderIssues() {
-  const [issues, setIssues] = useState([]);
-  const [open, setOpen] = useState(false);
-  useEffect(() => { billingApi.getProviderIssues().then(({ data }) => setIssues(data.issues || [])).catch(() => {}); }, []);
-  if (!issues.length) return null;
-  const WHY = {
-    unknown_order: 'its order matches no bill', currency: 'it was not in rupees', bad_amount: 'its amount was unreadable',
-    amount_differs_from_order: 'the amount captured differs from the order', amount_differs_from_recorded: 'the amount captured differs from the receipt recorded',
+const ISSUE_OUTCOMES = [
+  ['matched_to_bill', 'Matched to a bill (record it separately)'],
+  ['refunded_at_razorpay', 'Refunded at Razorpay'],
+  ['not_ours', 'Not ours / test payment'],
+  ['duplicate_notice', 'Duplicate notice'],
+  ['other', 'Other'],
+];
+const ISSUE_WHY = {
+  unknown_order: 'its order matches no bill', currency: 'it was not in rupees', bad_amount: 'its amount was unreadable',
+  amount_differs_from_order: 'the amount captured differs from the order', amount_differs_from_recorded: 'the amount captured differs from the receipt recorded',
+};
+const issueLine = (i) => `Razorpay ${i.paymentId}${i.amount ? ` · ${i.currency === 'INR' || !i.currency ? rs(i.amount) : `${i.amount} ${i.currency} (minor units)`}` : ''}${i.bill?.billNumber ? ` · bill ${i.bill.billNumber}` : ''} — ${ISSUE_WHY[i.reason] || i.reason}`;
+
+function ResolveIssueForm({ issue, onDone, onCancel }) {
+  const [outcome, setOutcome] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const clean = note.trim().replace(/\s+/g, ' ');
+  const submit = async (e) => {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true); setError(null);
+    try {
+      const { data } = await billingApi.resolveProviderIssue(issue._id, outcome, clean, issue.rev || 0);
+      toast.success(data.message);
+      onDone();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Could not reach the server — try again.');
+    } finally { setBusy(false); }
   };
+  const id = `iss-${issue._id}`;
   return (
-    <div className="card-sm mb-3 text-xs" role="alert" style={{ borderColor: 'rgba(255,184,48,.45)', color: 'var(--amber)' }}>
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="font-semibold inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded">
-        <AlertTriangle size={13} aria-hidden="true" /> {issues.length} online payment{issues.length === 1 ? ' needs' : 's need'} review
-      </button>
-      {open && (
-        <ul className="mt-2 space-y-1" style={{ color: 'var(--text2)' }}>
-          {issues.map((i) => (
-            <li key={i._id}>Razorpay {i.paymentId}{i.amount ? ` · ${i.currency === 'INR' || !i.currency ? rs(i.amount) : `${i.amount} ${i.currency} (minor units)`}` : ''}{i.bill?.billNumber ? ` · bill ${i.bill.billNumber}` : ''} — {WHY[i.reason] || i.reason}. {fmtIst(i.createdAt)}</li>
+    <form onSubmit={submit} className="mt-2 rounded-lg p-2.5 space-y-2" style={{ background: 'var(--surface)', color: 'var(--text2)' }} aria-label={`Resolve ${issue.paymentId}`}>
+      <div>
+        <label htmlFor={`${id}-o`} className="block text-[11px] font-semibold mb-1">What did you find?</label>
+        <select id={`${id}-o`} className="inp !py-1.5 text-xs" value={outcome} onChange={(e) => setOutcome(e.target.value)} required>
+          <option value="" disabled>Pick one…</option>
+          {ISSUE_OUTCOMES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+        </select>
+      </div>
+      <div>
+        <label htmlFor={`${id}-n`} className="block text-[11px] font-semibold mb-1">Note (required, at least 10 characters)</label>
+        <textarea id={`${id}-n`} className="inp !py-1.5 text-xs" rows={2} maxLength={300} value={note} onChange={(e) => setNote(e.target.value)} required placeholder="e.g. Checked the Razorpay dashboard — test payment" />
+      </div>
+      <div className="text-[11px]" style={{ color: 'var(--text3)' }}>Records your decision only — no receipt is created and no money record changes.</div>
+      {error && <div role="alert" className="text-xs" style={{ color: 'var(--red)' }}>{error}</div>}
+      <div className="flex gap-2">
+        <Btn type="submit" size="sm" disabled={busy || !outcome || clean.length < 10}>{busy ? 'Saving…' : 'Mark resolved'}</Btn>
+        <Btn type="button" size="sm" variant="ghost" onClick={onCancel} disabled={busy}>Cancel</Btn>
+      </div>
+    </form>
+  );
+}
+
+// Online payments Razorpay took that could not simply be recorded — money
+// may have been received, so they stay listed until the owner resolves them.
+function ProviderIssues() {
+  const [open, setOpen] = useState([]);
+  const [resolved, setResolved] = useState([]);
+  const [expanded, setExpanded] = useState(false);
+  const [showResolved, setShowResolved] = useState(false);
+  const [resolving, setResolving] = useState(null);
+  const load = () => {
+    billingApi.getProviderIssues().then(({ data }) => setOpen(data.issues || [])).catch(() => {});
+    billingApi.getProviderIssues('resolved').then(({ data }) => setResolved(data.issues || [])).catch(() => {});
+  };
+  useEffect(load, []);
+  if (!open.length && !resolved.length) return null;
+  const label = Object.fromEntries(ISSUE_OUTCOMES);
+  return (
+    <div className="card-sm mb-3 text-xs" role={open.length ? 'alert' : undefined} style={open.length ? { borderColor: 'rgba(255,184,48,.45)', color: 'var(--amber)' } : { color: 'var(--text3)' }} data-testid="provider-issues">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        {open.length > 0 && (
+          <button type="button" onClick={() => setExpanded((o) => !o)} aria-expanded={expanded} className="font-semibold inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded">
+            <AlertTriangle size={13} aria-hidden="true" /> {open.length} online payment{open.length === 1 ? ' needs' : 's need'} review
+          </button>
+        )}
+        {resolved.length > 0 && (
+          <button type="button" onClick={() => setShowResolved((o) => !o)} aria-expanded={showResolved} className="underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded" style={{ color: 'var(--text3)' }}>
+            Resolved ({resolved.length})
+          </button>
+        )}
+      </div>
+      {expanded && open.length > 0 && (
+        <ul className="mt-2 space-y-2" style={{ color: 'var(--text2)' }}>
+          {open.map((i) => (
+            <li key={i._id} data-issue={i.paymentId}>
+              <div className="flex flex-wrap items-center gap-2">
+                <span>{issueLine(i)}. {fmtIst(i.createdAt)}</span>
+                {resolving !== i._id && <button type="button" onClick={() => setResolving(i._id)} className="font-semibold rounded px-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]" style={{ color: 'var(--blue)' }}>Mark resolved…</button>}
+              </div>
+              {resolving === i._id && <ResolveIssueForm issue={i} onCancel={() => setResolving(null)} onDone={() => { setResolving(null); load(); }} />}
+            </li>
           ))}
           <li style={{ color: 'var(--text3)' }}>Check each in the Razorpay dashboard. Nothing is refunded or changed automatically.</li>
+        </ul>
+      )}
+      {showResolved && (
+        <ul className="mt-2 space-y-1" style={{ color: 'var(--text2)' }} aria-label="Resolved online payment reviews">
+          {resolved.map((i) => (
+            <li key={i._id} data-resolved={i.paymentId}>{issueLine(i)} — <strong>{label[i.resolution?.outcome] || i.resolution?.outcome}</strong>: “{i.resolution?.note}” · {i.resolution?.byName}, {fmtIst(i.resolvedAt)}</li>
+          ))}
         </ul>
       )}
     </div>
@@ -503,6 +684,7 @@ function AdvancesTab({ openReceipt }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [formFor, setFormFor] = useState(null);
+  const [refundFor, setRefundFor] = useState(null);
   const [showAll, setShowAll] = useState(false);
   const load = () => billingApi.getAdvances().then(({ data: d }) => { setData(d); setError(null); }).catch((e) => setError(e.response?.data?.message || 'Could not load advances.'));
   useEffect(() => { load(); }, []);
@@ -535,11 +717,19 @@ function AdvancesTab({ openReceipt }) {
                     {t.coverRemainingPaise != null && t.canTakeAdvance ? ` · up to ${rs(t.coverRemainingPaise)} more` : ''}
                   </div>
                 </div>
-                {t.canTakeAdvance && formFor !== t._id && <Btn size="sm" variant="blue" onClick={() => setFormFor(t._id)}>Record advance</Btn>}
+                <div className="flex flex-wrap gap-2">
+                  {t.canTakeAdvance && formFor !== t._id && <Btn size="sm" variant="blue" onClick={() => setFormFor(t._id)}>Record advance</Btn>}
+                  {t.advancePaise > 0 && refundFor !== t._id && <Btn size="sm" variant="ghost" onClick={() => setRefundFor(t._id)}>Record refund…</Btn>}
+                </div>
               </div>
               {t.reconcile.length > 0 && <div className="mt-2"><ReconcileNote reasons={t.reconcile} /></div>}
               {!t.estimatePaise && t.status !== 'cancelled' && <div className="text-[11px] mt-1" style={{ color: 'var(--text3)' }}>No fare estimate on this booking, so an advance can't be checked against it.</div>}
               {t.payments.length > 0 && <div className="mt-2"><ReceiptRows list={t.payments} onOpen={openReceipt} onChanged={load} /></div>}
+              {refundFor === t._id && (
+                <div className="mt-2">
+                  <RefundForm tripId={t._id} maxPaise={t.advancePaise} onCancel={() => setRefundFor(null)} onDone={() => { setRefundFor(null); load(); }} />
+                </div>
+              )}
               {formFor === t._id && (
                 <div className="mt-2">
                   <PaymentForm tripId={t._id} kind="advance" maxPaise={t.coverRemainingPaise} onCancel={() => setFormFor(null)} onDone={() => { setFormFor(null); load(); }} />

@@ -1171,12 +1171,16 @@ export default function DispatchPage() {
               <div className="text-xs font-mono mb-1" style={{ color: 'var(--accent)' }}>{billModal.billNumber}</div>
               <div className="font-bold">{billModal.patient}</div>
             </div>
+            {/* The bill's stored lines — the same as the printout (bills have
+                no per-km rate or distance charge, so none is shown). */}
             {[
+              billModal.distanceKm != null && ['Distance', `${billModal.distanceKm} km`],
               ['Base Fare',        rupee(billModal.baseFare)],
-              [`Distance (${billModal.distanceKm}km × ₹${billModal.perKmRate})`, rupee(billModal.distanceCharge)],
-              ['Additional',       rupee(billModal.additionalCharges)],
-              [`GST @ ${billModal.gstRate}%`, rupee(billModal.gstAmount)],
-            ].map(([label, val]) => (
+              Number(billModal.additionalCharges) ? ['Additional', rupee(billModal.additionalCharges)] : null,
+              billModal.subTotal != null && ['Subtotal', rupee(billModal.subTotal)],
+              [`GST${billModal.gstRate != null ? ` @ ${billModal.gstRate}%` : ''}`, rupee(billModal.gstAmount)],
+              Number(billModal.waitCharge) ? ['Waiting charges', rupee(billModal.waitCharge)] : null,
+            ].filter(Boolean).map(([label, val]) => (
               <div key={label} className="flex justify-between text-sm py-1.5"
                 style={{ borderBottom: '1px solid var(--border)' }}>
                 <span style={{ color: 'var(--text2)' }}>{label}</span>

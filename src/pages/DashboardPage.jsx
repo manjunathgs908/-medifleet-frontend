@@ -66,7 +66,7 @@ export default function DashboardPage() {
         <StatCard label="Available Units"   value={live?.counts?.available || 0}     color="green" icon={<Truck size={16}/>} />
         {/* Money received this month (India time); billed is shown apart. */}
         <StatCard label="Collected (Month)" value={rupee(dm.collectedRevenue || 0)}  color="green" icon={<TrendingUp size={16}/>}
-          sub={dm.billedRevenue != null ? `Billed ${rupee(dm.billedRevenue)}` : undefined} />
+          sub={dm.billedRevenue != null ? `Billed ${rupee(dm.billedRevenue)}${dash?.refundedThisMonth ? ` · Refunded ${rupee(dash.refundedThisMonth)}` : ''}` : undefined} />
         <StatCard label="Trips This Month"  value={dm.completedTrips || 0}           color="blue"  icon={<CheckCircle size={16}/>} />
       </div>
 

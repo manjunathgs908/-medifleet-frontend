@@ -194,15 +194,37 @@ export function FinancePage() {
       .then(({ data }) => { setCollections(data.summary?.collections || null); setCollectionsError(null); })
       .catch((err) => setCollectionsError(err.response?.data?.message || 'Could not load collections.'));
     try {
-      const [e, l] = await Promise.all([financeApi.getExpenses(), financeApi.getLoans()]);
-      setEntries(e.data.expenses || []);
+      // Ledger = expenses and income together, each tagged with its type.
+      const [e, i, l] = await Promise.all([financeApi.getExpenses(), financeApi.getIncome(), financeApi.getLoans()]);
+      setEntries([
+        ...(e.data.expenses || []).map((x) => ({ ...x, type: 'expense' })),
+        ...(i.data.income || []).map((x) => ({ ...x, type: 'income' })),
+      ].sort((a, b) => new Date(b.date) - new Date(a.date)));
       setLoans(l.data.loans || []);
     } finally { setLoading(false); }
   };
   const paise = (p) => rupee((p || 0) / 100);
 
-  const totalExpenses = entries.filter(e=>e.category!=='salary').reduce((s,e)=>s+e.amount,0);
-  const diesel = entries.filter(e=>e.category==='diesel').reduce((s,e)=>s+e.amount,0);
+  const expenses = entries.filter(e=>e.type==='expense');
+  const totalExpenses = expenses.filter(e=>e.category!=='salary').reduce((s,e)=>s+e.amount,0);
+  const diesel = expenses.filter(e=>e.category==='diesel').reduce((s,e)=>s+e.amount,0);
+  // Manual income is donation / grant / misc only — trip fares and hospital
+  // credit are recorded by the system (entering them would count twice).
+  const CATEGORIES = { expense: ['diesel','maintenance','oxygen_refill','salary','emi_payment','misc'], income: ['donation','grant','misc'] };
+  const [saving, setSaving] = useState(false);
+  const saveEntry = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      if (form.type === 'income') {
+        await financeApi.addIncome({ category: form.category, amount: form.amount, description: form.description, date: form.date });
+      } else {
+        await financeApi.addExpense({ category: form.category, amount: Number(form.amount), description: form.description, date: form.date });
+      }
+      toast.success(form.type === 'income' ? 'Income added' : 'Expense added');
+      setAddModal(false); loadAll();
+    } catch { /* the API client shows why */ } finally { setSaving(false); }
+  };
 
   return (
     <div className="page-enter">
@@ -231,6 +253,9 @@ export function FinancePage() {
               )}
               {collections.reversalsCount > 0 && (
                 <div>Collected is net of <strong>{paise(collections.reversedPaise)}</strong> in {collections.reversalsCount} receipt reversal{collections.reversalsCount === 1 ? '' : 's'} made this month (accounting corrections dated when made — no money was refunded).</div>
+              )}
+              {collections.refundsCount > 0 && (
+                <div>Refunds paid out this month: <strong>{paise(collections.refundedPaise)}</strong> ({collections.refundsCount}) — money out, shown apart from collections. Collected less refunds: <strong>{paise(collections.netCollectedPaise)}</strong>.</div>
               )}
               {collections.providerIssues > 0 && <div style={{color:'var(--amber)'}}>{collections.providerIssues} online payment{collections.providerIssues === 1 ? ' needs' : 's need'} review in Billing.</div>}
               <div style={{color:'var(--text3)'}}>Customer outstanding and hospital invoices are counted separately — a bill on a hospital invoice is never in both. The Income ledger below is not reconciled with these figures.</div>
@@ -317,7 +342,7 @@ export function FinancePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{color:'var(--text2)'}}>Type</label>
-              <select className="inp" value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))}>
+              <select className="inp" value={form.type} onChange={e=>{ const type = e.target.value; setForm(f=>({...f,type,category:CATEGORIES[type][0]})); }}>
                 <option value="expense">Expense</option>
                 <option value="income">Income</option>
               </select>
@@ -325,10 +350,11 @@ export function FinancePage() {
             <div>
               <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{color:'var(--text2)'}}>Category</label>
               <select className="inp" value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))}>
-                {['diesel','maintenance','oxygen_refill','salary','emi_payment','misc','trip_fare','hospital_credit'].map(c=>(
+                {CATEGORIES[form.type].map(c=>(
                   <option key={c} value={c}>{c.replace('_',' ')}</option>
                 ))}
               </select>
+              {form.type === 'income' && <div className="text-[11px] mt-1" style={{color:'var(--text3)'}}>Trip fares and hospital credit are recorded automatically.</div>}
             </div>
           </div>
           <div>
@@ -346,7 +372,7 @@ export function FinancePage() {
             </div>
           </div>
           <div className="flex gap-3 pt-2">
-            <Btn className="flex-1" onClick={async()=>{ await financeApi.addExpense(form); toast.success('Entry added'); setAddModal(false); loadAll(); }}>Save</Btn>
+            <Btn className="flex-1" disabled={saving} onClick={saveEntry}>{saving ? 'Saving…' : 'Save'}</Btn>
             <Btn variant="ghost" onClick={()=>setAddModal(false)}>Cancel</Btn>
           </div>
         </div>

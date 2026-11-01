@@ -260,7 +260,13 @@ export const billingApi = {
   recordPayment    : (d)      => api.post('/billing/payments', d, { skipErrorToast: true }),
   getReceipt       : (id)     => api.get(`/billing/payments/${id}`),
   getAdvances      : ()       => api.get('/billing/advances'),
-  getProviderIssues: ()       => api.get('/billing/provider-issues', { skipErrorToast: true }),
+  getProviderIssues: (state)  => api.get('/billing/provider-issues', { params: state ? { state } : {}, skipErrorToast: true }),
+  // Owner only: mark an online payment that needed review as resolved —
+  // records the decision; creates no receipt and changes no money.
+  resolveProviderIssue: (id, outcome, note, rev) => api.patch(`/billing/provider-issues/${id}/resolve`, { outcome, note, rev }, { skipErrorToast: true }),
+  // Owner only: record a refund ALREADY paid back by cash/UPI/bank. Sends
+  // nothing; no gateway call. Same requestId = same refund.
+  recordRefund     : (d)      => api.post('/billing/refunds', d, { skipErrorToast: true }),
   // Owner only: reverse a mistaken staff-recorded receipt (accounting
   // correction — no money is refunded). Same requestId = same reversal.
   reversePayment   : (id, reason, requestId) => api.post(`/billing/payments/${id}/reverse`, { reason, requestId }, { skipErrorToast: true }),
