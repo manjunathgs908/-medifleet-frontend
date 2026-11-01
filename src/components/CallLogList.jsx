@@ -32,6 +32,13 @@ const STATUS = {
   not_routed     : { color: 'amber', label: 'Not routed by CRM' },
 };
 
+// Why a call still stored as ringing is known to be over (backend liveState).
+const UNCONFIRMED_WHY = {
+  hangup_received  : 'Plivo reported the hang-up',
+  not_live_on_plivo: 'Plivo no longer has this call live',
+  too_old          : 'This call is older than any call can last',
+};
+
 const AGENT_TYPE = { driver: 'Driver', staff: 'Desk', fleet_owner: 'Partner' };
 
 const fmtSec = (s) => {
@@ -90,9 +97,13 @@ export default function CallLogList({ logs, emptyText = 'No recorded calls yet.'
   return (
     <div className="flex flex-col gap-2">
       {logs.map((log) => {
-        const st = log.routing?.skippedCaller?.leftNobody && ['no_agents', 'missed'].includes(log.status)
-          ? { color: 'amber', label: 'Not rung — called from the ring phone' }
-          : STATUS[log.status] || { color: 'gray', label: log.status };
+        const st = log.statusUnconfirmed
+          ? { color: 'gray', label: 'Status unconfirmed' }
+          : log.liveState === 'in_call'
+            ? { color: 'blue', label: 'In call' }
+            : log.routing?.skippedCaller?.leftNobody && ['no_agents', 'missed'].includes(log.status)
+              ? { color: 'amber', label: 'Not rung — called from the ring phone' }
+              : STATUS[log.status] || { color: 'gray', label: log.status };
         const inbound = log.direction === 'inbound';
         const about = log.trip?.tripNumber
           ? `Trip ${log.trip.tripNumber}${log.trip.patientName ? ` · ${log.trip.patientName}` : ''}`
@@ -132,6 +143,13 @@ export default function CallLogList({ logs, emptyText = 'No recorded calls yet.'
                     Plivo: {log.hangup?.HangupCauseName || log.hangupCause}
                     {log.hangup?.HangupCauseCode && <> ({log.hangup.HangupCauseCode})</>}
                     {log.hangup?.HangupSource && <> · ended by {log.hangup.HangupSource}</>}
+                  </div>
+                )}
+                {/* The call is over but Plivo's final report never reached
+                    us, so whether it was answered is not known. */}
+                {log.statusUnconfirmed && (
+                  <div className="text-[11px] mt-0.5" style={{ color: 'var(--amber)' }}>
+                    {UNCONFIRMED_WHY[log.statusUnconfirmedReason] || 'This call has ended'}, but its final outcome never reached the CRM — answered or missed is not known.
                   </div>
                 )}
                 {inbound && <PhoneLegLine log={log} />}

@@ -258,6 +258,7 @@ function Performance({ isOwner, onPeople }) {
           <span>Answered: <b style={{ color: 'var(--accent)' }}>{t.answered}</b></span>
           <span>Missed (team): <b style={{ color: t.missed ? 'var(--red)' : 'var(--text)' }}>{t.missed}</b></span>
           {t.inProgress > 0 && <span>Ringing now: <b>{t.inProgress}</b></span>}
+          {t.unconfirmed > 0 && <span title="Ended, but the final outcome never reached the CRM">Status unconfirmed: <b>{t.unconfirmed}</b></span>}
           {isOwner && t.answeredUnattributed > 0 && (
             <span style={{ color: 'var(--text3)' }}>{t.answeredUnattributed} answered before "answered by" was recorded</span>
           )}
