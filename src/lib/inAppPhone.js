@@ -22,11 +22,16 @@ const RELOGIN_DELAY_MS = 3 * 1000;
 const initial = {
   status  : 'off',  // off | starting | ready | mic_blocked | unsupported | error
   error   : '',
-  incoming: null,   // { callUUID, logId, log }
-  inCall  : null,   // { callUUID, logId, log, startedAt, muted }
+  incoming: null,   // { callUUID, logId, log, transferred }
+  // { callUUID, logId, log, startedAt, muted, transferred, canTransfer,
+  //   transferring, transferDone, transferNote, transferError }
+  inCall  : null,
 };
 
 let state = { ...initial };
+// Calls the server confirmed this user answered (POST /calls/:id/answered
+// claimed: true) — only those offer Transfer.
+const claimedLogs = new Set();
 const listeners = new Set();
 const set = (patch) => { state = { ...state, ...patch }; listeners.forEach((l) => l(state)); };
 
@@ -337,7 +342,12 @@ function wire(c) {
     record('ui:in_call', [{ callUUID }]);
     set({
       incoming: null,
-      inCall: { callUUID, logId: from.logId, log: from.log, startedAt: Date.now(), muted: false },
+      inCall: {
+        callUUID, logId: from.logId, log: from.log, startedAt: Date.now(), muted: false,
+        transferred: !!from.transferred,
+        // Transfer is offered once the server confirms this user took the call.
+        canTransfer: !!from.logId && claimedLogs.has(from.logId),
+      },
     });
   });
   // onCallTerminated is ({originator, reason}, callInfo); onCallFailed is
@@ -354,10 +364,12 @@ async function showIncoming(callUUID, extraHeaders, source) {
   if (callUUID && state.incoming?.callUUID === callUUID) return;
   if (callUUID && state.inCall?.callUUID === callUUID) return;
   const logId = headerValue(extraHeaders, 'X-PH-logId');
-  record('ui:incoming_shown', [{ callUUID, logId, source }]);
-  set({ incoming: { callUUID, logId, log: null } });
+  // Set by the backend on a call a colleague transferred from the CRM.
+  const transferred = String(headerValue(extraHeaders, 'X-PH-transfer') || '') === '1';
+  record('ui:incoming_shown', [{ callUUID, logId, source, transferred }]);
+  set({ incoming: { callUUID, logId, log: null, transferred } });
   const log = await loadCallInfo(logId);
-  if (state.incoming?.callUUID === callUUID) set({ incoming: { callUUID, logId, log } });
+  if (state.incoming?.callUUID === callUUID) set({ incoming: { callUUID, logId, log, transferred } });
 }
 
 // Clears the ringing screen only if it is for this call (or the event
@@ -522,7 +534,34 @@ export function answer() {
   if (!client || !inc) return;
   // Any other call that rings while we're on this one is turned away.
   client.answer(inc.callUUID, 'reject');
-  if (inc.logId) callsApi.answered(inc.logId).catch(() => {});
+  if (inc.logId) {
+    const logId = inc.logId;
+    callsApi.answered(logId).then(({ data }) => {
+      if (!data?.claimed) return;
+      claimedLogs.add(logId);
+      if (state.inCall?.logId === logId) set({ inCall: { ...state.inCall, canTransfer: true } });
+    }).catch(() => {});
+  }
+}
+
+// Hands the call you are on to the other telecallers. The server keeps the
+// caller connected to you if nobody is available or Plivo refuses; on
+// success Plivo drops your leg itself (hung up here too if it lingers).
+export async function transfer() {
+  const c = state.inCall;
+  if (!c?.logId || c.transferring || c.transferDone) return;
+  const same = () => state.inCall && state.inCall.callUUID === c.callUUID;
+  set({ inCall: { ...c, transferring: true, transferError: null } });
+  record('ui:transfer_pressed', [{ callUUID: c.callUUID, logId: c.logId }]);
+  try {
+    const { data } = await callsApi.transfer(c.logId);
+    if (!same()) return;
+    set({ inCall: { ...state.inCall, transferring: false, transferDone: true, transferNote: data?.message || 'Transferring…' } });
+    setTimeout(() => { if (same() && client) { try { client.hangup(); } catch { /* already gone */ } } }, 5000);
+  } catch (err) {
+    if (!same()) return;
+    set({ inCall: { ...state.inCall, transferring: false, transferError: err?.response?.data?.message || 'The transfer did not go through. You are still connected to the caller.' } });
+  }
 }
 
 export function reject() {

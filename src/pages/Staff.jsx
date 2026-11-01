@@ -331,6 +331,14 @@ const Staff = () => {
                 <td className="p-4 font-mono text-xs">{s.phone}</td>
                 <td className="p-4">
                   <span className={`badge ${s.role === 'driver' ? 'badge-green' : 'badge-blue'} text-xs capitalize`}>{s.role}</span>
+                  {/* A transferred call rings the on-duty English speakers first. */}
+                  {s.role === 'telecaller' && (
+                    <label className="flex items-center gap-1.5 mt-1.5 text-xs cursor-pointer whitespace-nowrap" style={{ color: 'var(--text2)' }}>
+                      <input type="checkbox" checked={!!s.speaksEnglish} aria-label={`${s.name} speaks English`}
+                        onChange={e => handleUpdate(s._id, { speaksEnglish: e.target.checked })} />
+                      Speaks English
+                    </label>
+                  )}
                 </td>
                 <td className="p-4">
                   {s.role === 'driver' && (

@@ -21,7 +21,9 @@ async function messageFrom(err) {
   }
 }
 
-export default function RecordingPlayer({ callLogId }) {
+// part: a part recorded after a transfer (none: the call's first part).
+// label: the button text, when a call has more than one recording.
+export default function RecordingPlayer({ callLogId, part, label = 'Play recording' }) {
   const [src,     setSrc]     = useState(null);
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
@@ -33,7 +35,7 @@ export default function RecordingPlayer({ callLogId }) {
     setLoading(true);
     setError('');
     try {
-      const { data } = await callsApi.recording(callLogId);
+      const { data } = await callsApi.recording(callLogId, part);
       const blob = data.type ? data : new Blob([data], { type: 'audio/mpeg' });
       urlRef.current = URL.createObjectURL(blob);
       setSrc(urlRef.current);
@@ -58,7 +60,7 @@ export default function RecordingPlayer({ callLogId }) {
         style={{ background: 'rgba(59,158,255,.12)', color: 'var(--blue)', border: '1px solid rgba(59,158,255,.3)' }}
       >
         {loading ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
-        {loading ? 'Loading recording…' : 'Play recording'}
+        {loading ? 'Loading recording…' : label}
       </button>
       {error && <div className="text-[11px] mt-1" style={{ color: 'var(--red)' }}>{error}</div>}
     </div>

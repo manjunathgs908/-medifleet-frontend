@@ -48,6 +48,37 @@ const UNCONFIRMED_WHY = {
 
 const AGENT_TYPE = { driver: 'Driver', staff: 'Desk', fleet_owner: 'Partner' };
 
+// A live transfer's outcome (backend CallLog.transfers[].outcome).
+const TRANSFER_OUTCOME = {
+  ringing       : { color: 'var(--blue)',   text: 'ringing telecallers…' },
+  answered      : { color: 'var(--accent)', text: 'taken' },
+  rang_back     : { color: 'var(--accent)', text: 'nobody took it — rang back' },
+  not_answered  : { color: 'var(--red)',    text: 'nobody answered, ring-back included — caller heard the sorry message' },
+  caller_hung_up: { color: 'var(--amber)',  text: 'caller hung up while on hold' },
+  failed        : { color: 'var(--amber)',  text: 'did not go through — the caller stayed connected' },
+};
+
+// One line per transfer: who handed it on, and who took it.
+function TransferHistory({ transfers }) {
+  if (!transfers?.length) return null;
+  return (
+    <div className="mt-1 space-y-0.5">
+      {transfers.map((t, i) => {
+        const o = TRANSFER_OUTCOME[t.outcome] || { color: 'var(--text3)', text: t.outcome };
+        return (
+          <div key={i} className="text-[11px]" style={{ color: 'var(--text2)' }}>
+            Transferred by {t.byName || 'staff'}{t.at && <> at {fmtDateTime(t.at)}</>}
+            {' → '}
+            {t.answeredByName && ['answered', 'rang_back'].includes(t.outcome)
+              ? <span style={{ color: o.color }}>{t.outcome === 'rang_back' ? 'rang back, ' : ''}taken by {t.answeredByName}{t.answeredIn === 'phone' ? ' (phone)' : ''}{fmtSec(t.talkSec) && <> · talk {fmtSec(t.talkSec)}</>}</span>
+              : <span style={{ color: o.color }}>{o.text}</span>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // Phone-leg verdicts worth acting on, shown on the card itself.
 const ACTIONABLE_VERDICTS = ['busy_no_ring', 'busy_no_ring_unchecked', 'busy_overlap', 'not_reached'];
 
@@ -211,13 +242,19 @@ export default function CallLogList({ logs, emptyText = 'No recorded calls yet.'
                   <div className="text-[11px] mt-1 font-semibold" style={{ color: 'var(--amber)' }}>{log.routing.skippedCaller.message}</div>
                 )}
                 {verdict && <div className="text-[11px] mt-1" style={{ color: 'var(--amber)' }}>{verdict}</div>}
+                <TransferHistory transfers={log.transfers} />
               </div>
               {showCallBack && log.customerMasked && <CallButton target={{ callLogId: log._id }} label="Call back" />}
             </div>
             {/* Streamed through the backend; the Plivo URL is never sent here.
                 Only answered calls are recorded, so a missed one just says so
                 — no Play button, no error. */}
-            {log.hasRecording && <RecordingPlayer callLogId={log._id} />}
+            {log.hasRecording && <RecordingPlayer callLogId={log._id} label={log.recordings?.length ? 'Play recording · before transfer' : undefined} />}
+            {/* One more recording per transfer that someone took — same call. */}
+            {(log.recordings || []).map((r) => (
+              <RecordingPlayer key={r.part} callLogId={log._id} part={r.part}
+                label={`Play recording · after transfer${log.transfers?.[r.part]?.answeredByName ? ` (${log.transfers[r.part].answeredByName})` : ''}`} />
+            ))}
             {!log.hasRecording && log.recordingState === 'not_answered' && !['ringing', 'initiated', 'agent_answered'].includes(log.status) && (
               <div className="text-[11px] mt-1.5" style={{ color: 'var(--text3)' }}>No recording — call not answered</div>
             )}

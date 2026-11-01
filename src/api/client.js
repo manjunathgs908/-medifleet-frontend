@@ -216,10 +216,14 @@ export const callsApi = {
   // TEMPORARY: sessions + this user's devices (online or not).
   debugSessions: ()       => api.get('/calls/webrtc/debug', { params: { limit: 300 }, skipErrorToast: true }),
   answered   : (id)       => api.post(`/calls/${id}/answered`, {}, { skipErrorToast: true }),
+  // Live transfer of the incoming call you are on to the other telecallers
+  // (English speakers first). The screen shows the server's message.
+  transfer   : (id)       => api.post(`/calls/${id}/transfer`, {}, { skipErrorToast: true }),
   // The recording, streamed through the backend (which holds the Plivo
   // credentials). Fetched as a blob because an <audio src> cannot send the
   // login token; the Plivo URL itself never reaches the browser.
-  recording  : (id)       => api.get(`/calls/${id}/recording`, { responseType: 'blob', skipErrorToast: true, timeout: 60000 }),
+  // part: the part recorded after that transfer (none: the first part).
+  recording  : (id, part) => api.get(`/calls/${id}/recording`, { params: part != null ? { part } : undefined, responseType: 'blob', skipErrorToast: true, timeout: 60000 }),
 };
 
 // Google Places / Directions, proxied by the backend so the Maps key stays

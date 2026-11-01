@@ -4,10 +4,10 @@
 // duty with "Ring in app" chosen, and draws
 //   - the full-screen incoming-call screen: masked caller, the trip or lead
 //     it matches, big Answer / Reject (the SDK plays the ring tone), and
-//   - the in-call bar: who, how long, mute, hang up.
+//   - the in-call bar: who, how long, mute, transfer, hang up.
 // Also exports useInAppPhone() for the header's status chip.
 import React, { useEffect, useState } from 'react';
-import { Phone, PhoneOff, Mic, MicOff } from 'lucide-react';
+import { Phone, PhoneOff, PhoneForwarded, Mic, MicOff } from 'lucide-react';
 import * as phone from '../lib/inAppPhone';
 import { custPhone } from './ui';
 
@@ -48,7 +48,7 @@ export default function InAppPhone({ active }) {
       <div className="fixed inset-0 z-[300] flex flex-col items-center justify-center p-6"
         style={{ background: 'rgba(5,8,18,.96)', backdropFilter: 'blur(8px)' }}>
         <div className="text-xs uppercase tracking-widest mb-3 pulse-dot" style={{ color: 'var(--accent)' }}>
-          Incoming call · 918065591088
+          {s.incoming.transferred ? 'Transferred call' : 'Incoming call'} · 918065591088
         </div>
         <div className="w-20 h-20 rounded-full flex items-center justify-center mb-5"
           style={{ background: 'rgba(0,212,170,.15)', border: '2px solid rgba(0,212,170,.4)' }}>
@@ -69,7 +69,9 @@ export default function InAppPhone({ active }) {
           </button>
         </div>
         <div className="text-[11px] mt-8 text-center max-w-xs" style={{ color: 'var(--text3)' }}>
-          Others on call duty are ringing too — the first to answer takes the call. Rejecting leaves it ringing for them.
+          {s.incoming.transferred
+            ? 'A colleague transferred this caller — they are on hold. Others may be ringing too; the first to answer takes the call.'
+            : 'Others on call duty are ringing too — the first to answer takes the call. Rejecting leaves it ringing for them.'}
         </div>
       </div>
     );
@@ -84,8 +86,20 @@ export default function InAppPhone({ active }) {
           <span className="w-2.5 h-2.5 rounded-full pulse-dot" style={{ background: 'var(--accent)' }} />
           <div className="min-w-0 flex-1">
             <div className="font-bold font-mono truncate">{who}</div>
-            <div className="text-xs truncate" style={{ color: 'var(--text3)' }}>{about} · <Elapsed since={s.inCall.startedAt} /> · recorded</div>
+            <div className="text-xs truncate" style={{ color: 'var(--text3)' }}>{s.inCall.transferred ? 'Transferred · ' : ''}{about} · <Elapsed since={s.inCall.startedAt} /> · recorded</div>
           </div>
+          {/* Only while connected, and only for the person the server says
+              took this call. */}
+          {s.inCall.canTransfer && !s.inCall.transferDone && (
+            <button onClick={phone.transfer} disabled={s.inCall.transferring} aria-label="Transfer call"
+              title="Transfer to another telecaller (English speakers first)"
+              className="h-11 px-3 rounded-full flex items-center justify-center gap-1.5 text-xs font-semibold disabled:opacity-60"
+              style={{ minWidth: 44, background: 'var(--surface2)', color: 'var(--blue)' }}>
+              <PhoneForwarded size={16} />
+              {/* Icon only on a phone, so the caller's digits stay readable. */}
+              <span className="hidden sm:inline">{s.inCall.transferring ? 'Transferring…' : 'Transfer'}</span>
+            </button>
+          )}
           <button onClick={phone.toggleMute} aria-label={s.inCall.muted ? 'Unmute' : 'Mute'}
             className="w-11 h-11 rounded-full flex items-center justify-center"
             style={{ background: 'var(--surface2)', color: s.inCall.muted ? 'var(--amber)' : 'var(--text2)' }}>
@@ -97,6 +111,15 @@ export default function InAppPhone({ active }) {
             <PhoneOff size={18} />
           </button>
         </div>
+        {s.inCall.transferring && (
+          <div role="status" className="text-xs mt-2 sm:hidden" style={{ color: 'var(--blue)' }}>Transferring…</div>
+        )}
+        {s.inCall.transferError && (
+          <div role="alert" className="text-xs mt-2" style={{ color: 'var(--amber)' }}>{s.inCall.transferError}</div>
+        )}
+        {s.inCall.transferNote && (
+          <div role="status" className="text-xs mt-2" style={{ color: 'var(--accent)' }}>{s.inCall.transferNote} The caller hears a hold message; you will be disconnected.</div>
+        )}
       </div>
     );
   }
