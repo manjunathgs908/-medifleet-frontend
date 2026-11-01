@@ -60,7 +60,9 @@ export default function DashboardPage() {
 
       {/* Live counters */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Active Trips"      value={live?.counts?.active || 0}        color="amber" icon={<Clock size={16}/>} />
+        {/* Same server counts as the Dispatch board (GET /api/trips/live). */}
+        <StatCard label="Active Trips"      value={live?.counts?.active || 0}        color="amber" icon={<Clock size={16}/>}
+          sub={live?.counts?.overdue ? `⚠️ ${live.counts.overdue} overdue, no crew` : undefined} />
         <StatCard label="Available Units"   value={live?.counts?.available || 0}     color="green" icon={<Truck size={16}/>} />
         <StatCard label="Month Revenue"     value={rupee(dm.collectedRevenue || 0)}  color="green" icon={<TrendingUp size={16}/>} />
         <StatCard label="Trips This Month"  value={dm.completedTrips || 0}           color="blue"  icon={<CheckCircle size={16}/>} />
@@ -108,8 +110,11 @@ export default function DashboardPage() {
                       <div className="font-medium text-xs">{t.patientName}</div>
                       <span className="badge badge-amber text-[10px]">{t.status}</span>
                     </div>
+                    {t.dispatch?.state === 'overdue_unassigned' && (
+                      <div className="text-[10px] font-semibold mt-1" style={{ color: 'var(--red)' }}>⚠️ Overdue — no crew assigned</div>
+                    )}
                     <div className="text-[11px] mt-1" style={{ color: 'var(--text3)' }}>
-                      🚑 {t.vehicle?.registrationNumber} · {t.driver?.name}
+                      {(t.dispatch ? t.dispatch.state === 'assigned' : t.driver) ? <>🚑 {t.vehicle?.registrationNumber || t.ambulance?.registrationNumber} · {t.driver?.name}</> : 'No crew assigned'}
                     </div>
                   </div>
                 ))

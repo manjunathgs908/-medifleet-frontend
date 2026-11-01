@@ -81,6 +81,46 @@ const scheduleLabel = (t) => {
   return when ? `Scheduled · ${when}` : '';
 };
 
+// How urgent an active booking is — computed by the server
+// (GET /api/trips/live → trip.dispatch), the same figures the Dashboard
+// shows. Nothing here hides, completes or cancels a booking.
+const fmtMinutes = (m) => {
+  const n = Math.max(0, Math.round(Number(m) || 0));
+  if (n < 60) return `${n} min`;
+  if (n < 24 * 60) return `${Math.floor(n / 60)}h ${n % 60}m`;
+  return `${Math.floor(n / 1440)}d ${Math.floor((n % 1440) / 60)}h`;
+};
+// A crew has the trip: the server's rule (a driver AND their ambulance), so
+// a trip "dispatched" to an ambulance with no driver still offers Assign.
+const crewAssigned = (t) => (t.dispatch ? t.dispatch.state === 'assigned' : !!t.driver);
+// Board order: what needs a crew most urgently first.
+const URGENCY_RANK = { overdue_unassigned: 0, scheduled_due_soon: 1, awaiting_assignment: 2, assigned: 3, scheduled_upcoming: 4 };
+const sortByUrgency = (trips) => [...trips].sort((a, b) =>
+  (URGENCY_RANK[a.dispatch?.state] ?? 3) - (URGENCY_RANK[b.dispatch?.state] ?? 3)
+  || (b.dispatch?.overdueMinutes || 0) - (a.dispatch?.overdueMinutes || 0));
+
+function UrgencyLine({ d }) {
+  if (!d || d.state === 'assigned') return null;
+  const line = {
+    overdue_unassigned : { color: 'var(--red)',   text: d.scheduled
+      ? `⚠️ Overdue — pickup was due ${fmtMinutes(d.overdueMinutes)} ago, no crew assigned`
+      : `⚠️ Overdue — no crew assigned for ${fmtMinutes(d.overdueMinutes)}` },
+    awaiting_assignment: { color: 'var(--amber)', text: `⏳ Waiting for a crew · booked ${fmtMinutes(d.ageMinutes)} ago` },
+    scheduled_due_soon : { color: 'var(--amber)', text: d.minutesToPickup >= 0
+      ? `📅 Pickup in ${fmtMinutes(d.minutesToPickup)} — assign a crew now`
+      : `📅 Pickup was due ${fmtMinutes(-d.minutesToPickup)} ago — assign a crew now` },
+    scheduled_upcoming : { color: 'var(--text3)', text: `📅 Pickup in ${fmtMinutes(d.minutesToPickup)} · no crew yet` },
+  }[d.state];
+  if (!line) return null;
+  return <div className="text-[11px] font-semibold mb-2" style={{ color: line.color }}>{line.text}</div>;
+}
+
+// Reasons offered when an operator cancels a booking; the server requires one.
+const CANCEL_REASONS = [
+  'Customer cancelled', 'Customer unreachable', 'Duplicate booking', 'Test booking',
+  'No ambulance available', 'Booked with another provider',
+];
+
 const EMERGENCY_LABELS = Object.fromEntries(EMERGENCY_TYPES.map((o) => [o.value, o.label]));
 
 // One implementation, rendered by both the new-booking popup and the Active
@@ -163,6 +203,9 @@ export default function DispatchPage() {
   const [hospitals, setHospitals] = useState([]);
   const [vehicles,  setVehicles]  = useState([]);
   const [liveTrips, setLiveTrips] = useState([]);
+  const [liveCounts, setLiveCounts] = useState(null); // server's board counts (same as the Dashboard's)
+  const [detailsId, setDetailsId] = useState(null);   // booking whose details are open
+  const [cancelling, setCancelling] = useState(null); // { trip, reason, note, saving }
   const [loading,   setLoading]   = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [billModal, setBillModal]   = useState(null);
@@ -384,7 +427,8 @@ export default function DispatchPage() {
         knownTripIdsRef.current = currentIds;
       }
 
-      setLiveTrips(trips);
+      setLiveTrips(sortByUrgency(trips));
+      setLiveCounts(data.counts || null);
       // Ambulance-sourced units only. The legacy Vehicle collection is
       // empty in production and nothing creates one, so a 'vehicle' entry
       // here would be a row a dispatcher could pick that no driver is
@@ -456,11 +500,23 @@ export default function DispatchPage() {
     } catch { /* axios interceptor shows error */ }
   };
 
-  const cancel = async (tripId) => {
-    if (!window.confirm('Cancel this trip?')) return;
-    await tripsApi.cancel(tripId, 'Cancelled by dispatcher');
-    toast.success('Trip cancelled');
-    await loadLiveBoard();
+  // Cancelling is explicit and always says why (the server refuses it
+  // otherwise) — an old booking is never cancelled just for being old.
+  const cancel = (trip) => setCancelling({ trip, reason: '', note: '', saving: false });
+  const cancelReasonText = (c) => [c.reason, c.note.trim()].filter(Boolean).join(' — ');
+  const confirmCancel = async () => {
+    const reason = cancelReasonText(cancelling);
+    if (reason.length < 3) { toast.error('Choose or type a reason for cancelling'); return; }
+    setCancelling((c) => ({ ...c, saving: true }));
+    try {
+      await tripsApi.cancel(cancelling.trip._id, reason);
+      toast.success('Booking cancelled');
+      setCancelling(null);
+      await loadLiveBoard();
+    } catch {
+      setCancelling((c) => c && ({ ...c, saving: false })); // axios interceptor shows the error
+      await loadLiveBoard(); // e.g. someone else just assigned or completed it
+    }
   };
 
   // id is a merged-list entry's _id; source tells us whether it came
@@ -756,7 +812,17 @@ export default function DispatchPage() {
         <div className="lg:col-span-2 flex flex-col gap-4">
           <div className="card flex-1">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold font-display text-sm">Active Trips</h3>
+              <div>
+                <h3 className="font-bold font-display text-sm">Active Trips</h3>
+                {liveCounts && (
+                  <div className="text-[11px] mt-0.5 flex flex-wrap gap-x-2" style={{ color: 'var(--text3)' }}>
+                    <span>{liveCounts.active} active</span>
+                    {liveCounts.overdue > 0 && <span style={{ color: 'var(--red)', fontWeight: 600 }}>⚠️ {liveCounts.overdue} overdue, no crew</span>}
+                    {liveCounts.scheduledDueSoon > 0 && <span style={{ color: 'var(--amber)' }}>{liveCounts.scheduledDueSoon} scheduled pickup soon</span>}
+                    {liveCounts.scheduledUpcoming > 0 && <span>{liveCounts.scheduledUpcoming} scheduled later</span>}
+                  </div>
+                )}
+              </div>
               <button onClick={loadLiveBoard}
                 className="p-1.5 rounded-lg transition-all"
                 style={{ color: 'var(--text3)', background: 'var(--surface2)' }}>
@@ -768,8 +834,9 @@ export default function DispatchPage() {
               ? <div className="text-center py-10 text-sm" style={{ color: 'var(--text3)' }}>No active trips</div>
               : <div className="space-y-3 overflow-y-auto" style={{ maxHeight: 480 }}>
                   {liveTrips.map(t => (
-                    <div key={t._id} className="rounded-xl p-3"
-                      style={{ background: 'var(--surface2)', border: '1px solid var(--border2)' }}>
+                    <div key={t._id} className="rounded-xl p-3" data-trip-id={t._id} data-urgency={t.dispatch?.state || ''}
+                      style={{ background: 'var(--surface2)', border: t.dispatch?.state === 'overdue_unassigned' ? '1px solid rgba(255,77,109,.55)' : '1px solid var(--border2)' }}>
+                      <UrgencyLine d={t.dispatch} />
                       <div className="flex justify-between items-start mb-2">
                         <div>
                           <div className="font-semibold text-sm">{t.patientName}</div>
@@ -792,7 +859,7 @@ export default function DispatchPage() {
                           keyed on driver, not vehicle: an ambulance-sourced
                           assignment (owner/driver on duty via the mobile
                           app) never sets trip.vehicle at all. ── */}
-                      {!t.driver ? (
+                      {!crewAssigned(t) ? (
                         <div className="mb-2.5">
                           <select
                             className="inp text-xs py-1.5 w-full"
@@ -886,16 +953,34 @@ export default function DispatchPage() {
                         </div>
                       )}
 
+                      {detailsId === t._id && (
+                        <div className="text-[11px] font-mono mt-2.5 rounded-lg p-2 space-y-0.5" style={{ background: 'var(--surface)', color: 'var(--text2)' }}>
+                          <div>Trip {t.tripNumber || t._id} · {t.status}{t.bookingSource ? ` · via ${t.bookingSource}` : ''}</div>
+                          <div>Booked {fmtStamp(t.createdAt)}{t.dispatch ? ` · ${fmtMinutes(t.dispatch.ageMinutes)} ago` : ''}</div>
+                          <div>Pickup wanted {t.dispatch?.scheduled ? fmtStamp(t.dispatch.pickupAt) : 'right away'}</div>
+                          <div>Crew: {crewAssigned(t) ? `${t.driver?.name || 'assigned'}${t.ambulance?.registrationNumber || t.vehicle?.registrationNumber ? ` · ${t.ambulance?.registrationNumber || t.vehicle?.registrationNumber}` : ''}` : 'none assigned'}</div>
+                        </div>
+                      )}
+
                       <div className="flex gap-2 mt-2.5">
-                        <button onClick={() => complete(t._id)}
-                          className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                          style={{ background: 'rgba(0,212,170,.1)', color: 'var(--accent)', border: '1px solid rgba(0,212,170,.2)' }}>
-                          <CheckCircle size={11}/> Complete
+                        {/* Complete only once a crew has the trip; an
+                            unassigned booking is assigned or cancelled. */}
+                        {crewAssigned(t) && (
+                          <button onClick={() => complete(t._id)}
+                            className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                            style={{ background: 'rgba(0,212,170,.1)', color: 'var(--accent)', border: '1px solid rgba(0,212,170,.2)' }}>
+                            <CheckCircle size={11}/> Complete
+                          </button>
+                        )}
+                        <button onClick={() => setDetailsId(detailsId === t._id ? null : t._id)}
+                          className="flex-1 py-1.5 rounded-lg text-xs font-semibold"
+                          style={{ background: 'var(--surface)', color: 'var(--text2)', border: '1px solid var(--border2)' }}>
+                          {detailsId === t._id ? 'Hide details' : 'Details'}
                         </button>
-                        <button onClick={() => cancel(t._id)}
-                          className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+                        <button onClick={() => cancel(t)} title="Cancel this booking (a reason is required)"
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1"
                           style={{ background: 'rgba(255,77,109,.08)', color: 'var(--red)', border: '1px solid rgba(255,77,109,.2)' }}>
-                          <XCircle size={11}/>
+                          <XCircle size={11}/> Cancel
                         </button>
                       </div>
                     </div>
@@ -1048,6 +1133,33 @@ export default function DispatchPage() {
             <Btn type="button" variant="ghost" onClick={closeQuote}>Cancel</Btn>
           </div>
         </form>
+      </Modal>
+
+      {/* ── Cancel a booking — always with a reason ── */}
+      <Modal open={!!cancelling} onClose={() => !cancelling?.saving && setCancelling(null)} title="Cancel booking" width="max-w-md">
+        {cancelling && (
+          <div className="space-y-3">
+            <div className="text-sm">
+              <b>{cancelling.trip.patientName || 'Booking'}</b>
+              {cancelling.trip.dispatch && <span style={{ color: 'var(--text3)' }}> · booked {fmtMinutes(cancelling.trip.dispatch.ageMinutes)} ago</span>}
+            </div>
+            <div className="text-xs" style={{ color: 'var(--text3)' }}>
+              Cancel only if this booking really is not going ahead. If it still needs an ambulance, close this and assign a crew instead.
+            </div>
+            <select className="inp w-full" value={cancelling.reason} onChange={(e) => setCancelling((c) => ({ ...c, reason: e.target.value }))}>
+              <option value="">Reason…</option>
+              {CANCEL_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+            <input className="inp w-full" placeholder={cancelling.reason ? 'Note (optional)' : 'Or type the reason'} maxLength={200}
+              value={cancelling.note} onChange={(e) => setCancelling((c) => ({ ...c, note: e.target.value }))} />
+            <div className="flex justify-end gap-2">
+              <Btn variant="ghost" onClick={() => setCancelling(null)} disabled={cancelling.saving}>Keep booking</Btn>
+              <Btn variant="danger" onClick={confirmCancel} disabled={cancelling.saving || cancelReasonText(cancelling).length < 3}>
+                {cancelling.saving ? 'Cancelling…' : 'Cancel booking'}
+              </Btn>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* ── Bill Modal ── */}
