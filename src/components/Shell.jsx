@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { sosApi, tripCallEventsApi, callsApi, callbacksApi, leadsApi } from '../api/client';
 import { InstallAppButton } from '../lib/installApp';
 import InAppPhone, { useInAppPhone } from './InAppPhone';
+import PhoneCallBar from './PhoneCallBar';
 import { APP_BUILD } from '../lib/pwaUpdate';
 import { fmtDateTime } from './ui';
 import toast from 'react-hot-toast';
@@ -619,6 +620,10 @@ export default function Shell({ children }) {
       {/* In-app calling: ringing screen + in-call bar. Live only while on
           duty with "Ring in app" chosen. */}
       {isCallStaff && <InAppPhone active={!!onDuty && callMode === 'app'} />}
+      {/* A call answered on your own phone (the native dialer): shown with
+          Transfer while it lasts. Either ring mode — "Ring in app" falls
+          through to phones when nobody answers in the app. */}
+      {isCallStaff && <PhoneCallBar active={!!onDuty} />}
 
       {/* Phone bottom tab bar — hidden from md up, where the sidebar shows. */}
       <nav className="mobile-tabbar md:hidden fixed bottom-0 inset-x-0 z-40 flex"

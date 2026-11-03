@@ -17,7 +17,7 @@ export function useInAppPhone() {
   return s;
 }
 
-const describe = (log) => {
+export const describe = (log) => {
   if (!log) return { who: 'Customer', about: 'Incoming call' };
   const about = log.trip?.tripNumber
     ? `Trip ${log.trip.tripNumber}${log.trip.patientName ? ` · ${log.trip.patientName}` : ''}`
@@ -25,7 +25,7 @@ const describe = (log) => {
   return { who: custPhone(log.customerPhone, log.customerMasked, 'Unknown number'), about };
 };
 
-function Elapsed({ since }) {
+export function Elapsed({ since }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
   const s = Math.max(0, Math.floor((now - since) / 1000));

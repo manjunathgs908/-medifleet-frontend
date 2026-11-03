@@ -219,6 +219,9 @@ export const callsApi = {
   // Live transfer of the incoming call you are on to the other telecallers
   // (English speakers first). The screen shows the server's message.
   transfer   : (id)       => api.post(`/calls/${id}/transfer`, {}, { skipErrorToast: true }),
+  // The incoming call you answered on your own phone, while it lasts
+  // ({ call: null } when none). Polled by PhoneCallBar.
+  myLive     : ()         => api.get('/calls/my-live', { skipErrorToast: true }),
   // The recording, streamed through the backend (which holds the Plivo
   // credentials). Fetched as a blob because an <audio src> cannot send the
   // login token; the Plivo URL itself never reaches the browser.
