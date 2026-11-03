@@ -432,3 +432,27 @@ export const seoApi = {
   remove    : (id)            => api.delete(`/seo/articles/${id}`),
   facts     : ()              => api.get('/seo/facts'),
 };
+
+// GST invoicing (owner only): parties, service catalog, sale invoices and
+// bills of supply. Every figure is computed by the server; `calculate`
+// previews what is on screen without saving.
+export const invoicingApi = {
+  settings       : ()            => api.get('/invoicing/settings'),
+  saveSettings   : (d)           => api.put('/invoicing/settings', d, { skipErrorToast: true }),
+  setSeriesStart : (d)           => api.put('/invoicing/settings/series', d, { skipErrorToast: true }),
+  parties        : (all)         => api.get('/invoicing/parties', { params: all ? { all: 1 } : {} }),
+  createParty    : (d)           => api.post('/invoicing/parties', d, { skipErrorToast: true }),
+  updateParty    : (id, d)       => api.put(`/invoicing/parties/${id}`, d, { skipErrorToast: true }),
+  items          : (all)         => api.get('/invoicing/items', { params: all ? { all: 1 } : {} }),
+  createItem     : (d)           => api.post('/invoicing/items', d, { skipErrorToast: true }),
+  updateItem     : (id, d)       => api.put(`/invoicing/items/${id}`, d, { skipErrorToast: true }),
+  invoices       : (params)      => api.get('/invoicing/invoices', { params }),
+  invoice        : (id)          => api.get(`/invoicing/invoices/${id}`),
+  calculate      : (d)           => api.post('/invoicing/invoices/calculate', d, { skipErrorToast: true }),
+  createInvoice  : (d)           => api.post('/invoicing/invoices', d, { skipErrorToast: true }),
+  updateInvoice  : (id, d)       => api.put(`/invoicing/invoices/${id}`, d, { skipErrorToast: true }),
+  deleteDraft    : (id)          => api.delete(`/invoicing/invoices/${id}`, { skipErrorToast: true }),
+  issue          : (id, rev)     => api.post(`/invoicing/invoices/${id}/issue`, { rev }, { skipErrorToast: true }),
+  cancel         : (id, reason)  => api.post(`/invoicing/invoices/${id}/cancel`, { reason }, { skipErrorToast: true }),
+  recordPayment  : (id, d)       => api.post(`/invoicing/invoices/${id}/payments`, d, { skipErrorToast: true }),
+};

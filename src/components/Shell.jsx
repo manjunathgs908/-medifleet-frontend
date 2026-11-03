@@ -46,6 +46,7 @@ const NAV_GROUPS = [
   ] },
   { id: 'finance', label: 'Finance', items: [
     { label: 'Billing',     to: '/billing',    icon: Receipt,         roles: ['owner'] },
+    { label: 'GST Invoicing', to: '/invoicing', icon: FileText,      roles: ['owner'] },
     { label: 'Finance',     to: '/finance',    icon: TrendingUp,      roles: ['owner'] },
     { label: 'Salaries',    to: '/salary',     icon: Wallet,          roles: ['owner'] },
     { label: 'Advances',    to: '/advances',   icon: Banknote,        roles: ['owner'] },

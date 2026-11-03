@@ -15,6 +15,7 @@ import DispatchPage    from './pages/DispatchPage';
 import FleetPage       from './pages/FleetPage';
 import TripsPage       from './pages/TripsPage';
 import BillingPage     from './pages/BillingPage';
+import InvoicingPage   from './pages/InvoicingPage';
 import FinancePage     from './pages/FinancePage';
 import SalaryPage      from './pages/SalaryPage';
 import LeadsPage       from './pages/LeadsPage';
@@ -115,6 +116,11 @@ export default function App() {
               <Route path="fleet"      element={<FleetPage />} />
               <Route path="trips"      element={<TripsPage />} />
               <Route path="billing"    element={<BillingPage />} />
+              <Route path="invoicing"  element={
+                <ProtectedRoute roles={['owner']}>
+                  <InvoicingPage />
+                </ProtectedRoute>
+              } />
               <Route path="finance"    element={
                 <ProtectedRoute roles={['owner']}>
                   <FinancePage />
