@@ -44,56 +44,81 @@ const TAX_LABEL = { exempt: 'Exempt', nil: 'Nil rated', non_gst: 'Non-GST' };
 const webHost = (url) => String(url || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
 
 const STYLE = `
-@page{size:A4;margin:12mm}
-*{box-sizing:border-box}
-html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-body{font-family:"Segoe UI",system-ui,Arial,sans-serif;color:#1f2937;margin:0;padding:28px 32px;font-size:12px;line-height:1.45;background:#fff}
-@media print{body{padding:0}}
-.top{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
-.brand{display:flex;align-items:center;gap:14px}
-.logo{width:46px;height:62px;overflow:hidden;position:relative;flex:none}
-.logo img{position:absolute;width:86px;height:86px;left:-20px;top:-12px}
-.name{font-size:26px;font-weight:700;color:${BRAND.navy};letter-spacing:-.2px;line-height:1.1}
-.tagline{color:${BRAND.blue};font-weight:600;font-size:12px;margin-top:3px}
-.doc{text-align:right;min-width:210px}
-.doc .title{font-size:18px;font-weight:800;color:${BRAND.navy};letter-spacing:.6px}
-.doc table{margin-left:auto;margin-top:4px}
-.doc td{padding:1px 0 1px 10px;font-size:12px}
+/* One A4 page. margin:0 leaves the browser no margin to draw its URL /
+   date / page-number header and footer in; the sheet's own padding is the
+   white space instead. */
+@page{size:A4;margin:0}
+*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+html,body{margin:0;padding:0;background:#fff}
+body{font-family:"Segoe UI",system-ui,Arial,sans-serif;color:#1f2937;font-size:11px;line-height:1.35}
+/* The page itself: exactly A4 wide, ~10mm inside. Scaled to fit one page
+   by the script at the end when the content runs a little long. */
+.sheet{width:210mm;padding:9mm 10mm 8mm;margin:0 auto;background:#fff}
+@media screen{body{background:#f3f4f6}.sheet{box-shadow:0 1px 4px rgba(0,0,0,.12);margin:12px auto}}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:18px}
+.brand{display:flex;align-items:center;gap:10px}
+.logo{width:40px;height:54px;overflow:hidden;position:relative;flex:none}
+.logo img{position:absolute;width:75px;height:75px;left:-17.5px;top:-10.5px}
+.name{font-size:22px;font-weight:700;color:${BRAND.navy};letter-spacing:-.2px;line-height:1.1}
+.tagline{color:${BRAND.blue};font-weight:600;font-size:11px;margin-top:2px}
+.doc{text-align:right;min-width:190px}
+.doc .title{font-size:16px;font-weight:800;color:${BRAND.navy};letter-spacing:.6px}
+.doc table{margin-left:auto;margin-top:2px;border-collapse:collapse}
+.doc td{padding:0 0 0 8px;font-size:11px;line-height:1.45}
 .doc td.k{color:#6b7280;text-align:right}.doc td.v{font-weight:600;text-align:right}
-.issuer{margin-top:10px;color:#4b5563;font-size:11.5px}
+.issuer{margin-top:6px;color:#4b5563;font-size:10.5px;line-height:1.4}
 .issuer strong{color:#1f2937}
-.rule{height:3px;background:${BRAND.navy};margin:12px 0 16px;border-radius:2px}
-.stamp{display:inline-block;margin-top:6px;padding:2px 10px;border:2px solid;font-weight:800;font-size:12px;letter-spacing:1px}
+.rule{height:3px;background:${BRAND.navy};margin:8px 0 10px;border-radius:2px}
+.stamp{display:inline-block;margin-top:4px;padding:1px 8px;border:2px solid;font-weight:800;font-size:11px;letter-spacing:1px}
 .stamp.cancel{color:#b42318;border-color:#b42318}.stamp.draft{color:#6b7280;border-color:#6b7280}
-.parties{display:grid;grid-template-columns:1.25fr 1fr;gap:16px;margin-bottom:14px}
-.parties.three{grid-template-columns:1.15fr 1fr .9fr;gap:12px}
-.card{border:1px solid ${BRAND.line};border-radius:6px;overflow:hidden}
-.card h3{margin:0;background:${BRAND.tint};color:${BRAND.navy};font-size:11px;letter-spacing:.6px;text-transform:uppercase;padding:6px 10px}
-.card .body{padding:8px 10px}
-.card .pname{font-weight:700;font-size:13px;color:#111827}
-.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px}.kv .k{color:#6b7280}
+.parties{display:grid;grid-template-columns:1.25fr 1fr;gap:10px;margin-bottom:10px}
+.parties.three{grid-template-columns:1.15fr 1fr .95fr;gap:8px}
+.card{border:1px solid ${BRAND.line};border-radius:5px;overflow:hidden;break-inside:avoid}
+.card h3{margin:0;background:${BRAND.tint};color:${BRAND.navy};font-size:9.5px;letter-spacing:.6px;text-transform:uppercase;padding:4px 8px}
+.card .body{padding:5px 8px}
+.card .pname{font-weight:700;font-size:11.5px;color:#111827}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:1px 8px}.kv .k{color:#6b7280}
 table.items,table.tax{border-collapse:collapse;width:100%}
-table.items th,table.tax th{background:${BRAND.navy};color:#fff;font-weight:600;text-align:left;padding:7px 8px;font-size:11.5px}
-table.items td,table.tax td{padding:7px 8px;border-bottom:1px solid ${BRAND.line};vertical-align:top}
+table.items th,table.tax th{background:${BRAND.navy};color:#fff;font-weight:600;text-align:left;padding:5px 7px;font-size:10.5px}
+table.items td,table.tax td{padding:4px 7px;border-bottom:1px solid ${BRAND.line};vertical-align:top}
+table.items tr,table.tax tr{break-inside:avoid}
 table.items tr:nth-child(even) td{background:#fafcff}
 .n,table.items th.n,table.tax th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-.small{font-size:10.5px;color:#6b7280}
-.section-title{font-size:11px;font-weight:700;color:${BRAND.navy};text-transform:uppercase;letter-spacing:.6px;margin:14px 0 6px}
-.lower{display:grid;grid-template-columns:1.25fr 1fr;gap:16px;margin-top:14px;align-items:start}
-.totals{border:1px solid ${BRAND.line};border-radius:6px;overflow:hidden}
+.small{font-size:9.5px;color:#6b7280}
+.section-title{font-size:9.5px;font-weight:700;color:${BRAND.navy};text-transform:uppercase;letter-spacing:.6px;margin:8px 0 3px}
+.lower{display:grid;grid-template-columns:1.25fr 1fr;gap:12px;margin-top:9px;align-items:start}
+.totals{border:1px solid ${BRAND.line};border-radius:5px;overflow:hidden;break-inside:avoid}
 .totals table{width:100%;border-collapse:collapse}
-.totals td{padding:6px 10px;border-bottom:1px solid ${BRAND.line}}
-.totals tr.grand td{background:${BRAND.navy};color:#fff;font-weight:700;font-size:14px;border-bottom:0}
+.totals td{padding:4px 8px;border-bottom:1px solid ${BRAND.line}}
+.totals tr.grand td{background:${BRAND.navy};color:#fff;font-weight:700;font-size:12.5px;border-bottom:0}
 .totals tr.due td{font-weight:700;color:${BRAND.navy}}
-.words{background:${BRAND.tint};border-left:3px solid ${BRAND.navy};padding:8px 10px;border-radius:4px}
-.notes p{margin:0 0 6px}
-.bank{background:${BRAND.tint};border:1px solid ${BRAND.line};border-radius:6px;padding:8px 10px;margin-top:12px}
-.sign{margin-top:14px}
-.sign img{height:46px;display:block;margin:4px 0 2px}
+.words{background:${BRAND.tint};border-left:3px solid ${BRAND.navy};padding:5px 8px;border-radius:4px}
+.notes{font-size:10px;line-height:1.35}
+.notes p{margin:0 0 3px}
+.bank{background:${BRAND.tint};border:1px solid ${BRAND.line};border-radius:5px;padding:5px 8px;margin-top:7px;break-inside:avoid}
+.bank .section-title{margin:0 0 2px}
+.sign{margin-top:8px;break-inside:avoid}
+.sign img{height:38px;display:block;margin:2px 0 1px}
 .sign .who{font-weight:700;color:#111827}
-.footer{margin-top:22px;background:${BRAND.navy};color:#fff;text-align:center;padding:9px 12px;border-radius:4px;font-size:11.5px}
-.gen{text-align:center;color:#9ca3af;font-size:10.5px;margin-top:6px}
+.footer{margin-top:10px;background:${BRAND.navy};color:#fff;text-align:center;padding:6px 10px;border-radius:4px;font-size:10.5px;break-inside:avoid}
+.gen{text-align:center;color:#9ca3af;font-size:9.5px;margin-top:3px}
 `;
+
+// Keeps the invoice on one A4 page: when the sheet is taller than a page
+// (more lines, a long address), it is scaled down just enough — never below
+// 75% — and widened to match, so it still fills the page width. The sheet
+// has a fixed width, so this measures correctly even in the hidden print
+// frame. Runs as the page loads and again just before printing.
+const FIT_ONE_PAGE = `(function(){
+  var s=document.querySelector('.sheet'); if(!s) return;
+  function fit(){
+    s.style.zoom=''; s.style.width='';
+    var page=297*96/25.4-2, h=s.getBoundingClientRect().height;
+    if(h>page){ var z=Math.max(0.75,page/h); s.style.zoom=z; s.style.width=(210/z)+'mm';
+      var h2=s.getBoundingClientRect().height*z; if(h2>page&&z>0.75){ z=Math.max(0.75,z*page/h2); s.style.zoom=z; s.style.width=(210/z)+'mm'; } }
+  }
+  fit(); window.addEventListener('beforeprint',fit);
+})();`;
 
 function addressLines(a) {
   if (!a) return '';
@@ -257,5 +282,5 @@ export function gstInvoiceHtml({ invoice: inv, print: p }) {
   <div class="gen">This is a computer generated ${docWord.toLowerCase()}.</div>`;
 
   const title = `${p.title} ${inv.number || 'draft'}`;
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>${STYLE}</style></head><body>${body}</body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>${STYLE}</style></head><body><div class="sheet">${body}</div><script>${FIT_ONE_PAGE}</script></body></html>`;
 }
