@@ -816,14 +816,163 @@ function InvoicesTab() {
   );
 }
 
+// ── Bills to send (customer's bill on WhatsApp) ──────────────────
+// Every completed trip's bill waits here until the owner taps Send (unless
+// auto-send is on and it has no warnings). Sent once, as the trip_bill
+// WhatsApp message with a link to view and pay. Numbers are masked.
+const CB_VIEWS = [['to_send', 'To send'], ['sent', 'Sent'], ['dismissed', "Didn't send"]];
+const CB_WARNING = {
+  drop_wait_review : 'Drop waiting charged ₹0 — round trip without a "Starting Return" tap. Check the waiting time.',
+  no_distance      : 'No distance recorded for this trip.',
+  no_total         : 'The bill total is ₹0 or missing.',
+  far_from_estimate: 'More than 25% away from the fare estimated at booking.',
+  billed_elsewhere : 'Billed to a hospital or insurance, or on a hospital invoice.',
+};
+const CB_STATE = {
+  pending_review: ['Waiting for you', 'var(--blue)'],
+  sending       : ['Sending…', 'var(--text3)'],
+  sent          : ['Sent', 'var(--accent)'],
+  failed        : ['Not sent', 'var(--red)'],
+  no_phone      : ['No mobile', 'var(--amber)'],
+  dismissed     : ["Didn't send", 'var(--text3)'],
+};
+
+function CustomerBillCard({ b, onChanged }) {
+  const [busy, setBusy] = useState(false);
+  const [ack, setAck] = useState(false);
+  const [confirmDismiss, setConfirmDismiss] = useState(false);
+  const warned = b.warnings.length > 0;
+  const canAct = ['pending_review', 'failed', 'no_phone'].includes(b.state);
+
+  const send = async () => {
+    setBusy(true);
+    try {
+      await billingApi.sendCustomerBill(b.billId, warned && ack);
+      toast.success(`Bill sent to ${b.phoneMasked || 'the customer'} on WhatsApp.`);
+      onChanged();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'The bill could not be sent.');
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  };
+  const dismiss = async () => {
+    setBusy(true);
+    try {
+      await billingApi.dismissCustomerBill(b.billId);
+      onChanged();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Could not update this bill.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const [label, color] = CB_STATE[b.state] || [b.state, 'var(--text3)'];
+  const line = (k, v) => <div className="flex justify-between gap-3"><span style={{ color: 'var(--text3)' }}>{k}</span><span className="font-mono">{v}</span></div>;
+  return (
+    <div className="card-sm" data-customer-bill={b.billId} style={warned && canAct ? { borderColor: 'rgba(255,184,48,.45)' } : undefined}>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="font-semibold truncate">{b.patient || 'Customer'} · <span className="font-mono">{b.tripNumber}</span></div>
+          <div className="text-xs" style={{ color: 'var(--text3)' }}>
+            {b.billNumber} · {b.phoneMasked || 'no mobile'} · completed {b.completedAt ? fmtIst(b.completedAt) : '—'}
+          </div>
+        </div>
+        <span className="text-xs font-semibold" style={{ color }}>{label}</span>
+      </div>
+
+      <div className="text-xs mt-3 space-y-0.5 max-w-xs">
+        {line('Fare', rupee(b.baseFare))}
+        {line('Waiting', rupee(b.waitCharge))}
+        {line('Extras', rupee(b.additionalCharges))}
+        {line('GST', rupee(b.gstAmount))}
+        <div className="flex justify-between gap-3 font-semibold pt-1" style={{ borderTop: '1px solid var(--border)' }}><span>Total</span><span className="font-mono">{rupee(b.grandTotal)}</span></div>
+        {line('Paid', rupee(b.paidPaise / 100))}
+        {line('Balance due', rupee(b.balancePaise / 100))}
+        {b.estimatedFare > 0 && line('Estimated at booking', rupee(b.estimatedFare))}
+      </div>
+
+      {warned && (
+        <ul className="text-xs mt-3 space-y-1" role={canAct ? 'alert' : undefined} style={{ color: 'var(--amber)' }}>
+          {b.warnings.map((w) => <li key={w} className="flex gap-1.5"><AlertTriangle size={13} className="shrink-0 mt-0.5" aria-hidden="true" />{CB_WARNING[w] || w}</li>)}
+        </ul>
+      )}
+      {b.error && b.state !== 'sent' && <div className="text-xs mt-2" style={{ color: 'var(--red)' }}>{b.error}</div>}
+      {b.state === 'sent' && <div className="text-xs mt-2" style={{ color: 'var(--text3)' }}>Sent {fmtIst(b.sentAt)}{b.auto ? ' automatically' : b.byName ? ` by ${b.byName}` : ''}.</div>}
+      {b.state === 'dismissed' && b.byName && <div className="text-xs mt-2" style={{ color: 'var(--text3)' }}>Marked "don't send" by {b.byName}.</div>}
+
+      {canAct && (
+        <div className="mt-3 space-y-2">
+          {warned && (
+            <label className="flex items-start gap-2 text-xs cursor-pointer">
+              <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} className="mt-0.5" />
+              <span>I have checked the warnings above — this bill is correct.</span>
+            </label>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <Btn size="sm" onClick={send} disabled={busy || (warned && !ack)}>
+              {busy ? 'Sending…' : b.state === 'failed' ? 'Try again' : 'Send on WhatsApp'}
+            </Btn>
+            {!confirmDismiss
+              ? <Btn size="sm" variant="ghost" onClick={() => setConfirmDismiss(true)} disabled={busy}>Don't send</Btn>
+              : <Btn size="sm" variant="danger" onClick={dismiss} disabled={busy}>Confirm: don't send</Btn>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CustomerBillsTab() {
+  const [view, setView] = useState('to_send');
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+  const load = () => {
+    billingApi.customerBills(view)
+      .then(({ data: d }) => { setData(d); setError(''); })
+      .catch((err) => setError(err?.response?.data?.message || 'Could not load the bills.'));
+  };
+  useEffect(() => { setData(null); load(); }, [view]);
+
+  return (
+    <div>
+      <div className="card-sm mb-3 text-xs flex items-start gap-2" style={{ color: 'var(--text2)' }}>
+        <ShieldCheck size={14} className="shrink-0 mt-0.5" style={{ color: 'var(--accent)' }} aria-hidden="true" />
+        <span>
+          Each completed trip's bill goes to the customer on WhatsApp with a link to view and pay — {data?.autoSend
+            ? <>automatically when it has no warnings (<strong>auto-send is on</strong>); bills with warnings wait here.</>
+            : <>only when you tap <strong>Send</strong>. Auto-send is off.</>} Each bill is sent once.
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-2 mb-3" role="group" aria-label="Which bills">
+        {CB_VIEWS.map(([k, l]) => (
+          <Btn key={k} size="sm" variant={view === k ? 'blue' : 'ghost'} onClick={() => setView(k)} aria-pressed={view === k}>{l}</Btn>
+        ))}
+        <Btn size="sm" variant="ghost" onClick={load} aria-label="Refresh"><RefreshCw size={13} /></Btn>
+      </div>
+      {error && <div role="alert" className="text-sm mb-3" style={{ color: 'var(--red)' }}>{error}</div>}
+      {!data && !error && <Spinner />}
+      {data && !data.bills.length && <div className="card"><Empty icon={<Receipt size={36} />} message={view === 'to_send' ? 'No bills waiting to be sent.' : 'Nothing here yet.'} /></div>}
+      {data && data.bills.length > 0 && (
+        <div className="grid gap-3 md:grid-cols-2">
+          {data.bills.map((b) => <CustomerBillCard key={b.billId} b={b} onChanged={load} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function BillingPage() {
   const [tab, setTab] = useState('bills');
   const [receipt, setReceipt] = useState(null);
   return (
     <div className="page-enter">
       <PageHeader title="Billing & Payments" subtitle="Trip bills · payments received · advances · hospital invoices — amounts in ₹, times in India time (IST)" />
-      <Tabs tabs={[{ key: 'bills', label: 'Trip Bills' }, { key: 'advances', label: 'Advances' }, { key: 'invoices', label: 'Hospital Invoices' }]} active={tab} onChange={setTab} />
+      <Tabs tabs={[{ key: 'bills', label: 'Trip Bills' }, { key: 'customer', label: 'Bills to send' }, { key: 'advances', label: 'Advances' }, { key: 'invoices', label: 'Hospital Invoices' }]} active={tab} onChange={setTab} />
       {tab === 'bills' && <BillsTab openReceipt={setReceipt} />}
+      {tab === 'customer' && <CustomerBillsTab />}
       {tab === 'advances' && <AdvancesTab openReceipt={setReceipt} />}
       {tab === 'invoices' && <InvoicesTab />}
       <ReceiptModal paymentId={receipt} onClose={() => setReceipt(null)} />

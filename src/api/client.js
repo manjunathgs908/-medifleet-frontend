@@ -279,6 +279,12 @@ export const billingApi = {
   reversePayment   : (id, reason, requestId) => api.post(`/billing/payments/${id}/reverse`, { reason, requestId }, { skipErrorToast: true }),
   // Header for customer bills/receipts (business name, GSTIN, address, contact).
   issuer           : ()       => api.get('/billing/issuer', { skipErrorToast: true }),
+  // Owner only: completed trips' bills waiting to go to the customer on
+  // WhatsApp. view: to_send | sent | dismissed. Send happens once; a bill
+  // with warnings needs acknowledgeWarnings: true.
+  customerBills    : (view)   => api.get('/billing/customer-bills', { params: { view }, skipErrorToast: true }),
+  sendCustomerBill : (id, acknowledgeWarnings = false) => api.post(`/billing/customer-bills/${id}/send`, { acknowledgeWarnings }, { skipErrorToast: true }),
+  dismissCustomerBill: (id)   => api.post(`/billing/customer-bills/${id}/dismiss`, {}, { skipErrorToast: true }),
   generateInvoice  : (data)   => api.post('/billing/hospital-invoice/generate', data),
   getInvoices      : (params) => api.get('/billing/hospital-invoices', { params }),
   updateInvoice    : (id, status) => api.put(`/billing/hospital-invoices/${id}/status`, { status }),
