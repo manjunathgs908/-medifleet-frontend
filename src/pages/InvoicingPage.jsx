@@ -242,11 +242,31 @@ const Row = ({ k, v }) => <div className="flex justify-between"><span style={{ c
 function InvoiceView({ id, onClose, onChanged, onEdit }) {
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [mode, setMode] = useState(null); // 'pay' | 'cancel'
+  const [mode, setMode] = useState(null); // 'pay' | 'cancel' | 'delete'
   const [pay, setPay] = useState({ amount: '', receivedOn: today(), mode: 'bank_transfer', reference: '' });
   const [reason, setReason] = useState('');
+  // Permanently deleting a cancelled tax invoice: the server's preview, then
+  // the typed confirmation word.
+  const [delPreview, setDelPreview] = useState(null);
+  const [delWord, setDelWord] = useState('');
   const load = () => invoicingApi.invoice(id).then(({ data: d }) => setData(d)).catch((err) => toast.error(errMsg(err, 'Could not load the invoice.')));
-  useEffect(() => { if (id) { setData(null); setMode(null); load(); } }, [id]);
+  useEffect(() => { if (id) { setData(null); setMode(null); setDelPreview(null); setDelWord(''); load(); } }, [id]);
+  const openDelete = () => {
+    setMode('delete'); setDelPreview(null); setDelWord('');
+    invoicingApi.previewDeleteCancelled(id).then(({ data: d }) => setDelPreview(d)).catch((err) => toast.error(errMsg(err, 'Could not check.')));
+  };
+  const deletePermanently = async () => {
+    setBusy(true);
+    try {
+      const { data: d } = await invoicingApi.deleteCancelled(id, delWord);
+      toast.success(d.message);
+      onChanged();
+      onClose();
+    } catch (err) {
+      toast.error(errMsg(err, 'Nothing was deleted.'));
+      openDelete();
+    } finally { setBusy(false); }
+  };
   if (!id) return null;
   const inv = data?.invoice;
   const html = data ? gstInvoiceHtml(data) : '';
@@ -286,7 +306,31 @@ function InvoiceView({ id, onClose, onChanged, onEdit }) {
             {inv.status === 'issued' && <Btn size="sm" variant="ghost" onClick={() => onEdit(inv)}><Pencil size={13} /> Edit</Btn>}
             {inv.status === 'issued' && inv.balancePaise > 0 && <Btn size="sm" variant="blue" onClick={() => setMode('pay')}><IndianRupee size={13} /> Record money received</Btn>}
             {inv.status === 'issued' && !(inv.receivedPaise > 0) && <Btn size="sm" variant="danger" onClick={() => setMode('cancel')}><Ban size={13} /> Cancel invoice</Btn>}
+            {inv.status === 'cancelled' && inv.docType === 'tax_invoice' && !(inv.receivedPaise > 0) && <Btn size="sm" variant="danger" onClick={openDelete}><Trash2 size={13} /> Delete permanently</Btn>}
           </div>
+          {mode === 'delete' && (
+            <div className="card-sm mb-3 space-y-2" style={{ borderColor: 'rgba(255,77,109,.45)' }}>
+              <div className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--red)' }}><AlertTriangle size={15} aria-hidden="true" /> Delete {inv.number} permanently</div>
+              <div className="text-xs" style={{ color: 'var(--text2)' }}>
+                Only for a bill issued in error that was <strong>never sent to the customer and not reported in GSTR-1</strong>. The invoice is removed from the CRM for good; this cannot be undone.
+              </div>
+              {!delPreview && <Spinner />}
+              {delPreview && (delPreview.canDelete
+                ? (
+                  <>
+                    <div className="text-xs" style={delPreview.numberReused ? { color: 'var(--accent)' } : { color: 'var(--amber)' }}>
+                      {delPreview.numberReused ? '' : <AlertTriangle size={13} className="inline mr-1" aria-hidden="true" />}{delPreview.message}
+                    </div>
+                    <div className="flex flex-wrap gap-2 items-end">
+                      <Input label={`Type ${delPreview.confirmWord} to confirm`} value={delWord} onChange={(e) => setDelWord(e.target.value)} />
+                      <Btn size="sm" variant="danger" onClick={deletePermanently} disabled={busy || delWord.trim() !== delPreview.confirmWord}>{busy ? 'Deleting…' : 'Delete permanently'}</Btn>
+                      <Btn size="sm" variant="ghost" onClick={() => setMode(null)}>Keep it</Btn>
+                    </div>
+                  </>
+                )
+                : <Problems list={delPreview.problems} />)}
+            </div>
+          )}
           {inv.status === 'draft' && (data.problems?.length
             ? <div className="card-sm mb-3"><div className="text-xs font-semibold">Fix these before issuing:</div><Problems list={data.problems} /></div>
             : <div className="text-xs mb-3" style={{ color: 'var(--text3)' }}>Issuing gives it the next number and freezes it. After that it can only be cancelled.</div>)}

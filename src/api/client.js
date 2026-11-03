@@ -460,4 +460,8 @@ export const invoicingApi = {
   issue          : (id, rev)     => api.post(`/invoicing/invoices/${id}/issue`, { rev }, { skipErrorToast: true }),
   cancel         : (id, reason)  => api.post(`/invoicing/invoices/${id}/cancel`, { reason }, { skipErrorToast: true }),
   recordPayment  : (id, d)       => api.post(`/invoicing/invoices/${id}/payments`, d, { skipErrorToast: true }),
+  // Permanently delete a CANCELLED tax invoice (no money received). Preview
+  // says whether its number is reused or leaves a gap; the run needs DELETE.
+  previewDeleteCancelled: (id)   => api.get(`/invoicing/invoices/${id}/delete-cancelled`, { skipErrorToast: true }),
+  deleteCancelled: (id, confirm) => api.post(`/invoicing/invoices/${id}/delete-cancelled`, { confirm }, { skipErrorToast: true }),
 };
