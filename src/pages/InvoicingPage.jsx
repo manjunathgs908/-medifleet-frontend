@@ -568,6 +568,71 @@ function SettingsTab() {
           </div>
         ))}
       </div>
+      <RestartSeries onDone={load} />
+    </div>
+  );
+}
+
+// ── Danger: continue the tax-invoice series from a number ────────
+// For when the CRM's numbering started at 1 although Vyapar had already
+// used those numbers: deletes the CRM's own unpaid tax invoices numbered
+// below the number entered and continues the series from it. The server
+// refuses if any tax invoice has a payment, and re-checks everything when it
+// runs; the preview shows exactly what would go.
+function RestartSeries({ onDone }) {
+  const [next, setNext] = useState('');
+  const [preview, setPreview] = useState(null);
+  const [word, setWord] = useState('');
+  const [busy, setBusy] = useState(false);
+  const check = () => invoicingApi.previewSeriesRestart(next).then(({ data }) => { setPreview(data); setWord(''); }).catch((err) => toast.error(errMsg(err, 'Could not check.')));
+  const run = async () => {
+    setBusy(true);
+    try {
+      const { data } = await invoicingApi.restartSeries(Number(next), word);
+      toast.success(data.message);
+      setPreview(null); setNext(''); setWord('');
+      onDone();
+    } catch (err) {
+      toast.error(errMsg(err, 'Nothing was changed.'));
+      check();
+    } finally { setBusy(false); }
+  };
+  const plan = preview?.plan;
+  const ready = plan && !plan.problems.length && word.trim() === preview.confirmWord;
+  return (
+    <div className="card space-y-3 md:col-span-2" style={{ borderColor: 'rgba(255,77,109,.45)' }}>
+      <div className="font-semibold flex items-center gap-2" style={{ color: 'var(--red)' }}><AlertTriangle size={16} aria-hidden="true" /> Danger: continue the tax-invoice series from a number</div>
+      <div className="text-xs space-y-1" style={{ color: 'var(--text2)' }}>
+        <p>Use this only if the CRM started tax-invoice numbers at 1 although those numbers were already used in Vyapar this year.</p>
+        <p><strong style={{ color: 'var(--red)' }}>It permanently deletes the CRM's tax invoices numbered below the number you enter</strong> — only use it for test invoices that were never sent to the customer or filed in GSTR-1. The deletion cannot be undone.</p>
+        <p>It is refused if any tax invoice has money recorded against it, so it cannot touch real, paid invoices. Bills of supply and drafts are never touched.</p>
+      </div>
+      <div className="flex flex-wrap gap-2 items-end">
+        <Input label="Continue from (next tax invoice number)" inputMode="numeric" value={next} onChange={(e) => { setNext(e.target.value); setPreview(null); }} />
+        <Btn size="sm" variant="ghost" onClick={check} disabled={!/^\d+$/.test(next)}>Check what it would do</Btn>
+      </div>
+      {preview && plan && (
+        <div className="card-sm text-sm space-y-2">
+          <div>Now: next tax invoice is <strong className="font-mono">{preview.nextNumber}</strong>. After: <strong className="font-mono">{plan.nextNumber}</strong>.</div>
+          {plan.willDelete.length > 0
+            ? (
+              <div>
+                <div className="text-xs font-semibold" style={{ color: 'var(--red)' }}>Will be deleted permanently:</div>
+                <ul className="text-xs mt-1 space-y-0.5">
+                  {plan.willDelete.map((i) => <li key={i.number} className="font-mono">{i.number} · {i.status} · {showDay(i.date)} · {i.party} · {rs(i.totalPaise)} · received {rs(i.receivedPaise)}</li>)}
+                </ul>
+              </div>
+            )
+            : <div className="text-xs" style={{ color: 'var(--text3)' }}>No invoice will be deleted.</div>}
+          <Problems list={plan.problems} />
+          {!plan.problems.length && (
+            <div className="flex flex-wrap gap-2 items-end">
+              <Input label={`Type ${preview.confirmWord} to confirm`} value={word} onChange={(e) => setWord(e.target.value)} />
+              <Btn size="sm" variant="danger" onClick={run} disabled={busy || !ready}>{busy ? 'Working…' : `Delete and continue from ${plan.nextNumber}`}</Btn>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

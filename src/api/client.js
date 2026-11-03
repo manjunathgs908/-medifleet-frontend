@@ -440,6 +440,11 @@ export const invoicingApi = {
   settings       : ()            => api.get('/invoicing/settings'),
   saveSettings   : (d)           => api.put('/invoicing/settings', d, { skipErrorToast: true }),
   setSeriesStart : (d)           => api.put('/invoicing/settings/series', d, { skipErrorToast: true }),
+  // Continue the tax-invoice series from a number — deletes the CRM's unpaid
+  // tax invoices numbered below it. Preview changes nothing; the run needs
+  // confirm: 'DELETE' and is refused if any tax invoice has a payment.
+  previewSeriesRestart: (next)   => api.get('/invoicing/settings/series/restart', { params: next ? { next } : {}, skipErrorToast: true }),
+  restartSeries  : (next, confirm) => api.post('/invoicing/settings/series/restart', { next, confirm }, { skipErrorToast: true }),
   parties        : (all)         => api.get('/invoicing/parties', { params: all ? { all: 1 } : {} }),
   createParty    : (d)           => api.post('/invoicing/parties', d, { skipErrorToast: true }),
   updateParty    : (id, d)       => api.put(`/invoicing/parties/${id}`, d, { skipErrorToast: true }),
