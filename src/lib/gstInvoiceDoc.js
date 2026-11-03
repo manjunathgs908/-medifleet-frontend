@@ -66,6 +66,7 @@ body{font-family:"Segoe UI",system-ui,Arial,sans-serif;color:#1f2937;margin:0;pa
 .stamp{display:inline-block;margin-top:6px;padding:2px 10px;border:2px solid;font-weight:800;font-size:12px;letter-spacing:1px}
 .stamp.cancel{color:#b42318;border-color:#b42318}.stamp.draft{color:#6b7280;border-color:#6b7280}
 .parties{display:grid;grid-template-columns:1.25fr 1fr;gap:16px;margin-bottom:14px}
+.parties.three{grid-template-columns:1.15fr 1fr .9fr;gap:12px}
 .card{border:1px solid ${BRAND.line};border-radius:6px;overflow:hidden}
 .card h3{margin:0;background:${BRAND.tint};color:${BRAND.navy};font-size:11px;letter-spacing:.6px;text-transform:uppercase;padding:6px 10px}
 .card .body{padding:8px 10px}
@@ -144,6 +145,8 @@ export function gstInvoiceHtml({ invoice: inv, print: p }) {
 
   const bank = p.bank || {};
   const transport = inv.transport && Object.values(inv.transport).some(Boolean) ? inv.transport : null;
+  // The site this invoice is for (one invoice per site for multi-site clients).
+  const site = inv.serviceLocation?.siteName ? inv.serviceLocation : null;
 
   // ── Notes ────────────────────────────────────────────────
   const notes = [
@@ -189,7 +192,7 @@ export function gstInvoiceHtml({ invoice: inv, print: p }) {
   </div>
   <div class="rule"></div>
 
-  <div class="parties">
+  <div class="parties${site ? ' three' : ''}">
     <div class="card"><h3>Bill to</h3><div class="body">
       <div class="pname">${esc(party.name)}</div>
       ${party.address ? `<div>${addressLines(party.address)}</div>` : ''}
@@ -199,6 +202,11 @@ export function gstInvoiceHtml({ invoice: inv, print: p }) {
         <span class="k">State</span><span>${esc(party.stateCode)}-${esc(party.stateName || '')}</span>
       </div>
     </div></div>
+    ${site ? `<div class="card"><h3>Service location</h3><div class="body">
+      <div class="pname">${esc(site.siteName)}</div>
+      ${site.address ? `<div>${esc(site.address).replace(/\n/g, '<br>')}</div>` : ''}
+      ${site.attention ? `<div style="margin-top:4px"><span class="k" style="color:#6b7280">Kind attn:</span> <strong>${esc(site.attention)}</strong></div>` : ''}
+    </div></div>` : ''}
     <div class="card"><h3>${transport ? 'Transportation details' : 'Supply details'}</h3><div class="body"><div class="kv">
       ${transport?.driverName ? `<span class="k">Driver</span><span>${esc(transport.driverName)}</span>` : ''}
       ${transport?.vehicleNumber ? `<span class="k">Vehicle</span><span>${esc(transport.vehicleNumber)}</span>` : ''}

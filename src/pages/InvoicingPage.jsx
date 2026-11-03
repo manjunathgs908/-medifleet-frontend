@@ -64,6 +64,7 @@ function InvoiceEditor({ open, draft, lookups, onClose, onSaved }) {
         party: String(draft.party), date: dayOf(draft.date), placeOfSupply: draft.placeOfSupply, paymentMode: draft.paymentMode,
         roundOff: draft.roundOff !== false, description: draft.description || '', terms: draft.terms || '',
         transport: { driverName: '', vehicleNumber: '', pickup: '', drop: '', ...(draft.transport || {}) },
+        serviceLocation: { siteName: '', address: '', attention: '', ...(draft.serviceLocation || {}) },
         lines: draft.lines.map((l) => ({
           item: l.item ? String(l.item) : '', name: l.name, code: l.code || '', unit: l.unit || 'Nos', qty: String(l.qtyMilli / 1000),
           rate: rupeesText(l.ratePaise), discount: l.discountPercent == null && l.discountPaise ? rupeesText(l.discountPaise) : '',
@@ -72,14 +73,14 @@ function InvoiceEditor({ open, draft, lookups, onClose, onSaved }) {
         rev: draft.rev,
       });
     } else {
-      setF({ party: '', date: today(), placeOfSupply: '', paymentMode: 'credit', roundOff: true, description: '', terms: '', transport: { driverName: '', vehicleNumber: '', pickup: '', drop: '' }, lines: [blankLine()] });
+      setF({ party: '', date: today(), placeOfSupply: '', paymentMode: 'credit', roundOff: true, description: '', terms: '', transport: { driverName: '', vehicleNumber: '', pickup: '', drop: '' }, serviceLocation: { siteName: '', address: '', attention: '' }, lines: [blankLine()] });
     }
     setCalc(null);
   }, [open, draft]);
 
   const body = useMemo(() => f && ({
     party: f.party, date: f.date, placeOfSupply: f.placeOfSupply || undefined, paymentMode: f.paymentMode, roundOff: f.roundOff,
-    description: f.description, terms: f.terms, transport: f.transport,
+    description: f.description, terms: f.terms, transport: f.transport, serviceLocation: f.serviceLocation,
     lines: f.lines.map((l) => ({
       item: l.item || undefined, name: l.name, code: l.code, unit: l.unit, qty: l.qty, rate: l.rate,
       discount: l.discountPercent === '' || l.discountPercent == null ? l.discount : undefined,
@@ -139,6 +140,12 @@ function InvoiceEditor({ open, draft, lookups, onClose, onSaved }) {
         </Select>
       </div>
 
+      <div className="grid gap-3 md:grid-cols-3 mt-3">
+        <Input label="Service location — site name (optional)" placeholder="e.g. Kalpataru — Hebbal metro site" value={f.serviceLocation.siteName} onChange={(e) => set('serviceLocation', { ...f.serviceLocation, siteName: e.target.value })} />
+        <Input label="Site address" value={f.serviceLocation.address} onChange={(e) => set('serviceLocation', { ...f.serviceLocation, address: e.target.value })} />
+        <Input label="Kind attn: (contact at the site)" value={f.serviceLocation.attention} onChange={(e) => set('serviceLocation', { ...f.serviceLocation, attention: e.target.value })} />
+      </div>
+
       <div className="mt-4 overflow-x-auto">
         <table className="w-full text-xs" style={{ minWidth: 900 }}>
           <thead><tr style={{ color: 'var(--text3)' }} className="text-left">
@@ -180,7 +187,7 @@ function InvoiceEditor({ open, draft, lookups, onClose, onSaved }) {
             <Input label="Vehicle number" value={f.transport.vehicleNumber} onChange={(e) => set('transport', { ...f.transport, vehicleNumber: e.target.value })} />
           </div>
           <div>
-            <label className="block text-xs font-semibold mb-1 tracking-wide uppercase" style={{ color: 'var(--text2)' }}>Terms (leave blank for the default)</label>
+            <label className="block text-xs font-semibold mb-1 tracking-wide uppercase" style={{ color: 'var(--text2)' }}>Terms for this invoice only (leave blank to print the default terms from Settings)</label>
             <textarea className="inp" rows={3} value={f.terms} onChange={(e) => set('terms', e.target.value)} />
           </div>
           <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={f.roundOff} onChange={(e) => set('roundOff', e.target.checked)} /> Round off the total to the rupee</label>
@@ -327,7 +334,7 @@ function InvoicesTab({ lookups, reloadLookups }) {
                   <tr key={i._id} onClick={() => setViewing(i._id)} className="cursor-pointer hover:bg-[var(--surface2)]" style={{ borderTop: '1px solid var(--border)' }}>
                     <td className="p-3 font-mono">{i.number || '—'}{i.docType === 'bill_of_supply' && <span className="text-xs ml-1" style={{ color: 'var(--text3)' }}>BoS</span>}</td>
                     <td className="p-3">{showDay(i.date)}</td>
-                    <td className="p-3">{i.partyName}</td>
+                    <td className="p-3">{i.partyName}{i.serviceLocation?.siteName && <div className="text-xs" style={{ color: 'var(--text3)' }}>{i.serviceLocation.siteName}</div>}</td>
                     <td className="p-3 text-right font-mono">{rs(i.totals?.grandTotalPaise || 0)}</td>
                     <td className="p-3 text-right font-mono">{i.balancePaise == null ? '—' : rs(i.balancePaise)}</td>
                     <td className="p-3"><Badge color={c}>{l}</Badge></td>
@@ -517,7 +524,11 @@ function SettingsTab() {
         </div>
         <div>
           <label className="block text-xs font-semibold mb-1 tracking-wide uppercase" style={{ color: 'var(--text2)' }}>Default terms and conditions</label>
-          <textarea className="inp" rows={5} value={f.terms} onChange={(e) => setF({ ...f, terms: e.target.value })} />
+          <textarea className="inp" rows={7} value={f.terms} onChange={(e) => setF({ ...f, terms: e.target.value })} />
+          <div className="flex flex-wrap items-center gap-2 mt-1 text-xs" style={{ color: 'var(--text3)' }}>
+            <span>Printed on every tax invoice and bill of supply, unless an invoice has its own terms. Left blank, the standard terms are printed.</span>
+            {f.terms !== data.defaultTerms && <button type="button" className="underline" style={{ color: 'var(--blue)' }} onClick={() => setF({ ...f, terms: data.defaultTerms })}>Use the standard terms</button>}
+          </div>
         </div>
         <Btn onClick={save}>Save</Btn>
       </div>
