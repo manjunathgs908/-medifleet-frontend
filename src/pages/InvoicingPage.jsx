@@ -110,21 +110,40 @@ function InvoiceEditor({ open, draft, lookups, onClose, onSaved }) {
   const party = parties.find((p) => String(p._id) === f.party);
   const inv = calc?.invoice;
 
+  // An issued invoice keeps its number. With money already received, the
+  // server asks before amounts, GST or the party change; the owner confirms.
+  const issued = draft?.status === 'issued';
   const save = async () => {
     setSaving(true);
     try {
-      const { data } = draft ? await invoicingApi.updateInvoice(draft._id, { ...body, rev: f.rev }) : await invoicingApi.createInvoice(body);
-      toast.success('Draft saved.');
+      let data;
+      if (!draft) ({ data } = await invoicingApi.createInvoice(body));
+      else {
+        try {
+          ({ data } = await invoicingApi.updateInvoice(draft._id, { ...body, rev: f.rev }));
+        } catch (err) {
+          const d = err?.response?.data;
+          if (d?.reason !== 'financial_change_needs_confirm' || !window.confirm(d.message)) throw err;
+          ({ data } = await invoicingApi.updateInvoice(draft._id, { ...body, rev: f.rev, confirmFinancialChange: true }));
+        }
+      }
+      toast.success(issued ? `Saved ${draft.number}.` : 'Draft saved.');
       onSaved(data.invoice._id);
     } catch (err) {
-      toast.error(errMsg(err, 'Could not save the draft.'));
+      if (err?.response?.data?.reason !== 'financial_change_needs_confirm') toast.error(errMsg(err, 'Could not save.'));
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Modal open={open} onClose={onClose} title={draft ? 'Edit draft invoice' : 'New invoice'} width="max-w-5xl">
+    <Modal open={open} onClose={onClose} title={issued ? `Edit ${draft.docType === 'bill_of_supply' ? 'bill' : 'invoice'} ${draft.number}` : draft ? 'Edit draft invoice' : 'New invoice'} width="max-w-5xl">
+      {issued && (
+        <div className="card-sm mb-3 text-xs" style={draft.receivedPaise > 0 ? { borderColor: 'rgba(255,184,48,.45)', color: 'var(--amber)' } : { color: 'var(--text2)' }}>
+          The number {draft.number} stays the same. Totals and GST are worked out again when you save.
+          {draft.receivedPaise > 0 && <> {rs(draft.receivedPaise)} has been received: driver, vehicle, description, site and terms can be changed freely; changing amounts, GST or the party asks you to confirm first.</>}
+        </div>
+      )}
       <div className="grid gap-3 md:grid-cols-4">
         <Select label="Party" value={f.party} onChange={(e) => { const p = parties.find((x) => String(x._id) === e.target.value); setF((x) => ({ ...x, party: e.target.value, placeOfSupply: p?.stateCode || '' })); }}>
           <option value="">Choose…</option>
@@ -212,7 +231,7 @@ function InvoiceEditor({ open, draft, lookups, onClose, onSaved }) {
 
       <div className="flex justify-end gap-2 mt-5">
         <Btn variant="ghost" onClick={onClose}>Close</Btn>
-        <Btn onClick={save} disabled={saving || !f.party}>{saving ? 'Saving…' : 'Save draft'}</Btn>
+        <Btn onClick={save} disabled={saving || !f.party}>{saving ? 'Saving…' : issued ? 'Save changes' : 'Save draft'}</Btn>
       </div>
     </Modal>
   );
@@ -264,6 +283,7 @@ function InvoiceView({ id, onClose, onChanged, onEdit }) {
               }}><Trash2 size={13} /> Delete draft</Btn>
             </>}
             <Btn size="sm" variant="ghost" onClick={() => printHtml(html)}><Printer size={13} /> Print / Save as PDF</Btn>
+            {inv.status === 'issued' && <Btn size="sm" variant="ghost" onClick={() => onEdit(inv)}><Pencil size={13} /> Edit</Btn>}
             {inv.status === 'issued' && inv.balancePaise > 0 && <Btn size="sm" variant="blue" onClick={() => setMode('pay')}><IndianRupee size={13} /> Record money received</Btn>}
             {inv.status === 'issued' && !(inv.receivedPaise > 0) && <Btn size="sm" variant="danger" onClick={() => setMode('cancel')}><Ban size={13} /> Cancel invoice</Btn>}
           </div>
