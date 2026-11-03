@@ -38,14 +38,22 @@ export const row = (k, v, cls = '') => `<tr${cls ? ` class="${cls}"` : ''}><th>$
 export const page = (title, body) => `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>${STYLE}</style></head><body>${body}</body></html>`;
 
 // Prints just this document (a hidden frame) — never the CRM screen around it.
+// A document with images (the GST invoice's logo and signature) is printed
+// once they have loaded, so they are never missing from the PDF; at most
+// 5 seconds, then it prints anyway.
 export function printHtml(html) {
   const f = document.createElement('iframe');
   f.style.position = 'fixed'; f.style.width = '0'; f.style.height = '0'; f.style.border = '0';
   f.setAttribute('aria-hidden', 'true');
   document.body.appendChild(f);
   f.contentDocument.open(); f.contentDocument.write(html); f.contentDocument.close();
-  f.contentWindow.focus(); f.contentWindow.print();
-  setTimeout(() => f.remove(), 1000);
+  const pending = [...f.contentDocument.images].filter((img) => !img.complete)
+    .map((img) => new Promise((done) => { img.onload = done; img.onerror = done; }));
+  const timeout = new Promise((done) => setTimeout(done, 5000));
+  Promise.race([Promise.all(pending), timeout]).then(() => {
+    f.contentWindow.focus(); f.contentWindow.print();
+    setTimeout(() => f.remove(), 1000);
+  });
 }
 
 export function downloadHtml(html, filename) {

@@ -4,14 +4,36 @@
 // for the on-screen preview, printing and "Save as PDF" alike. Built only
 // from what the server returns for the invoice (GET /invoicing/invoices/:id:
 // the invoice, and `print` — issuer, the party as frozen at issue, place of
-// supply, amount in words, bank, terms). Nothing is recalculated here.
+// supply, amount in words, bank, terms). Nothing is recalculated here: every
+// figure printed is a figure the server computed.
 //
 // Contents follow Rule 46 (tax invoice) / Rule 49 (bill of supply):
 // supplier name, address, GSTIN; number and date; recipient name, address,
-// GSTIN and state; place of supply with state code; SAC/HSN, description,
-// quantity, unit, rate, discount, taxable value, rate and tax per line; the
-// tax breakup; reverse-charge statement; total in words; signatory.
+// GSTIN and state with code; place of supply with state code; SAC/HSN,
+// description, quantity, unit, rate, discount, taxable value, rate and tax
+// per line; the CGST/SGST or IGST breakup; reverse-charge statement; total in
+// words; signature.
+//
+// Look: the SaveLife letterhead used on quotations and proforma invoices —
+// the website's logo (savelife-web public/savelife-mark-512.png) and brand
+// blue, the signature from those documents. The images are ordinary built
+// assets (cached by the PWA); printHtml waits for them to load before it
+// opens the print dialog, so a printed or saved PDF always has them.
+//
+// Unlike trip bills and receipts (lib/customerDocs.js), a GST invoice is
+// signed by the proprietor by name, as on the quotations.
 import { esc, rs } from './customerDocs';
+import logoUrl from '../assets/invoice/savelife-logo.png';
+import signatureUrl from '../assets/invoice/signature.png';
+
+const BRAND = {
+  navy: '#1E4FA3',      // website "Save" / wordmark blue
+  blue: '#1677E8',      // website primary brand blue
+  tint: '#EEF4FC',      // label cells and boxes
+  line: '#C9D8EE',
+  tagline: '24x7 Private Ambulance & Medical Transport',
+};
+const SIGNATORY = { name: 'G. S. Manjunath', title: 'Proprietor & Authorised Signatory' };
 
 const day = (v) => {
   const d = new Date(v);
@@ -19,21 +41,58 @@ const day = (v) => {
 };
 const qty = (milli) => (milli / 1000).toLocaleString('en-IN', { maximumFractionDigits: 3 });
 const TAX_LABEL = { exempt: 'Exempt', nil: 'Nil rated', non_gst: 'Non-GST' };
+const webHost = (url) => String(url || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
 
-const STYLE = `*{box-sizing:border-box}body{font-family:system-ui,Segoe UI,Arial,sans-serif;color:#111;margin:24px;font-size:12px}
-.head{display:flex;justify-content:space-between;gap:16px;border-bottom:3px solid #111;padding-bottom:10px}
-.head h1{font-size:20px;margin:0 0 4px}.muted{color:#444;line-height:1.5}
-.title{text-align:center;font-size:16px;font-weight:700;margin:12px 0}
-.cancel{color:#b00020;border:2px solid #b00020;display:inline-block;padding:2px 10px;font-weight:700;margin-left:8px}
-.three{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:16px;margin-bottom:12px}
-.three h3{font-size:12px;margin:0 0 4px}.right{text-align:right}
-table{border-collapse:collapse;width:100%}th,td{padding:6px;border-bottom:1px solid #ddd;vertical-align:top}
-thead th{background:#e8462a;color:#fff;text-align:left;font-weight:600}td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-tr.tot td{font-weight:700;border-top:2px solid #111}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px}
-.box h4{background:#e8462a;color:#fff;margin:8px 0 4px;padding:4px 6px;font-size:12px}
-.sign{text-align:right;margin-top:40px}.small{font-size:11px;color:#555}
-@media print{body{margin:10mm}}`;
+const STYLE = `
+@page{size:A4;margin:12mm}
+*{box-sizing:border-box}
+html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{font-family:"Segoe UI",system-ui,Arial,sans-serif;color:#1f2937;margin:0;padding:28px 32px;font-size:12px;line-height:1.45;background:#fff}
+@media print{body{padding:0}}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
+.brand{display:flex;align-items:center;gap:14px}
+.logo{width:46px;height:62px;overflow:hidden;position:relative;flex:none}
+.logo img{position:absolute;width:86px;height:86px;left:-20px;top:-12px}
+.name{font-size:26px;font-weight:700;color:${BRAND.navy};letter-spacing:-.2px;line-height:1.1}
+.tagline{color:${BRAND.blue};font-weight:600;font-size:12px;margin-top:3px}
+.doc{text-align:right;min-width:210px}
+.doc .title{font-size:18px;font-weight:800;color:${BRAND.navy};letter-spacing:.6px}
+.doc table{margin-left:auto;margin-top:4px}
+.doc td{padding:1px 0 1px 10px;font-size:12px}
+.doc td.k{color:#6b7280;text-align:right}.doc td.v{font-weight:600;text-align:right}
+.issuer{margin-top:10px;color:#4b5563;font-size:11.5px}
+.issuer strong{color:#1f2937}
+.rule{height:3px;background:${BRAND.navy};margin:12px 0 16px;border-radius:2px}
+.stamp{display:inline-block;margin-top:6px;padding:2px 10px;border:2px solid;font-weight:800;font-size:12px;letter-spacing:1px}
+.stamp.cancel{color:#b42318;border-color:#b42318}.stamp.draft{color:#6b7280;border-color:#6b7280}
+.parties{display:grid;grid-template-columns:1.25fr 1fr;gap:16px;margin-bottom:14px}
+.card{border:1px solid ${BRAND.line};border-radius:6px;overflow:hidden}
+.card h3{margin:0;background:${BRAND.tint};color:${BRAND.navy};font-size:11px;letter-spacing:.6px;text-transform:uppercase;padding:6px 10px}
+.card .body{padding:8px 10px}
+.card .pname{font-weight:700;font-size:13px;color:#111827}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px}.kv .k{color:#6b7280}
+table.items,table.tax{border-collapse:collapse;width:100%}
+table.items th,table.tax th{background:${BRAND.navy};color:#fff;font-weight:600;text-align:left;padding:7px 8px;font-size:11.5px}
+table.items td,table.tax td{padding:7px 8px;border-bottom:1px solid ${BRAND.line};vertical-align:top}
+table.items tr:nth-child(even) td{background:#fafcff}
+.n,table.items th.n,table.tax th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.small{font-size:10.5px;color:#6b7280}
+.section-title{font-size:11px;font-weight:700;color:${BRAND.navy};text-transform:uppercase;letter-spacing:.6px;margin:14px 0 6px}
+.lower{display:grid;grid-template-columns:1.25fr 1fr;gap:16px;margin-top:14px;align-items:start}
+.totals{border:1px solid ${BRAND.line};border-radius:6px;overflow:hidden}
+.totals table{width:100%;border-collapse:collapse}
+.totals td{padding:6px 10px;border-bottom:1px solid ${BRAND.line}}
+.totals tr.grand td{background:${BRAND.navy};color:#fff;font-weight:700;font-size:14px;border-bottom:0}
+.totals tr.due td{font-weight:700;color:${BRAND.navy}}
+.words{background:${BRAND.tint};border-left:3px solid ${BRAND.navy};padding:8px 10px;border-radius:4px}
+.notes p{margin:0 0 6px}
+.bank{background:${BRAND.tint};border:1px solid ${BRAND.line};border-radius:6px;padding:8px 10px;margin-top:12px}
+.sign{margin-top:14px}
+.sign img{height:46px;display:block;margin:4px 0 2px}
+.sign .who{font-weight:700;color:#111827}
+.footer{margin-top:22px;background:${BRAND.navy};color:#fff;text-align:center;padding:9px 12px;border-radius:4px;font-size:11.5px}
+.gen{text-align:center;color:#9ca3af;font-size:10.5px;margin-top:6px}
+`;
 
 function addressLines(a) {
   if (!a) return '';
@@ -44,8 +103,11 @@ export function gstInvoiceHtml({ invoice: inv, print: p }) {
   const isBos = inv.docType === 'bill_of_supply';
   const intra = inv.supplyType === 'intra';
   const party = p.party || {};
+  const issuer = p.issuer || {};
   const anyDiscount = inv.lines.some((l) => l.discountPaise > 0);
+  const docWord = isBos ? 'Bill' : 'Invoice';
 
+  // ── Lines ────────────────────────────────────────────────
   const lines = inv.lines.map((l, i) => `<tr>
     <td>${i + 1}</td>
     <td><strong>${esc(l.name)}</strong>${l.description ? `<div class="small">${esc(l.description)}</div>` : ''}</td>
@@ -54,77 +116,137 @@ export function gstInvoiceHtml({ invoice: inv, print: p }) {
     <td class="n">${rs(l.ratePaise)}</td>
     ${anyDiscount ? `<td class="n">${l.discountPaise ? rs(l.discountPaise) : '—'}</td>` : ''}
     <td class="n">${rs(l.taxablePaise)}</td>
-    ${isBos ? '' : `<td class="n">${l.taxType === 'taxable' ? `${rs(l.taxPaise)}<div class="small">(${l.gstRate}%)</div>` : esc(TAX_LABEL[l.taxType] || '—')}</td>`}
-    <td class="n">${rs(l.totalPaise)}</td></tr>`).join('');
+    ${isBos ? '' : `<td class="n">${l.taxType === 'taxable' ? `${rs(l.taxPaise)}<div class="small">${l.gstRate}%</div>` : esc(TAX_LABEL[l.taxType] || '—')}</td>`}
+    <td class="n"><strong>${rs(l.totalPaise)}</strong></td></tr>`).join('');
 
+  // ── GST breakup, one row per rate ────────────────────────
   const t = inv.totals;
   const breakup = isBos || !inv.taxSummary?.length ? '' : `
-    <table style="margin-top:12px"><thead><tr><th>Tax type</th><th class="n">Taxable amount</th><th class="n">Rate</th><th class="n">Tax amount</th></tr></thead><tbody>
-    ${inv.taxSummary.map((r) => (intra
-    ? `<tr><td>SGST</td><td class="n">${rs(r.taxablePaise)}</td><td class="n">${r.gstRate / 2}%</td><td class="n">${rs(r.sgstPaise)}</td></tr>
-         <tr><td>CGST</td><td class="n">${rs(r.taxablePaise)}</td><td class="n">${r.gstRate / 2}%</td><td class="n">${rs(r.cgstPaise)}</td></tr>`
-    : `<tr><td>IGST</td><td class="n">${rs(r.taxablePaise)}</td><td class="n">${r.gstRate}%</td><td class="n">${rs(r.igstPaise)}</td></tr>`)).join('')}
+    <div class="section-title">GST breakup</div>
+    <table class="tax"><thead><tr>
+      <th>GST rate</th><th class="n">Taxable value</th>
+      ${intra ? '<th class="n">CGST rate</th><th class="n">CGST amount</th><th class="n">SGST rate</th><th class="n">SGST amount</th>'
+    : '<th class="n">IGST rate</th><th class="n">IGST amount</th>'}
+      <th class="n">Total tax</th></tr></thead><tbody>
+    ${inv.taxSummary.map((r) => `<tr><td>${r.gstRate}%</td><td class="n">${rs(r.taxablePaise)}</td>
+      ${intra ? `<td class="n">${r.gstRate / 2}%</td><td class="n">${rs(r.cgstPaise)}</td><td class="n">${r.gstRate / 2}%</td><td class="n">${rs(r.sgstPaise)}</td>`
+    : `<td class="n">${r.gstRate}%</td><td class="n">${rs(r.igstPaise)}</td>`}
+      <td class="n">${rs(r.cgstPaise + r.sgstPaise + r.igstPaise)}</td></tr>`).join('')}
     </tbody></table>`;
 
-  const amounts = [
+  // ── Totals ───────────────────────────────────────────────
+  const received = inv.receivedPaise || 0;
+  const totals = [
     ['Taxable value', rs(t.taxablePaise)],
     ...(isBos ? [] : intra ? [['CGST', rs(t.cgstPaise)], ['SGST', rs(t.sgstPaise)]] : [['IGST', rs(t.igstPaise)]]),
     ...(t.roundOffPaise ? [['Round off', `${t.roundOffPaise > 0 ? '+' : '−'}${rs(Math.abs(t.roundOffPaise))}`]] : []),
   ];
-  const received = inv.receivedPaise || 0;
+
   const bank = p.bank || {};
   const transport = inv.transport && Object.values(inv.transport).some(Boolean) ? inv.transport : null;
 
+  // ── Notes ────────────────────────────────────────────────
+  const notes = [
+    inv.description ? `<p><strong>Description:</strong> ${esc(inv.description)}</p>` : '',
+    isBos ? '<p>Bill of supply — this supply is exempt from GST; no tax is charged.</p>' : '',
+    inv.reverseCharge ? '<p><strong>Reverse charge:</strong> GST on this supply is payable by the recipient under reverse charge and is not included in the amount due.</p>' : '',
+    p.terms ? `<p><strong>Terms &amp; conditions</strong><br>${esc(p.terms).replace(/\n/g, '<br>')}</p>` : '',
+  ].filter(Boolean).join('');
+
+  const contacts = [
+    issuer.phone && `Call ${esc(issuer.phone)}`,
+    issuer.whatsapp && `WhatsApp ${esc(issuer.whatsapp)}`,
+    issuer.email && esc(issuer.email),
+    issuer.website && esc(webHost(issuer.website)),
+  ].filter(Boolean).join('&nbsp; | &nbsp;');
+
   const body = `
-  <div class="head">
-    <div><h1>${esc(p.issuer?.name)}</h1><div class="muted">${esc(p.issuer?.address || '')}<br>
-      ${[p.issuer?.phone && `Phone: ${esc(p.issuer.phone)}`, p.issuer?.email && `Email: ${esc(p.issuer.email)}`].filter(Boolean).join(' · ')}<br>
-      GSTIN: <strong>${esc(p.issuer?.gstin)}</strong>, State: ${esc(p.issuer?.stateCode)}-${esc(p.issuer?.stateName)}</div></div>
+  <div class="top">
+    <div>
+      <div class="brand">
+        <div class="logo"><img src="${logoUrl}" alt="SaveLife"></div>
+        <div><div class="name">${esc(issuer.name)}</div><div class="tagline">${esc(BRAND.tagline)}</div></div>
+      </div>
+      <div class="issuer">
+        ${esc(issuer.address || '')}<br>
+        ${[issuer.phone && `Call: ${esc(issuer.phone)}`, issuer.whatsapp && `WhatsApp: ${esc(issuer.whatsapp)}`].filter(Boolean).join(' &nbsp;|&nbsp; ')}<br>
+        ${[issuer.email && `Email: ${esc(issuer.email)}`, issuer.website && `Web: ${esc(webHost(issuer.website))}`].filter(Boolean).join(' &nbsp;|&nbsp; ')}<br>
+        <strong>GSTIN: ${esc(issuer.gstin)}</strong> &nbsp;|&nbsp; State: ${esc(issuer.stateCode)}-${esc(issuer.stateName)}${issuer.udyam ? ` &nbsp;|&nbsp; Udyam: ${esc(issuer.udyam)}` : ''}
+      </div>
+    </div>
+    <div class="doc">
+      <div class="title">${esc(String(p.title || '').toUpperCase())}</div>
+      <table>
+        <tr><td class="k">${docWord} No:</td><td class="v">${esc(inv.number || 'Draft')}</td></tr>
+        <tr><td class="k">Date:</td><td class="v">${day(inv.date)}</td></tr>
+        <tr><td class="k">Place of supply:</td><td class="v">${esc(inv.placeOfSupply)}-${esc(p.placeOfSupplyName || '')}</td></tr>
+        <tr><td class="k">Reverse charge:</td><td class="v">${inv.reverseCharge ? 'Yes' : 'No'}</td></tr>
+        <tr><td class="k">Payment:</td><td class="v">${inv.paymentMode === 'cash' ? 'Cash' : 'Credit'}</td></tr>
+      </table>
+      ${inv.status === 'cancelled' ? '<div class="stamp cancel">CANCELLED</div>' : ''}
+      ${inv.status === 'draft' ? '<div class="stamp draft">DRAFT — NOT ISSUED</div>' : ''}
+    </div>
   </div>
-  <div class="title">${esc(p.title)}${inv.status === 'cancelled' ? '<span class="cancel">CANCELLED</span>' : ''}${inv.status === 'draft' ? '<span class="cancel" style="color:#555;border-color:#555">DRAFT — NOT ISSUED</span>' : ''}</div>
-  <div class="three">
-    <div><h3>Bill To</h3><strong>${esc(party.name)}</strong><div class="muted">${addressLines(party.address)}
-      ${party.phone ? `<br>Contact No.: ${esc(party.phone)}` : ''}
-      ${party.gstin ? `<br>GSTIN: <strong>${esc(party.gstin)}</strong>` : ''}
-      <br>State: ${esc(party.stateCode)}-${esc(party.stateName || '')}</div></div>
-    <div>${transport ? `<h3>Transportation Details</h3><div class="muted">
-      ${transport.driverName ? `Driver Name: ${esc(transport.driverName)}<br>` : ''}
-      ${transport.vehicleNumber ? `Vehicle Number: ${esc(transport.vehicleNumber)}<br>` : ''}
-      ${transport.pickup ? `Pickup: ${esc(transport.pickup)}<br>` : ''}
-      ${transport.drop ? `Drop: ${esc(transport.drop)}` : ''}</div>` : ''}</div>
-    <div class="right"><h3>${isBos ? 'Bill' : 'Invoice'} Details</h3><div class="muted">
-      ${isBos ? 'Bill' : 'Invoice'} No.: <strong>${esc(inv.number || 'Draft')}</strong><br>
-      Date: ${day(inv.date)}<br>
-      Place of supply: ${esc(inv.placeOfSupply)}-${esc(p.placeOfSupplyName || '')}<br>
-      Tax payable on reverse charge: <strong>${inv.reverseCharge ? 'Yes' : 'No'}</strong></div></div>
+  <div class="rule"></div>
+
+  <div class="parties">
+    <div class="card"><h3>Bill to</h3><div class="body">
+      <div class="pname">${esc(party.name)}</div>
+      ${party.address ? `<div>${addressLines(party.address)}</div>` : ''}
+      <div class="kv" style="margin-top:4px">
+        ${party.phone ? `<span class="k">Contact</span><span>${esc(party.phone)}</span>` : ''}
+        <span class="k">GSTIN</span><span>${party.gstin ? `<strong>${esc(party.gstin)}</strong>` : 'Unregistered'}</span>
+        <span class="k">State</span><span>${esc(party.stateCode)}-${esc(party.stateName || '')}</span>
+      </div>
+    </div></div>
+    <div class="card"><h3>${transport ? 'Transportation details' : 'Supply details'}</h3><div class="body"><div class="kv">
+      ${transport?.driverName ? `<span class="k">Driver</span><span>${esc(transport.driverName)}</span>` : ''}
+      ${transport?.vehicleNumber ? `<span class="k">Vehicle</span><span>${esc(transport.vehicleNumber)}</span>` : ''}
+      ${transport?.pickup ? `<span class="k">Pickup</span><span>${esc(transport.pickup)}</span>` : ''}
+      ${transport?.drop ? `<span class="k">Drop</span><span>${esc(transport.drop)}</span>` : ''}
+      <span class="k">Supply</span><span>${intra ? 'Intra-state' : 'Inter-state'}${isBos ? '' : intra ? ' (CGST + SGST)' : ' (IGST)'}</span>
+      <span class="k">Document</span><span>${isBos ? 'Bill of supply (exempt)' : 'Tax invoice'}</span>
+    </div></div></div>
   </div>
-  <table><thead><tr><th>#</th><th>Item name</th><th>HSN/SAC</th><th class="n">Quantity</th><th class="n">Price/Unit</th>${anyDiscount ? '<th class="n">Discount</th>' : ''}<th class="n">Taxable value</th>${isBos ? '' : '<th class="n">GST</th>'}<th class="n">Amount</th></tr></thead>
+
+  <table class="items"><thead><tr><th>#</th><th>Description</th><th>HSN/SAC</th><th class="n">Qty</th><th class="n">Rate</th>${anyDiscount ? '<th class="n">Discount</th>' : ''}<th class="n">Taxable value</th>${isBos ? '' : '<th class="n">GST</th>'}<th class="n">Amount</th></tr></thead>
   <tbody>${lines}</tbody></table>
   ${breakup}
-  <div class="two">
+
+  <div class="lower">
     <div>
-      <div class="box"><h4>${isBos ? 'Bill' : 'Invoice'} Amount In Words</h4>${esc(p.amountInWords)}</div>
-      <div class="box"><h4>Payment mode</h4>${inv.paymentMode === 'cash' ? 'Cash' : 'Credit'}</div>
-      ${inv.description ? `<div class="box"><h4>Description</h4>${esc(inv.description)}</div>` : ''}
-      ${isBos ? '<div class="box"><h4>Note</h4>Bill of supply — supply exempt from GST; no tax is charged.</div>' : ''}
-      ${inv.reverseCharge ? '<div class="box"><h4>Reverse charge</h4>GST on this supply is payable by the recipient under reverse charge and is not included in the amount due.</div>' : ''}
-      ${p.terms ? `<div class="box"><h4>Terms and Conditions</h4>${esc(p.terms).replace(/\n/g, '<br>')}</div>` : ''}
+      <div class="words"><strong>Amount in words:</strong> ${esc(p.amountInWords)}</div>
+      ${notes ? `<div class="section-title">Notes</div><div class="notes">${notes}</div>` : ''}
+      <div class="bank">
+        <div class="section-title" style="margin-top:0">Bank details</div>
+        <div class="kv">
+          ${bank.holder ? `<span class="k">Account name</span><span>${esc(bank.holder)}</span>` : ''}
+          ${bank.name ? `<span class="k">Bank</span><span>${esc(bank.name)}</span>` : ''}
+          ${bank.accountNo ? `<span class="k">Account no.</span><span><strong>${esc(bank.accountNo)}</strong></span>` : ''}
+          ${bank.ifsc ? `<span class="k">IFSC</span><span>${esc(bank.ifsc)}</span>` : ''}
+          ${p.upiId ? `<span class="k">UPI</span><span>${esc(p.upiId)}</span>` : ''}
+          ${!bank.accountNo && !p.upiId ? '<span class="k">—</span><span>Add bank details in GST Invoicing → Settings.</span>' : ''}
+        </div>
+      </div>
     </div>
     <div>
-      <table><tbody>
-        ${amounts.map(([k, v]) => `<tr><td>${k}</td><td class="n">${v}</td></tr>`).join('')}
-        <tr class="tot"><td>Total</td><td class="n">${rs(t.grandTotalPaise)}</td></tr>
+      <div class="totals"><table>
+        ${totals.map(([k, v]) => `<tr><td>${k}</td><td class="n">${v}</td></tr>`).join('')}
+        <tr class="grand"><td>Total</td><td class="n">${rs(t.grandTotalPaise)}</td></tr>
         <tr><td>Received</td><td class="n">${rs(received)}</td></tr>
-        <tr><td>Balance</td><td class="n">${rs(t.grandTotalPaise - received)}</td></tr>
-      </tbody></table>
-      ${bank.accountNo || p.upiId ? `<div class="box"><h4>Bank Details</h4><div class="muted">
-        ${bank.name ? `Name: ${esc(bank.name)}<br>` : ''}${bank.accountNo ? `Account No.: ${esc(bank.accountNo)}<br>` : ''}
-        ${bank.ifsc ? `IFSC code: ${esc(bank.ifsc)}<br>` : ''}${bank.holder ? `Account holder's name: ${esc(bank.holder)}<br>` : ''}
-        ${p.upiId ? `UPI: ${esc(p.upiId)}` : ''}</div></div>` : ''}
-      <div class="sign">For: ${esc(p.signatory)}<br><br><br>Authorized Signatory</div>
+        <tr class="due"><td>Balance due</td><td class="n">${rs(t.grandTotalPaise - received)}</td></tr>
+      </table></div>
+      <div class="sign">
+        For <strong>${esc(p.signatory || issuer.name)}</strong>
+        <img src="${signatureUrl}" alt="Signature">
+        <div class="who">${esc(SIGNATORY.name)}</div>
+        <div class="small">${esc(SIGNATORY.title)}</div>
+      </div>
     </div>
   </div>
-  <div class="small" style="margin-top:16px">This is a computer generated ${isBos ? 'bill' : 'invoice'}.</div>`;
+
+  <div class="footer">${contacts}</div>
+  <div class="gen">This is a computer generated ${docWord.toLowerCase()}.</div>`;
 
   const title = `${p.title} ${inv.number || 'draft'}`;
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>${STYLE}</style></head><body>${body}</body></html>`;
