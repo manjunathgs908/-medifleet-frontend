@@ -50,103 +50,117 @@ const STYLE = `
 @page{size:A4;margin:0}
 *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 html,body{margin:0;padding:0;background:#fff}
-body{font-family:"Segoe UI",system-ui,Arial,sans-serif;color:#1f2937;font-size:12px;line-height:1.45}
-/* The page itself: A4 wide and (at least) A4 tall, a column whose line-items
-   box grows to fill the height, so the totals, signature and footer bar sit
-   at the bottom of the page. The script at the end scales a long invoice
-   down to keep it on one page. */
-.sheet{width:210mm;min-height:296.5mm;padding:11mm 11mm 9mm;margin:0 auto;background:#fff;display:flex;flex-direction:column}
+body{font-family:"Segoe UI",system-ui,Arial,sans-serif;color:#1f2937;font-size:13px;line-height:1.45}
+/* The page itself: A4 wide and (at least) A4 tall, a column. The spare
+   height is shared between the small .gap spacers between sections, so a
+   short invoice fills the page evenly with the footer at the bottom and no
+   single large hole. The script at the end fits a long invoice on one page. */
+.sheet{width:210mm;min-height:296.5mm;padding:9.5mm 11mm 8mm;margin:0 auto;background:#fff;display:flex;flex-direction:column}
 @media screen{body{background:#f3f4f6}.sheet{box-shadow:0 1px 4px rgba(0,0,0,.12);margin:12px auto}}
+.gap{flex:1 1 0;min-height:0;max-height:22mm}
 .top{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
 .brand{display:flex;align-items:center;gap:12px}
-.logo{width:46px;height:62px;overflow:hidden;position:relative;flex:none}
-.logo img{position:absolute;width:86px;height:86px;left:-20px;top:-12px}
-.name{font-size:25px;font-weight:700;color:${BRAND.navy};letter-spacing:-.2px;line-height:1.1}
-.tagline{color:${BRAND.blue};font-weight:600;font-size:12px;margin-top:3px}
-.doc{text-align:right;min-width:200px}
-.doc .title{font-size:18px;font-weight:800;color:${BRAND.navy};letter-spacing:.6px}
+.logo{width:48px;height:65px;overflow:hidden;position:relative;flex:none}
+.logo img{position:absolute;width:90px;height:90px;left:-21px;top:-12.5px}
+.name{font-size:27px;font-weight:700;color:${BRAND.navy};letter-spacing:-.2px;line-height:1.1}
+.tagline{color:${BRAND.blue};font-weight:600;font-size:13px;margin-top:3px}
+.doc{text-align:right;min-width:210px}
+.doc .title{font-size:19px;font-weight:800;color:${BRAND.navy};letter-spacing:.6px}
 .doc table{margin-left:auto;margin-top:4px;border-collapse:collapse}
-.doc td{padding:1px 0 1px 10px;font-size:12px}
+.doc td{padding:1px 0 1px 10px;font-size:13px}
 .doc td.k{color:#6b7280;text-align:right}.doc td.v{font-weight:600;text-align:right}
-.issuer{margin-top:9px;color:#4b5563;font-size:11.5px;line-height:1.5}
+.issuer{margin-top:9px;color:#4b5563;font-size:12.5px;line-height:1.5}
 .issuer strong{color:#1f2937}
-.rule{height:3px;background:${BRAND.navy};margin:12px 0 14px;border-radius:2px;flex:none}
-.stamp{display:inline-block;margin-top:6px;padding:2px 10px;border:2px solid;font-weight:800;font-size:12px;letter-spacing:1px}
+.rule{height:3px;background:${BRAND.navy};margin:10px 0 12px;border-radius:2px;flex:none}
+.stamp{display:inline-block;margin-top:6px;padding:2px 10px;border:2px solid;font-weight:800;font-size:12.5px;letter-spacing:1px}
 .stamp.cancel{color:#b42318;border-color:#b42318}.stamp.draft{color:#6b7280;border-color:#6b7280}
-.parties{display:grid;grid-template-columns:1.25fr 1fr;gap:12px;margin-bottom:14px}
+.parties{display:grid;grid-template-columns:1.25fr 1fr;gap:12px}
 .parties.three{grid-template-columns:1.15fr 1fr .95fr;gap:10px}
 .card{border:1px solid ${BRAND.line};border-radius:6px;overflow:hidden;break-inside:avoid}
-.card h3{margin:0;background:${BRAND.tint};color:${BRAND.navy};font-size:10.5px;letter-spacing:.6px;text-transform:uppercase;padding:6px 10px}
-.card .body{padding:8px 10px}
-.card .pname{font-weight:700;font-size:12.5px;color:#111827}
+.card h3{margin:0;background:${BRAND.tint};color:${BRAND.navy};font-size:11.5px;letter-spacing:.6px;text-transform:uppercase;padding:5px 10px}
+.card .body{padding:6px 10px}
+.card .pname{font-weight:700;font-size:14px;color:#111827}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px}.kv .k{color:#6b7280}
-/* The line items: a bordered box that takes the spare height of the page. */
-.items-box{flex:1 1 auto;border:1px solid ${BRAND.line};border-radius:6px;overflow:hidden;min-height:60mm}
+/* The line items: a bordered box with a few blank rows' worth of room below
+   the last line — it does not stretch to fill the page. */
+.items-box{flex:none;border:1px solid ${BRAND.line};border-radius:6px;overflow:hidden;min-height:30mm;margin-top:12px}
 table.items,table.tax{border-collapse:collapse;width:100%}
-table.items th,table.tax th{background:${BRAND.navy};color:#fff;font-weight:600;text-align:left;padding:8px 9px;font-size:11.5px}
-table.items td,table.tax td{padding:8px 9px;border-bottom:1px solid ${BRAND.line};vertical-align:top}
+table.items th,table.tax th{background:${BRAND.navy};color:#fff;font-weight:600;text-align:left;padding:8px 10px;font-size:12.5px}
+table.items td,table.tax td{padding:9px 10px;border-bottom:1px solid ${BRAND.line};vertical-align:top;font-size:13px}
 table.items tr,table.tax tr{break-inside:avoid}
 table.items tr:nth-child(even) td{background:#fafcff}
 .n,table.items th.n,table.tax th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-.small{font-size:10.5px;color:#6b7280}
-.section-title{font-size:10.5px;font-weight:700;color:${BRAND.navy};text-transform:uppercase;letter-spacing:.6px;margin:14px 0 6px}
-.lower{display:grid;grid-template-columns:1.25fr 1fr;gap:16px;margin-top:14px;align-items:start}
+.small{font-size:11.5px;color:#6b7280}
+.section-title{font-size:11.5px;font-weight:700;color:${BRAND.navy};text-transform:uppercase;letter-spacing:.6px;margin:12px 0 5px}
+.lower{display:grid;grid-template-columns:1.25fr 1fr;gap:16px;margin-top:12px;align-items:start}
 .totals{border:1px solid ${BRAND.line};border-radius:6px;overflow:hidden;break-inside:avoid}
 .totals table{width:100%;border-collapse:collapse}
-.totals td{padding:7px 10px;border-bottom:1px solid ${BRAND.line}}
-.totals tr.grand td{background:${BRAND.navy};color:#fff;font-weight:700;font-size:14px;border-bottom:0}
+.totals td{padding:6px 11px;border-bottom:1px solid ${BRAND.line};font-size:13px}
+.totals tr.grand td{background:${BRAND.navy};color:#fff;font-weight:700;font-size:16px;border-bottom:0}
 .totals tr.due td{font-weight:700;color:${BRAND.navy}}
-.words{background:${BRAND.tint};border-left:3px solid ${BRAND.navy};padding:8px 10px;border-radius:4px}
-.notes{font-size:11px;line-height:1.5}
-.notes p{margin:0 0 5px}
-.bank{background:${BRAND.tint};border:1px solid ${BRAND.line};border-radius:6px;padding:8px 10px;margin-top:10px;break-inside:avoid}
+.words{background:${BRAND.tint};border-left:3px solid ${BRAND.navy};padding:9px 11px;border-radius:4px;font-size:13px}
+.notes{font-size:12.5px;line-height:1.5}
+.notes p{margin:0 0 6px}
+/* Bank details: one full-width strip under the totals and signature. */
+.bank{background:${BRAND.tint};border:1px solid ${BRAND.line};border-radius:6px;padding:7px 12px;margin-top:12px;break-inside:avoid;font-size:12px;flex:none}
 .bank .section-title{margin:0 0 4px}
-.sign{margin-top:14px;break-inside:avoid}
-.sign img{height:48px;display:block;margin:4px 0 2px}
+.bankrow{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 14px}
+.bankrow .k{display:block;color:#6b7280;font-size:10.5px}
+.sign{margin-top:12px;break-inside:avoid;font-size:13px}
+.sign img{height:46px;display:block;margin:4px 0 2px}
 .sign .who{font-weight:700;color:#111827}
-.footer{margin-top:16px;background:${BRAND.navy};color:#fff;text-align:center;padding:9px 12px;border-radius:4px;font-size:11.5px;break-inside:avoid;flex:none}
-.gen{text-align:center;color:#9ca3af;font-size:10.5px;margin-top:5px;flex:none}
-/* A long invoice: the tighter spacing, applied by the script before any
-   scaling, so text stays as large as possible. */
+.footer{margin-top:12px;background:${BRAND.navy};color:#fff;text-align:center;padding:10px 12px;border-radius:4px;font-size:12.5px;break-inside:avoid;flex:none}
+.gen{text-align:center;color:#9ca3af;font-size:11px;margin-top:5px;flex:none}
+/* A long invoice: the tighter spacing and smaller type, applied by the
+   script before any scaling, so text stays as large as possible. */
 .sheet.compact{font-size:11px;line-height:1.35;padding:9mm 10mm 8mm}
+.compact .name{font-size:22px}.compact .tagline{font-size:11px}
+.compact .doc .title{font-size:16px}.compact .doc td{font-size:11px;padding:0 0 0 8px}
 .compact .issuer{margin-top:6px;font-size:10.5px;line-height:1.4}
 .compact .rule{margin:8px 0 10px}
-.compact .parties{margin-bottom:10px}
 .compact .card h3{padding:4px 8px;font-size:9.5px}
 .compact .card .body{padding:5px 8px}
-.compact .items-box{min-height:0}
+.compact .card .pname{font-size:11.5px}
+.compact .items-box{min-height:0;margin-top:10px}
 .compact table.items th,.compact table.tax th{padding:5px 7px;font-size:10.5px}
-.compact table.items td,.compact table.tax td{padding:4px 7px}
+.compact table.items td,.compact table.tax td{padding:4px 7px;font-size:11px}
+.compact .small{font-size:9.5px}
 .compact .section-title{margin:8px 0 3px;font-size:9.5px}
 .compact .lower{margin-top:9px;gap:12px}
-.compact .totals td{padding:4px 8px}
-.compact .words{padding:5px 8px}
+.compact .totals td{padding:4px 8px;font-size:11px}
+.compact .totals tr.grand td{font-size:12.5px}
+.compact .words{padding:5px 8px;font-size:11px}
 .compact .notes{font-size:10px;line-height:1.35}
 .compact .notes p{margin:0 0 3px}
-.compact .bank{padding:5px 8px;margin-top:7px}
-.compact .sign{margin-top:8px}
+.compact .bank{padding:5px 8px;margin-top:8px;font-size:11px}
+.compact .bankrow .k{font-size:9.5px}
+.compact .sign{margin-top:8px;font-size:11px}
 .compact .sign img{height:38px}
 .compact .footer{margin-top:10px;padding:6px 10px;font-size:10.5px}
 `;
 
-// Keeps the invoice on one A4 page. A short invoice simply fills the page
-// (the sheet is A4 tall and its line-items box grows). A long one — its
-// natural height, measured without the full-page minimum, is more than a
-// page — first gets the tighter spacing; if it is still too tall it is
-// scaled down just enough (never below 70%), widened and made taller to
-// match, so it still fills exactly one page. The sheet has a fixed width,
-// so this measures correctly even in the hidden print frame. Runs as the
-// page loads and again just before printing.
+// Keeps the invoice on one A4 page, filled. A short invoice simply fills the
+// page (the sheet is A4 tall; the spare height is shared by the .gap
+// spacers). If the full-size invoice is a little taller than a page it is
+// scaled down by at most 10% so it fills exactly one page with the same
+// look; if it is longer than that it first gets the tighter spacing, then
+// is scaled (never below 70%). Scaling widens and lengthens the sheet to
+// match, so it still covers the whole page. The sheet has a fixed width, so
+// this measures correctly even in the hidden print frame. Runs as the page
+// loads and again just before printing.
 const FIT_ONE_PAGE = `(function(){
   var s=document.querySelector('.sheet'); if(!s) return;
   var page=297*96/25.4-2;
   function natural(){ return s.getBoundingClientRect().height; }
+  function scale(z){ s.style.zoom=z; s.style.width=(210/z)+'mm'; s.style.minHeight=(296.5/z)+'mm'; }
   function fit(){
     s.classList.remove('compact'); s.style.zoom=''; s.style.width=''; s.style.minHeight='0';
     var h=natural();
-    if(h>page){ s.classList.add('compact'); h=natural(); }
-    if(h>page){ var z=Math.max(0.7,page/h); s.style.zoom=z; s.style.width=(210/z)+'mm'; s.style.minHeight=(296.5/z)+'mm'; }
-    else { s.style.minHeight=''; }
+    if(h<=page){ s.style.minHeight=''; return; }
+    if(page/h>=0.9){ scale(page/h); return; }
+    s.classList.add('compact'); h=natural();
+    if(h<=page){ s.style.minHeight=''; return; }
+    scale(Math.max(0.7,page/h));
   }
   fit(); window.addEventListener('beforeprint',fit);
 })();`;
@@ -273,25 +287,17 @@ export function gstInvoiceHtml({ invoice: inv, print: p }) {
     </div></div></div>
   </div>
 
+  <div class="gap"></div>
   <div class="items-box"><table class="items"><thead><tr><th>#</th><th>Description</th><th>HSN/SAC</th><th class="n">Qty</th><th class="n">Rate</th>${anyDiscount ? '<th class="n">Discount</th>' : ''}<th class="n">Taxable value</th>${isBos ? '' : '<th class="n">GST</th>'}<th class="n">Amount</th></tr></thead>
   <tbody>${lines}</tbody></table></div>
+  <div class="gap"></div>
   ${breakup}
 
+  <div class="gap"></div>
   <div class="lower">
     <div>
       <div class="words"><strong>Amount in words:</strong> ${esc(p.amountInWords)}</div>
       ${notes ? `<div class="section-title">Notes</div><div class="notes">${notes}</div>` : ''}
-      <div class="bank">
-        <div class="section-title" style="margin-top:0">Bank details</div>
-        <div class="kv">
-          ${bank.holder ? `<span class="k">Account name</span><span>${esc(bank.holder)}</span>` : ''}
-          ${bank.name ? `<span class="k">Bank</span><span>${esc(bank.name)}</span>` : ''}
-          ${bank.accountNo ? `<span class="k">Account no.</span><span><strong>${esc(bank.accountNo)}</strong></span>` : ''}
-          ${bank.ifsc ? `<span class="k">IFSC</span><span>${esc(bank.ifsc)}</span>` : ''}
-          ${p.upiId ? `<span class="k">UPI</span><span>${esc(p.upiId)}</span>` : ''}
-          ${!bank.accountNo && !p.upiId ? '<span class="k">—</span><span>Add bank details in GST Invoicing → Settings.</span>' : ''}
-        </div>
-      </div>
     </div>
     <div>
       <div class="totals"><table>
@@ -309,6 +315,19 @@ export function gstInvoiceHtml({ invoice: inv, print: p }) {
     </div>
   </div>
 
+  <div class="bank">
+    <div class="section-title">Bank details</div>
+    <div class="bankrow">
+      ${bank.holder ? `<div><span class="k">Account name</span>${esc(bank.holder)}</div>` : ''}
+      ${bank.name ? `<div><span class="k">Bank</span>${esc(bank.name)}</div>` : ''}
+      ${bank.accountNo ? `<div><span class="k">Account no.</span><strong>${esc(bank.accountNo)}</strong></div>` : ''}
+      ${bank.ifsc ? `<div><span class="k">IFSC</span>${esc(bank.ifsc)}</div>` : ''}
+      ${p.upiId ? `<div><span class="k">UPI</span>${esc(p.upiId)}</div>` : ''}
+      ${!bank.accountNo && !p.upiId ? '<div>Add bank details in GST Invoicing → Settings.</div>' : ''}
+    </div>
+  </div>
+
+  <div class="gap"></div>
   <div class="footer">${contacts}</div>
   <div class="gen">This is a computer generated ${docWord.toLowerCase()}.</div>`;
 
