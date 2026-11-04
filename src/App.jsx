@@ -33,6 +33,7 @@ import SeoStudioPage from './pages/SeoStudioPage';
 import QuotePage from './pages/QuotePage';
 import CallLogsPage from './pages/CallLogsPage';
 import CallbacksPage from './pages/CallbacksPage';
+import AiTelecallerPage from './pages/AiTelecallerPage';
 
 // Driver mobile app pages
 import DriverApp       from './pages/driver/DriverApp';
@@ -145,6 +146,11 @@ export default function App() {
               <Route path="staff"      element={
                 <ProtectedRoute roles={['owner']}>
                   <StaffPage />
+                </ProtectedRoute>
+              } />
+              <Route path="ai-telecaller" element={
+                <ProtectedRoute roles={['owner']}>
+                  <AiTelecallerPage />
                 </ProtectedRoute>
               } />
               <Route path="compliance" element={

@@ -15,7 +15,7 @@ import {
   LayoutDashboard, Radio, Truck, FileText, Receipt,
   TrendingUp, Users, Target, ShieldCheck, Building2, UserCheck,
   LogOut, Menu, X, Bell, BellOff, BellRing, ChevronRight, ChevronDown, AlertTriangle, PhoneMissed, MapPin, MessageCircle, MessageSquare, Sparkles,
-  PhoneCall, PhoneForwarded, Headphones, Wallet, Banknote
+  PhoneCall, PhoneForwarded, Headphones, Wallet, Banknote, Bot
 } from 'lucide-react';
 
 const SOS_POLL_MS = 30000;
@@ -50,6 +50,7 @@ const NAV_GROUPS = [
     { label: 'WhatsApp Chats', to: '/whatsapp-conversations', icon: MessageSquare, roles: ['owner', 'telecaller'] },
     { label: 'Callbacks',   to: '/callbacks',  icon: PhoneForwarded,  roles: ['owner', 'telecaller'], badgeKey: 'callbacks' },
     { label: 'Call Logs',   to: '/call-logs',  icon: PhoneCall,       roles: ['owner', 'telecaller'] },
+    { label: 'AI Telecaller (pilot)', to: '/ai-telecaller', icon: Bot, roles: ['owner'] },
   ] },
   { id: 'finance', label: 'Finance', items: [
     { label: 'Billing',     to: '/billing',    icon: Receipt,         roles: ['owner'] },

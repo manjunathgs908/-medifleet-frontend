@@ -160,6 +160,7 @@ function TaskCard({ task, assignees, me, onChanged }) {
               : task.state === 'withdrawn' ? <Badge color="gray">Answered after all</Badge> : <Badge color="green">Resolved</Badge>}
             {task.missedCount > 1 && <Badge color="red">{task.missedCount} missed calls</Badge>}
             {task.source === 'not_routed' && <Badge color="gray">From not routed</Badge>}
+            {task.source === 'ai_call' && <Badge color="blue">From AI telecaller</Badge>}
           </div>
           <div className="text-[11px] mt-1" style={{ color: 'var(--text3)' }}>
             {[

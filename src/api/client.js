@@ -129,6 +129,16 @@ export const tripsApi = {
   updateStatus: (id, status)   => api.put(`/trips/${id}/status`, { status }),
 };
 
+// AI telecaller PILOT (owner only) — medifleet-backend /api/ai-caller.
+// Calls only numbers on the server's AI_CALL_TEST_NUMBERS allowlist.
+export const aiCallerApi = {
+  status   : ()        => api.get('/ai-caller/status'),
+  setToggle: (enabled) => api.put('/ai-caller/toggle', { enabled }),
+  call     : (phone)   => api.post('/ai-caller/calls', { phone }),
+  calls    : ()        => api.get('/ai-caller/calls', { skipErrorToast: true }),
+  get      : (id)      => api.get(`/ai-caller/calls/${id}`, { skipErrorToast: true }),
+};
+
 // Open / Dismiss on the incoming alert for a WhatsApp lead (type 'wa_lead')
 // or WhatsApp conversation ('wa_chat'); bookings use tripsApi.acknowledge.
 export const alertsApi = {

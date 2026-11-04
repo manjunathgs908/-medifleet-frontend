@@ -37,7 +37,7 @@ const VIBRATE_PATTERN = [1800, 700];
 // without inter-sample overs crackling. The SOS siren peaks at 0.3.
 const RING_LEVEL      = 0.95;
 
-const SOURCE_LABELS = { whatsapp: 'WhatsApp', web: 'Website', app: 'Website / App' };
+const SOURCE_LABELS = { whatsapp: 'WhatsApp', web: 'Website', app: 'Website / App', ai_telecaller: 'AI telecaller (pilot)' };
 // The server marks a quote link the customer confirmed (incomingVia).
 const sourceLabel = (t) => (t.incomingVia === 'quote_link'
   ? 'Quote link — confirmed by customer'
