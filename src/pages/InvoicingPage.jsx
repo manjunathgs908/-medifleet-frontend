@@ -307,7 +307,23 @@ function InvoiceView({ id, onClose, onChanged, onEdit }) {
             {inv.status === 'issued' && inv.balancePaise > 0 && <Btn size="sm" variant="blue" onClick={() => setMode('pay')}><IndianRupee size={13} /> Record money received</Btn>}
             {inv.status === 'issued' && !(inv.receivedPaise > 0) && <Btn size="sm" variant="danger" onClick={() => setMode('cancel')}><Ban size={13} /> Cancel invoice</Btn>}
             {inv.status === 'cancelled' && inv.docType === 'tax_invoice' && !(inv.receivedPaise > 0) && <Btn size="sm" variant="danger" onClick={openDelete}><Trash2 size={13} /> Delete permanently</Btn>}
+            {/* Monthly auto-bill: this issued invoice is copied into next month's draft. */}
+            {inv.status === 'issued' && !inv.isMonthly && !inv.monthlyStoppedAt && (
+              <Btn size="sm" disabled={busy} onClick={() => act(() => invoicingApi.updateInvoice(inv._id, { rev: inv.rev, isMonthly: true }), 'This invoice will repeat monthly.')}><RefreshCw size={13} /> Repeat monthly</Btn>
+            )}
+            {inv.status === 'issued' && inv.isMonthly && (
+              <Btn size="sm" variant="danger" disabled={busy} onClick={() => act(() => invoicingApi.updateInvoice(inv._id, { rev: inv.rev, isMonthly: false, monthlyStoppedAt: new Date().toISOString() }), 'Monthly billing stopped for this client.')}><Ban size={13} /> Stop monthly billing</Btn>
+            )}
+            {inv.status === 'issued' && !inv.isMonthly && inv.monthlyStoppedAt && (
+              <Btn size="sm" disabled={busy} onClick={() => act(() => invoicingApi.updateInvoice(inv._id, { rev: inv.rev, isMonthly: true, monthlyStoppedAt: null }), 'Monthly billing resumed.')}><RefreshCw size={13} /> Resume monthly</Btn>
+            )}
           </div>
+          {inv.status === 'issued' && inv.isMonthly && (
+            <div className="text-xs mb-3" style={{ color: 'var(--accent)' }}>Repeats monthly: "Generate this month's bills" copies this invoice into a draft for each new month.</div>
+          )}
+          {inv.status === 'draft' && inv.sourceTemplateId && (
+            <div className="text-xs mb-3" style={{ color: 'var(--blue)' }}>Monthly draft — check the driver, vehicle, days and amount, then Issue. Issuing makes this the invoice copied next month.</div>
+          )}
           {mode === 'delete' && (
             <div className="card-sm mb-3 space-y-2" style={{ borderColor: 'rgba(255,77,109,.45)' }}>
               <div className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--red)' }}><AlertTriangle size={15} aria-hidden="true" /> Delete {inv.number} permanently</div>
@@ -372,10 +388,39 @@ function InvoicesTab({ lookups, reloadLookups }) {
   const load = () => invoicingApi.invoices({ status: filter.status || undefined, payment: filter.payment || undefined }).then(({ data }) => setList(data.invoices)).catch(() => setList([]));
   useEffect(() => { load(); }, [filter]);
 
+  // Monthly auto-bill: the month to generate drafts for (default: this month, IST).
+  const months = useMemo(() => {
+    const now = new Date(Date.now() + 5.5 * 3600e3);
+    return [-3, -2, -1, 0, 1].map((k) => {
+      const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + k, 1));
+      return { key: `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}`, year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, label: d.toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' }) };
+    });
+  }, []);
+  const [genKey, setGenKey] = useState(() => months[3].key);
+  const [generating, setGenerating] = useState(false);
+  const generate = async () => {
+    const m = months.find((x) => x.key === genKey) || months[3];
+    setGenerating(true);
+    try {
+      const { data } = await invoicingApi.generateMonthly(m.year, m.month);
+      toast.success(`Created ${data.createdCount} draft bill${data.createdCount === 1 ? '' : 's'} for ${m.label}. Check and issue each.`);
+      if (data.skippedCount) toast(`${data.skippedCount} skipped — already billed or a draft already exists for ${m.label}.`, { icon: 'ℹ️' });
+      load();
+    } catch (err) {
+      toast.error(errMsg(err, 'Could not generate the monthly bills.'));
+    } finally { setGenerating(false); }
+  };
+
   return (
     <div>
       <div className="flex flex-wrap gap-2 items-end mb-3">
         <Btn onClick={() => setEditing({})} disabled={!lookups.parties.length}><Plus size={14} /> New invoice</Btn>
+        <div className="flex gap-1 items-end">
+          <Btn variant="blue" onClick={generate} disabled={generating}><RefreshCw size={14} /> {generating ? 'Generating…' : "Generate this month's bills"}</Btn>
+          <Select value={genKey} onChange={(e) => setGenKey(e.target.value)} aria-label="Month to bill">
+            {months.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+          </Select>
+        </div>
         <Select value={filter.status} onChange={(e) => setFilter({ ...filter, status: e.target.value })} aria-label="Status">
           <option value="">All</option><option value="draft">Drafts</option><option value="issued">Issued</option><option value="cancelled">Cancelled</option>
         </Select>
@@ -401,7 +446,13 @@ function InvoicesTab({ lookups, reloadLookups }) {
                     <td className="p-3">{i.partyName}{i.serviceLocation?.siteName && <div className="text-xs" style={{ color: 'var(--text3)' }}>{i.serviceLocation.siteName}</div>}</td>
                     <td className="p-3 text-right font-mono">{rs(i.totals?.grandTotalPaise || 0)}</td>
                     <td className="p-3 text-right font-mono">{i.balancePaise == null ? '—' : rs(i.balancePaise)}</td>
-                    <td className="p-3"><Badge color={c}>{l}</Badge></td>
+                    <td className="p-3">
+                      <div className="flex flex-wrap gap-1">
+                        <Badge color={c}>{l}</Badge>
+                        {i.isMonthly && <Badge color="green">Monthly</Badge>}
+                        {!i.isMonthly && i.monthlyStoppedAt && <Badge color="gray">Stopped</Badge>}
+                      </div>
+                    </td>
                   </tr>
                 );
               })}

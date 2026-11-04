@@ -463,5 +463,9 @@ export const invoicingApi = {
   // Permanently delete a CANCELLED tax invoice (no money received). Preview
   // says whether its number is reused or leaves a gap; the run needs DELETE.
   previewDeleteCancelled: (id)   => api.get(`/invoicing/invoices/${id}/delete-cancelled`, { skipErrorToast: true }),
+  // Monthly auto-bill: a draft for that month from every issued invoice
+  // marked "Repeat monthly" (skips any already billed for that month). The
+  // flag itself is set with updateInvoice(id, { rev, isMonthly, monthlyStoppedAt }).
+  generateMonthly: (year, month) => api.post('/invoicing/generate-monthly', { year, month }, { skipErrorToast: true }),
   deleteCancelled: (id, confirm) => api.post(`/invoicing/invoices/${id}/delete-cancelled`, { confirm }, { skipErrorToast: true }),
 };
