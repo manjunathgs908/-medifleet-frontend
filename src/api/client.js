@@ -119,6 +119,13 @@ export const tripsApi = {
   suggestedAmbulances: (id) => api.get(`/trips/${id}/suggested-ambulances`),
   complete    : (id, data) => api.put(`/trips/${id}/complete`, data),
   cancel      : (id, reason)   => api.put(`/trips/${id}/cancel`, { reason }),
+  // Customer bookings nobody has answered yet — the full-screen ring
+  // (components/IncomingBookingAlert). action: 'accepted' | 'dismissed';
+  // the first operator's tap wins and stops it ringing everywhere.
+  // Polled every few seconds from every page, so a failure is silent here
+  // (the next poll retries) instead of a toast every poll.
+  incoming    : ()             => api.get('/trips/incoming', { skipErrorToast: true }),
+  acknowledge : (id, action)   => api.put(`/trips/${id}/acknowledge`, { action }),
   updateStatus: (id, status)   => api.put(`/trips/${id}/status`, { status }),
 };
 

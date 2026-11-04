@@ -1,5 +1,6 @@
 // src/pages/DispatchPage.jsx
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { tripsApi, hospitalsApi, pricingApi, quotesApi, billingApi } from '../api/client';
 import { billHtml, printHtml } from '../lib/customerDocs';
 import AddressAutocomplete from '../components/AddressAutocomplete';
@@ -8,9 +9,11 @@ import { ambulanceTypeLabel, servicesFromPricing, fmtDuration } from '../utils/s
 import RoutePreviewMap from '../components/RoutePreviewMap';
 import { PageHeader, StatusBadge, Badge, Btn, Modal, rupee, Spinner, fmtDateTime as fmtStamp, timeAgo, custPhone } from '../components/ui';
 import toast from 'react-hot-toast';
-import { Send, RefreshCw, CheckCircle, XCircle, MapPin, Phone, Bell, BellOff, X, Link2, ExternalLink } from 'lucide-react';
+import { Send, RefreshCw, CheckCircle, XCircle, MapPin, Phone, Link2, ExternalLink } from 'lucide-react';
 
-const MAX_RINGS = 12; // ~12s of ringing if never dismissed
+// New-booking alerts (sound + popup) are not on this page any more: they
+// ring on every CRM page from components/IncomingBookingAlert, whose Accept
+// lands here as /dispatch?trip=<id> and opens that booking.
 
 // Every field the operator actually chooses. Distance, base fare, per-km rate
 // and total are deliberately absent: they are computed by the backend from
@@ -124,8 +127,8 @@ const CANCEL_REASONS = [
 
 const EMERGENCY_LABELS = Object.fromEntries(EMERGENCY_TYPES.map((o) => [o.value, o.label]));
 
-// One implementation, rendered by both the new-booking popup and the Active
-// Trips card — the two showed different subsets before and drifted apart.
+// One implementation for the Active Trips card (it was once shared with a
+// new-booking popup here — the two showed different subsets and drifted apart).
 // Every row and badge is independently optional: a CRM-desk or WhatsApp
 // booking carries none of the website's option fields and simply renders
 // fewer badges rather than "undefined".
@@ -217,8 +220,6 @@ export default function DispatchPage() {
   // are already assigned.
   const [suggestions, setSuggestions] = useState({});
   const [loadingSuggestions, setLoadingSuggestions] = useState(null);
-  const [soundEnabled, setSoundEnabled] = useState(false);
-  const [newBookings, setNewBookings]   = useState([]); // freshly-arrived trips awaiting acknowledgment
   const [quotes,      setQuotes]      = useState([]);
   const [quoteOpen,   setQuoteOpen]   = useState(false);
   const [quoteForm,   setQuoteForm]   = useState(EMPTY_QUOTE);
@@ -226,13 +227,12 @@ export default function DispatchPage() {
   const [quoteDrop,   setQuoteDrop]   = useState(null);
   const [sendingQuote, setSendingQuote] = useState(false);
   const intervalRef      = useRef();
-  const knownTripIdsRef  = useRef(null); // null = baseline not yet captured (skip alert on first load)
-  const audioCtxRef      = useRef(null);
-  const ringTimerRef     = useRef(null);
-  const soundEnabledRef  = useRef(false); // mirrors soundEnabled for the setInterval closure
   const estimateSeqRef   = useRef(0);     // drops out-of-order quote responses
-
-  useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
+  // ?trip=<id> — set by the incoming-booking alert's Accept: open that
+  // booking's details and bring it into view, then drop the param.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const focusTripId = searchParams.get('trip');
+  const [flashId, setFlashId] = useState(null);
 
   // The dropdown is whatever the Pricing collection currently offers.
   const services = useMemo(() => servicesFromPricing(pricing), [pricing]);
@@ -278,75 +278,27 @@ export default function DispatchPage() {
   useEffect(() => {
     loadInitialData();
     intervalRef.current = setInterval(() => { loadLiveBoard(); loadQuotes(); }, 20000);
-    return () => {
-      clearInterval(intervalRef.current);
-      stopRinging();
-      audioCtxRef.current?.close();
-    };
+    return () => clearInterval(intervalRef.current);
   }, []);
 
-  // ── Alert sound (Web Audio API — synthesized, no asset file, keeps
-  // playing in a backgrounded tab once unlocked by a user gesture) ──
-  const playChime = () => {
-    const ctx = audioCtxRef.current;
-    if (!ctx) return;
-    const now = ctx.currentTime;
-    [[880, 0], [660, 0.18]].forEach(([freq, delay]) => {
-      const osc  = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0, now + delay);
-      gain.gain.linearRampToValueAtTime(0.3, now + delay + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.16);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now + delay);
-      osc.stop(now + delay + 0.18);
+  // A just-accepted booking may be newer than the last board poll.
+  useEffect(() => { if (focusTripId) loadLiveBoard(); }, [focusTripId]);
+
+  useEffect(() => {
+    if (!focusTripId || !liveTrips.some(t => t._id === focusTripId)) return;
+    setDetailsId(focusTripId);
+    setFlashId(focusTripId);
+    requestAnimationFrame(() => {
+      document.querySelector(`[data-trip-id="${focusTripId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
-  };
+    setSearchParams({}, { replace: true });
+  }, [focusTripId, liveTrips]);
 
-  const startRinging = () => {
-    if (!soundEnabledRef.current || !audioCtxRef.current || ringTimerRef.current) return;
-    let count = 0;
-    playChime();
-    count++;
-    ringTimerRef.current = setInterval(() => {
-      if (count >= MAX_RINGS) { stopRinging(); return; }
-      playChime();
-      count++;
-    }, 1000);
-  };
-
-  const stopRinging = () => {
-    if (ringTimerRef.current) { clearInterval(ringTimerRef.current); ringTimerRef.current = null; }
-  };
-
-  const enableSound = () => {
-    try {
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      if (!audioCtxRef.current) audioCtxRef.current = new Ctx();
-      if (audioCtxRef.current.state === 'suspended') audioCtxRef.current.resume();
-      setSoundEnabled(true);
-      playChime(); // audible confirmation that the unlock worked
-      toast.success('🔔 Sound alerts enabled for this session');
-    } catch {
-      toast.error('Could not enable audio in this browser');
-    }
-  };
-
-  const dismissBooking = (id) => {
-    setNewBookings(prev => {
-      const next = prev.filter(b => b._id !== id);
-      if (next.length === 0) stopRinging();
-      return next;
-    });
-  };
-
-  const dismissAllBookings = () => {
-    setNewBookings([]);
-    stopRinging();
-  };
+  useEffect(() => {
+    if (!flashId) return;
+    const t = setTimeout(() => setFlashId(null), 4000);
+    return () => clearTimeout(t);
+  }, [flashId]);
 
   const loadInitialData = async () => {
     setLoading(true);
@@ -414,20 +366,6 @@ export default function DispatchPage() {
     try {
       const { data } = await tripsApi.getLive();
       const trips = data.liveTrips || [];
-      const currentIds = new Set(trips.map(t => t._id));
-
-      if (knownTripIdsRef.current === null) {
-        // First load — just record the baseline, don't alert for pre-existing bookings.
-        knownTripIdsRef.current = currentIds;
-      } else {
-        const freshlyArrived = trips.filter(t => !knownTripIdsRef.current.has(t._id));
-        if (freshlyArrived.length) {
-          setNewBookings(prev => [...prev, ...freshlyArrived]);
-          startRinging();
-        }
-        knownTripIdsRef.current = currentIds;
-      }
-
       setLiveTrips(sortByUrgency(trips));
       setLiveCounts(data.counts || null);
       // Ambulance-sourced units only. The legacy Vehicle collection is
@@ -579,18 +517,6 @@ export default function DispatchPage() {
             <Btn variant="blue" size="sm" onClick={() => setQuoteOpen(true)}>
               <Link2 size={13} /> Send Quote Link
             </Btn>
-            <button
-              onClick={enableSound}
-              disabled={soundEnabled}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-              style={soundEnabled
-                ? { background: 'rgba(0,212,170,.1)', color: 'var(--accent)', cursor: 'default' }
-                : { background: 'rgba(255,77,109,.1)', color: 'var(--red)', border: '1px solid rgba(255,77,109,.25)', cursor: 'pointer' }}
-              title={soundEnabled ? 'Sound alerts are on for this session' : 'Click to unlock audible new-booking alerts'}
-            >
-              {soundEnabled ? <Bell size={13} /> : <BellOff size={13} />}
-              {soundEnabled ? 'Alerts On' : 'Enable sound alerts'}
-            </button>
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold"
               style={{ background: 'rgba(0,212,170,.1)', color: 'var(--accent)' }}>
               <span className="w-2 h-2 rounded-full pulse-dot" style={{ background: 'var(--accent)' }} />
@@ -599,44 +525,6 @@ export default function DispatchPage() {
           </div>
         }
       />
-
-      {/* ── New Booking Alert Banner ── */}
-      {newBookings.length > 0 && (
-        <div className="fixed top-4 left-4 right-4 sm:left-auto z-50 space-y-2 sm:w-full max-w-sm">
-          {newBookings.length > 1 && (
-            <button onClick={dismissAllBookings}
-              className="w-full text-center text-[11px] font-semibold py-1 rounded-lg"
-              style={{ background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border2)' }}>
-              Dismiss all ({newBookings.length})
-            </button>
-          )}
-          {newBookings.map(b => (
-            <div key={b._id} className="rounded-xl p-4 shadow-lg banner-pop"
-              style={{ background: 'var(--surface)', border: '1px solid var(--red)', boxShadow: '0 0 0 1px rgba(255,77,109,.25), 0 8px 24px rgba(255,77,109,.25)' }}>
-              <div className="flex items-start justify-between gap-2">
-                <div className="font-bold font-display text-sm" style={{ color: 'var(--red)' }}>
-                  🚑 New Booking!
-                </div>
-                <button onClick={() => dismissBooking(b._id)} style={{ color: 'var(--text3)' }}>
-                  <X size={16} />
-                </button>
-              </div>
-              <div className="text-sm font-semibold mt-1.5">{b.patientName}</div>
-              <div className="text-xs flex items-center gap-1 mt-0.5" style={{ color: 'var(--text2)' }}>
-                <Phone size={10} /> {custPhone(b.patientPhone, b.patientPhoneMasked)}
-              </div>
-              <div className="mt-2">
-                <BookingSummary t={b} />
-              </div>
-              <button onClick={() => dismissBooking(b._id)}
-                className="w-full mt-2.5 py-1.5 rounded-lg text-xs font-semibold"
-                style={{ background: 'rgba(255,77,109,.08)', color: 'var(--red)', border: '1px solid rgba(255,77,109,.2)' }}>
-                Dismiss
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
 
@@ -836,7 +724,11 @@ export default function DispatchPage() {
               : <div className="space-y-3 overflow-y-auto" style={{ maxHeight: 480 }}>
                   {liveTrips.map(t => (
                     <div key={t._id} className="rounded-xl p-3" data-trip-id={t._id} data-urgency={t.dispatch?.state || ''}
-                      style={{ background: 'var(--surface2)', border: t.dispatch?.state === 'overdue_unassigned' ? '1px solid rgba(255,77,109,.55)' : '1px solid var(--border2)' }}>
+                      style={{
+                        background: 'var(--surface2)',
+                        border: t.dispatch?.state === 'overdue_unassigned' ? '1px solid rgba(255,77,109,.55)' : '1px solid var(--border2)',
+                        ...(flashId === t._id ? { boxShadow: '0 0 0 2px var(--accent)', transition: 'box-shadow .3s' } : {}),
+                      }}>
                       <UrgencyLine d={t.dispatch} />
                       <div className="flex justify-between items-start mb-2">
                         <div>

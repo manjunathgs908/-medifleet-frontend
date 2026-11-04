@@ -6,6 +6,7 @@ import { sosApi, tripCallEventsApi, callsApi, callbacksApi, leadsApi } from '../
 import { InstallAppButton } from '../lib/installApp';
 import InAppPhone, { useInAppPhone } from './InAppPhone';
 import PhoneCallBar from './PhoneCallBar';
+import IncomingBookingAlert from './IncomingBookingAlert';
 import { APP_BUILD } from '../lib/pwaUpdate';
 import { fmtDateTime } from './ui';
 import toast from 'react-hot-toast';
@@ -170,14 +171,29 @@ export default function Shell({ children }) {
   // cause of the silent-siren bug (see investigation), but scheduling audio
   // before resume() has genuinely finished is a real, if narrow, footgun,
   // and awaiting it costs nothing.
+  // The gesture-unlock itself, shared with IncomingBookingAlert's "tap to
+  // enable ringing" — one AudioContext, one tap, both alerts audible.
+  const unlockSound = async () => {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!sosAudioCtxRef.current) sosAudioCtxRef.current = new Ctx();
+    if (sosAudioCtxRef.current.state === 'suspended') await sosAudioCtxRef.current.resume();
+    setSosSoundEnabled(true);
+  };
+
+  const enableBookingSound = async () => {
+    try {
+      await unlockSound();
+      toast.success('🔔 Sound on — bookings and SOS will ring');
+    } catch {
+      toast.error('Could not play audio in this browser');
+    }
+  };
+
   const enableSosSound = async () => {
     try {
-      const Ctx = window.AudioContext || window.webkitAudioContext;
       const firstEnable = !sosSoundEnabled;
-      if (!sosAudioCtxRef.current) sosAudioCtxRef.current = new Ctx();
-      if (sosAudioCtxRef.current.state === 'suspended') await sosAudioCtxRef.current.resume();
+      await unlockSound();
       if (firstEnable) {
-        setSosSoundEnabled(true);
         toast.success('🚨 SOS sound alerts enabled for this session');
       } else {
         toast.success('🔊 Test tone played');
@@ -568,7 +584,7 @@ export default function Shell({ children }) {
                 style={sosSoundEnabled
                   ? { background: 'rgba(0,212,170,.1)', color: 'var(--accent)', cursor: 'pointer' }
                   : { background: 'rgba(255,77,109,.1)', color: 'var(--red)', border: '1px solid rgba(255,77,109,.25)', cursor: 'pointer' }}
-                title={sosSoundEnabled ? 'Click to play a test tone' : 'Click to unlock audible SOS alerts'}
+                title={sosSoundEnabled ? 'Click to play a test tone' : 'Click to unlock audible SOS and incoming-booking alerts'}
               >
                 {sosSoundEnabled ? <Bell size={13} /> : <BellOff size={13} />}
                 <span className="hidden sm:inline">{sosSoundEnabled ? 'SOS Sound On' : 'Enable SOS sound'}</span>
@@ -617,6 +633,15 @@ export default function Shell({ children }) {
           {children}
         </main>
       </div>
+
+      {/* Full-screen ring for new customer bookings, on every page. Below
+          the in-app phone's ringing screen (z-[300]) so a live call wins. */}
+      <IncomingBookingAlert
+        active={isCallStaff}
+        audioCtxRef={sosAudioCtxRef}
+        soundEnabled={sosSoundEnabled}
+        onEnableSound={enableBookingSound}
+      />
 
       {/* In-app calling: ringing screen + in-call bar. Live only while on
           duty with "Ring in app" chosen. */}
