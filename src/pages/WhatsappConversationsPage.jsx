@@ -1,5 +1,6 @@
 // src/pages/WhatsappConversationsPage.jsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { whatsappConversationsApi, whatsappCustomerApi, callsApi } from '../api/client';
 import { PageHeader, Spinner, Empty, SectionLabel, StatusBadge, rupee, fmtDateTime, custPhone } from '../components/ui';
 import CallButton from '../components/CallButton';
@@ -271,6 +272,18 @@ export default function WhatsappConversationsPage() {
     setHistoryData(null);
     setHistoryError(null);
   };
+
+  // ?customer=<customerRef> — "Open" on the incoming WhatsApp-enquiry alert
+  // (components/IncomingBookingAlert) or its notification: open that
+  // customer's conversation history straight away, then drop the param.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const focusCustomer = searchParams.get('customer');
+  useEffect(() => {
+    if (!focusCustomer) return;
+    const row = conversations.find((c) => c.customerRef === focusCustomer);
+    openHistory(focusCustomer, row?.phoneMasked);
+    setSearchParams({}, { replace: true });
+  }, [focusCustomer]);
 
   return (
     <div className="page-enter">

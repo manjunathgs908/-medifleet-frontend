@@ -129,6 +129,12 @@ export const tripsApi = {
   updateStatus: (id, status)   => api.put(`/trips/${id}/status`, { status }),
 };
 
+// Open / Dismiss on the incoming alert for a WhatsApp lead (type 'wa_lead')
+// or WhatsApp conversation ('wa_chat'); bookings use tripsApi.acknowledge.
+export const alertsApi = {
+  acknowledge: (type, id, action) => api.put(`/alerts/${type}/${id}/acknowledge`, { action }),
+};
+
 // Background "New booking" Web Push (src/lib/bookingPush.js). Errors are
 // handled there, quietly — push is an extra, never in the operator's way.
 export const pushApi = {
