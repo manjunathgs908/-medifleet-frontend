@@ -26,9 +26,14 @@ import { custPhone, rupee, fmtDateTime } from './ui';
 
 const POLL_MS         = 5000;
 const RING_TIMEOUT_MS = 60000;
-const RING_CYCLE_MS   = 2000;
-// Matches one ring cycle: buzz, gap, buzz, rest.
-const VIBRATE_PATTERN = [400, 150, 400, 1050];
+const RING_ON_S       = 1.8;   // one "brrrrring"
+const RING_CYCLE_MS   = 2500;  // ring + ~0.7s gap
+// Matches one ring cycle: buzz while it rings, rest in the gap.
+const VIBRATE_PATTERN = [1800, 700];
+// Final output level — just under digital full scale (1.0), so the
+// clipped, square-ish signal is as loud as the device volume allows
+// without inter-sample overs crackling. The SOS siren peaks at 0.3.
+const RING_LEVEL      = 0.95;
 
 const SOURCE_LABELS = { whatsapp: 'WhatsApp', web: 'Website', app: 'Website / App' };
 // The server marks a quote link the customer confirmed (incomingVia).
@@ -36,44 +41,55 @@ const sourceLabel = (t) => (t.incomingVia === 'quote_link'
   ? 'Quote link — confirmed by customer'
   : SOURCE_LABELS[t.bookingSource] || 'Website / App');
 
-// One "brrring … brrring" — two bursts of a bright two-tone trill (a
-// classic phone bell, ~22 Hz warble), through a compressor so it can run
-// loud without clipping. Triangle waves and a trill, deliberately unlike
-// the SOS square-wave wail, so the two are never confused.
+// Soft-clip curve (tanh): drives the mixed tones up to full scale, so the
+// ring keeps near-maximum loudness all the way through instead of only on
+// peaks, and adds the gritty harmonics a ringer has.
+const CLIP_CURVE = (() => {
+  const n = 2048;
+  const k = 4;
+  const curve = new Float32Array(n);
+  for (let i = 0; i < n; i += 1) {
+    const x = (i * 2) / (n - 1) - 1;
+    curve[i] = Math.tanh(k * x) / Math.tanh(k);
+  }
+  return curve;
+})();
+
+// One classic telephone ring: 440 Hz + 480 Hz together (the standard ring
+// pair — their 40 Hz beat is the landline "brrrr" warble), square waves for
+// harmonics that carry on small laptop/phone speakers, soft-clipped to
+// full scale, sharp 5 ms attack, RING_ON_S long. Deliberately unlike the
+// SOS siren (short alternating 1046/784 Hz beeps at 0.3): long, low,
+// warbling and much louder. No compressor — at its defaults it turns the
+// signal DOWN, which is what made the earlier ring quiet.
 const playRingCycle = (ctx) => {
-  const t0 = ctx.currentTime + 0.02;
-  const comp = ctx.createDynamicsCompressor();
-  comp.connect(ctx.destination);
-  [0, 0.55].forEach((start) => {
-    const s = t0 + start;
-    const burst = ctx.createGain();
-    burst.gain.setValueAtTime(0, s);
-    burst.gain.linearRampToValueAtTime(1, s + 0.01);
-    burst.gain.setValueAtTime(1, s + 0.40);
-    burst.gain.linearRampToValueAtTime(0, s + 0.45);
-    burst.connect(comp);
+  const t0  = ctx.currentTime + 0.02;
+  const end = t0 + RING_ON_S;
 
-    // Trill: an LFO swings this gain between 0 and 1.
-    const trill = ctx.createGain();
-    trill.gain.value = 0.5;
-    const lfo = ctx.createOscillator();
-    const depth = ctx.createGain();
-    lfo.frequency.value = 22;
-    depth.gain.value = 0.5;
-    lfo.connect(depth);
-    depth.connect(trill.gain);
-    trill.connect(burst);
-    lfo.start(s);
-    lfo.stop(s + 0.46);
+  const drive = ctx.createGain();   // into the clipper: past full scale on purpose
+  drive.gain.value = 0.8;
+  const shaper = ctx.createWaveShaper();
+  shaper.curve = CLIP_CURVE;
+  shaper.oversample = '4x';         // keeps the clipping from aliasing into hiss
 
-    [1046, 1318].forEach((freq) => {
-      const osc = ctx.createOscillator();
-      osc.type = 'triangle';
-      osc.frequency.value = freq;
-      osc.connect(trill);
-      osc.start(s);
-      osc.stop(s + 0.46);
-    });
+  // Envelope after the clipper, so the attack stays sharp and the gap silent.
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(0, t0);
+  env.gain.linearRampToValueAtTime(RING_LEVEL, t0 + 0.005);
+  env.gain.setValueAtTime(RING_LEVEL, end - 0.02);
+  env.gain.linearRampToValueAtTime(0, end);
+
+  drive.connect(shaper);
+  shaper.connect(env);
+  env.connect(ctx.destination);
+
+  [440, 480].forEach((freq) => {
+    const osc = ctx.createOscillator();
+    osc.type = 'square';
+    osc.frequency.value = freq;
+    osc.connect(drive);
+    osc.start(t0);
+    osc.stop(end);
   });
 };
 
