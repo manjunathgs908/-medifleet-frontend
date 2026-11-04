@@ -109,7 +109,7 @@ export default function AiTelecallerPage() {
             </div>
           )}
           <div className="text-[11px] font-mono" style={{ color: 'var(--text3)' }}>
-            {status.models.realtime} · voice {status.models.voice} · max {status.limits.maxCallSeconds}s AI time
+            {status.models.realtime} + {status.models.delegate} · voice {status.models.voice} · max {status.limits.maxCallSeconds}s AI time
             {!status.costRatesSet && ' · cost not estimated (AI_COST_* not set)'}
           </div>
         </div>
@@ -161,6 +161,15 @@ export default function AiTelecallerPage() {
                       {detail.summary && <div><span className="font-semibold">Summary:</span> {detail.summary}</div>}
                       {detail.trip && <div><span className="font-semibold">Booking:</span> {detail.trip.tripNumber} ({detail.trip.status})</div>}
                       {detail.error && <div style={{ color: 'var(--red)' }}>{detail.error}</div>}
+                      {/* Why the OpenAI side ended, in OpenAI's own words. */}
+                      {detail.openaiClose && (detail.openaiClose.code || detail.openaiClose.reason) && (
+                        <div className="text-xs font-mono" style={{ color: 'var(--amber)' }}>
+                          OpenAI closed: {detail.openaiClose.code != null ? `code ${detail.openaiClose.code}` : ''} {detail.openaiClose.reason || ''}
+                        </div>
+                      )}
+                      {(detail.openaiErrors || []).map((e, i) => (
+                        <div key={i} className="text-xs font-mono" style={{ color: 'var(--amber)' }}>OpenAI error: {e.code} {e.message}</div>
+                      ))}
                       <div className="text-[11px] font-mono" style={{ color: 'var(--text3)' }}>
                         tokens — audio in {detail.usage?.audioIn || 0} · audio out {detail.usage?.audioOut || 0} · text in {detail.usage?.textIn || 0} · text out {detail.usage?.textOut || 0}
                       </div>
