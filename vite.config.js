@@ -71,6 +71,9 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
+        // Background "New booking" Web Push handlers (push +
+        // notificationclick) — plain script in public/, see its header.
+        importScripts: ['push-sw.js'],
       },
     }),
   ],

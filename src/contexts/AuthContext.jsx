@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import api from '../api/client';
 import toast from 'react-hot-toast';
+import { disableBookingPush } from '../lib/bookingPush';
 
 const AuthContext = createContext(null);
 
@@ -31,6 +32,11 @@ export const AuthProvider = ({ children }) => {
 
   // ── Logout ─────────────────────────────────────────────────
   const logout = useCallback(async () => {
+    // This browser stops getting booking notifications (they carry patient
+    // names) while nobody is logged in; the choice is kept, so the next
+    // login turns them back on. Needs the token, so before the logout call;
+    // capped so a slow network never holds up logging out.
+    await Promise.race([disableBookingPush({ remember: false }), new Promise((r) => setTimeout(r, 3000))]);
     try { await api.post('/auth/logout'); } catch { /* ignore */ }
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');

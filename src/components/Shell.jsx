@@ -7,13 +7,14 @@ import { InstallAppButton } from '../lib/installApp';
 import InAppPhone, { useInAppPhone } from './InAppPhone';
 import PhoneCallBar from './PhoneCallBar';
 import IncomingBookingAlert from './IncomingBookingAlert';
+import { bookingPushState, enableBookingPush, disableBookingPush, pushPref, pushBlocker, PUSH_HINTS } from '../lib/bookingPush';
 import { APP_BUILD } from '../lib/pwaUpdate';
 import { fmtDateTime } from './ui';
 import toast from 'react-hot-toast';
 import {
   LayoutDashboard, Radio, Truck, FileText, Receipt,
   TrendingUp, Users, Target, ShieldCheck, Building2, UserCheck,
-  LogOut, Menu, X, Bell, BellOff, ChevronRight, ChevronDown, AlertTriangle, PhoneMissed, MapPin, MessageCircle, MessageSquare, Sparkles,
+  LogOut, Menu, X, Bell, BellOff, BellRing, ChevronRight, ChevronDown, AlertTriangle, PhoneMissed, MapPin, MessageCircle, MessageSquare, Sparkles,
   PhoneCall, PhoneForwarded, Headphones, Wallet, Banknote
 } from 'lucide-react';
 
@@ -376,6 +377,69 @@ export default function Shell({ children }) {
 
   const phoneState = useInAppPhone();
 
+  // ── Background booking push (Web Push; src/lib/bookingPush.js) ──
+  // After login: an operator who said yes before is re-subscribed silently;
+  // one who never chose is asked once — right away if the login click still
+  // counts as a gesture, otherwise on their first tap/key (browsers, Safari
+  // above all, only show the permission dialog from a gesture). 'off' is
+  // never asked again. iPhone outside an installed home-screen app, or a
+  // browser without push, just gets the header hint.
+  const [pushState, setPushState] = useState(null);
+  useEffect(() => {
+    if (!isCallStaff) return undefined;
+    let cancelled = false;
+    const done = (s) => { if (!cancelled) setPushState(s); };
+    const EVENTS = ['click', 'keydown'];
+    let asked = false;
+    const askOnce = () => {
+      if (asked) return;
+      asked = true;
+      EVENTS.forEach((e) => window.removeEventListener(e, askOnce, true));
+      enableBookingPush({ prompt: true }).then(done);
+    };
+
+    (async () => {
+      const pref = pushPref();
+      const current = await bookingPushState();
+      if (cancelled) return;
+      done(current);
+      if (pref === 'off' || pushBlocker()) return;
+      if (Notification.permission === 'granted') { enableBookingPush({ prompt: false }).then(done); return; }
+      if (pref === null) {
+        if (navigator.userActivation?.isActive) askOnce();
+        else EVENTS.forEach((e) => window.addEventListener(e, askOnce, true));
+      }
+    })();
+    return () => { cancelled = true; EVENTS.forEach((e) => window.removeEventListener(e, askOnce, true)); };
+  }, [user?.role]);
+
+  const togglePush = async () => {
+    if (pushState === 'on') {
+      setPushState(await disableBookingPush());
+      toast('Booking notifications off on this device', { icon: '🔕' });
+      return;
+    }
+    const s = await enableBookingPush({ prompt: true });
+    setPushState(s);
+    if (s === 'on') toast.success('🔔 Booking notifications on — you’ll be alerted even with the CRM closed');
+    else if (PUSH_HINTS[s]) toast(PUSH_HINTS[s], { icon: 'ℹ️', duration: 9000 });
+  };
+
+  // A tapped booking notification asks an open CRM window to show the
+  // booking (public/push-sw.js) — routed in-app, never a page reload.
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return undefined;
+    const onMessage = (event) => {
+      if (event.data?.type !== 'open-url') return;
+      try {
+        const u = new URL(event.data.url, window.location.origin);
+        if (u.origin === window.location.origin) navigate(`${u.pathname}${u.search}`);
+      } catch { /* ignore a malformed message */ }
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, [navigate]);
+
   const toggleDuty = async () => {
     try {
       const { data } = await callsApi.setDuty(!onDuty);
@@ -665,6 +729,31 @@ export default function Shell({ children }) {
               >
                 {sosSoundEnabled ? <Bell size={13} /> : <BellOff size={13} />}
                 <span className="hidden sm:inline">{sosSoundEnabled ? 'SOS Sound On' : 'Enable SOS sound'}</span>
+              </button>
+            )}
+
+            {/* Background booking notifications for THIS device. Anything
+                other than on/off (blocked, iPhone not installed, no browser
+                support, server not set up) explains itself on click. */}
+            {isCallStaff && pushState && (
+              <button
+                onClick={togglePush}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                style={pushState === 'on'
+                  ? { background: 'rgba(0,212,170,.1)', color: 'var(--accent)' }
+                  : pushState === 'off'
+                    ? { background: 'var(--surface2)', color: 'var(--text3)', border: '1px solid var(--border2)' }
+                    : { background: 'rgba(255,184,0,.1)', color: 'var(--amber)', border: '1px solid rgba(255,184,0,.3)' }}
+                title={pushState === 'on'
+                  ? 'Booking notifications on for this device, even with the CRM closed. Click to turn off.'
+                  : pushState === 'off'
+                    ? 'Click to get booking notifications on this device even with the CRM closed.'
+                    : PUSH_HINTS[pushState] || 'Booking notifications unavailable'}
+              >
+                {pushState === 'on' ? <BellRing size={13} /> : <BellOff size={13} />}
+                <span className="hidden sm:inline">
+                  {pushState === 'on' ? 'Booking push on' : pushState === 'off' ? 'Booking push off' : pushState === 'denied' ? 'Push blocked' : 'Push unavailable'}
+                </span>
               </button>
             )}
 

@@ -129,6 +129,14 @@ export const tripsApi = {
   updateStatus: (id, status)   => api.put(`/trips/${id}/status`, { status }),
 };
 
+// Background "New booking" Web Push (src/lib/bookingPush.js). Errors are
+// handled there, quietly — push is an extra, never in the operator's way.
+export const pushApi = {
+  publicKey  : ()             => api.get('/push/public-key', { skipErrorToast: true }),
+  subscribe  : (subscription) => api.post('/push/subscribe', { subscription }, { skipErrorToast: true }),
+  unsubscribe: (endpoint)     => api.post('/push/unsubscribe', { endpoint }, { skipErrorToast: true }),
+};
+
 // Pricing — the MongoDB `pricing` collection is the single source of truth
 // for which services are bookable at all. The CRM's service dropdown is
 // built from this, never from a hard-coded list, so a service added in the
