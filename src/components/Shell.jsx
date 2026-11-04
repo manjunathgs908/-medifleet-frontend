@@ -19,6 +19,11 @@ import {
 
 const SOS_POLL_MS = 30000;
 const NO_RESPONSE_POLL_MS = 30000;
+// Set once this browser has had alert sound unlocked (SOS + booking ring).
+const SOUND_PREF_KEY = 'medifleet.sound.enabled.v1';
+const soundWasEnabled = () => {
+  try { return localStorage.getItem(SOUND_PREF_KEY) === '1'; } catch { return false; }
+};
 
 // Sidebar, grouped. Every link keeps its route, roles and badge exactly as
 // before; a group a role can see nothing in is not shown. Overview sits at
@@ -163,21 +168,30 @@ export default function Shell({ children }) {
     if (sosRingTimerRef.current) { clearInterval(sosRingTimerRef.current); sosRingTimerRef.current = null; }
   };
 
-  // Doubles as both the initial gesture-unlock AND a repeatable test-tone
-  // button (per-request: the owner needs a way to confirm sound works
-  // without waiting for a real SOS). First click creates+unlocks+enables;
-  // every click after that just re-plays the tone. resume() is awaited
-  // here (DispatchPage's equivalent doesn't) — not proven to be the actual
-  // cause of the silent-siren bug (see investigation), but scheduling audio
-  // before resume() has genuinely finished is a real, if narrow, footgun,
-  // and awaiting it costs nothing.
+  // The one AudioContext both alerts play through (SOS siren and the
+  // incoming-booking ring). A context closed by a previous session's
+  // cleanup is replaced, never reused.
+  const ensureAudioCtx = () => {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    if (!sosAudioCtxRef.current || sosAudioCtxRef.current.state === 'closed') sosAudioCtxRef.current = new Ctx();
+    return sosAudioCtxRef.current;
+  };
+
+  // Marks sound as on, for this session and — remembered per browser — for
+  // the next one (see the first-interaction unlock below).
+  const markSoundUnlocked = () => {
+    setSosSoundEnabled(true);
+    try { localStorage.setItem(SOUND_PREF_KEY, '1'); } catch { /* private mode: not remembered */ }
+  };
+
   // The gesture-unlock itself, shared with IncomingBookingAlert's "tap to
   // enable ringing" — one AudioContext, one tap, both alerts audible.
   const unlockSound = async () => {
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!sosAudioCtxRef.current) sosAudioCtxRef.current = new Ctx();
-    if (sosAudioCtxRef.current.state === 'suspended') await sosAudioCtxRef.current.resume();
-    setSosSoundEnabled(true);
+    const ctx = ensureAudioCtx();
+    if (!ctx) throw new Error('No Web Audio');
+    if (ctx.state === 'suspended') await ctx.resume();
+    markSoundUnlocked();
   };
 
   const enableBookingSound = async () => {
@@ -189,6 +203,55 @@ export default function Shell({ children }) {
     }
   };
 
+  // Browsers only let audio start from a user gesture — that can't be
+  // removed, only made invisible. So the FIRST tap, click or key press
+  // anywhere in the CRM unlocks it (capture phase: runs before the page's
+  // own handler, whatever was tapped). And if this page was already
+  // interacted with — the login click, same document, no reload — Chrome
+  // lets the context start right away with no tap at all. iOS Safari also
+  // wants a sound actually started inside the gesture: a silent one-sample
+  // buffer. Unlocking remembers the choice in localStorage; the banner
+  // uses it to say "turn back on" instead of "enable".
+  useEffect(() => {
+    if (!CALL_STAFF.includes(user?.role)) return undefined;
+    let ctx;
+    try { ctx = ensureAudioCtx(); } catch { return undefined; }
+    if (!ctx) return undefined;
+
+    const EVENTS = ['pointerup', 'touchend', 'keydown', 'click'];
+    const detach = () => EVENTS.forEach((e) => window.removeEventListener(e, onGesture, true));
+    const markIfRunning = () => {
+      if (ctx.state !== 'running') return;
+      markSoundUnlocked();
+      detach();
+    };
+    function onGesture() {
+      if (ctx.state === 'closed') { detach(); return; }
+      try {
+        const buf = ctx.createBuffer(1, 1, 22050);
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.connect(ctx.destination);
+        src.start(0);
+      } catch { /* priming is best-effort */ }
+      ctx.resume().then(markIfRunning).catch(() => {});
+    }
+
+    ctx.addEventListener('statechange', markIfRunning);
+    EVENTS.forEach((e) => window.addEventListener(e, onGesture, true));
+    if (navigator.userActivation?.hasBeenActive) ctx.resume().then(markIfRunning).catch(() => {});
+    markIfRunning();
+    return () => { detach(); ctx.removeEventListener('statechange', markIfRunning); };
+  }, [user?.role]);
+
+  // Doubles as both the initial gesture-unlock AND a repeatable test-tone
+  // button (per-request: the owner needs a way to confirm sound works
+  // without waiting for a real SOS). First click creates+unlocks+enables;
+  // every click after that just re-plays the tone. resume() is awaited
+  // here (DispatchPage's equivalent doesn't) — not proven to be the actual
+  // cause of the silent-siren bug (see investigation), but scheduling audio
+  // before resume() has genuinely finished is a real, if narrow, footgun,
+  // and awaiting it costs nothing.
   const enableSosSound = async () => {
     try {
       const firstEnable = !sosSoundEnabled;
@@ -554,6 +617,20 @@ export default function Shell({ children }) {
 
       {/* Main area */}
       <div className="flex-1 min-w-0 flex flex-col">
+        {/* Until alert sound is unlocked this session. Any tap anywhere
+            unlocks it (see the first-interaction effect), this included;
+            it disappears the moment the AudioContext is running. */}
+        {isCallStaff && !sosSoundEnabled && (
+          <button
+            type="button"
+            onClick={enableBookingSound}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold"
+            style={{ background: 'rgba(255,184,0,.14)', color: 'var(--amber)', borderBottom: '1px solid rgba(255,184,0,.35)' }}
+          >
+            <Bell size={15} />
+            {soundWasEnabled() ? '🔔 Tap anywhere to turn the booking ring back on' : '🔔 Tap to enable booking ring'}
+          </button>
+        )}
         {/* Top bar */}
         <header className="flex items-center gap-3 px-5 py-3 sticky top-0 z-40"
           style={{ background: 'rgba(10,15,30,.85)', backdropFilter: 'blur(12px)', borderBottom: '1px solid var(--border)' }}>
