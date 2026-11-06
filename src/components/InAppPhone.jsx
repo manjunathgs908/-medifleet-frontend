@@ -10,6 +10,7 @@ import React, { useEffect, useState } from 'react';
 import { Phone, PhoneOff, PhoneForwarded, Mic, MicOff } from 'lucide-react';
 import * as phone from '../lib/inAppPhone';
 import { custPhone } from './ui';
+import { LiveCaptureButton } from './LiveCallCapture';
 
 export function useInAppPhone() {
   const [s, setS] = useState(phone.getState());
@@ -100,6 +101,8 @@ export default function InAppPhone({ active }) {
               <span className="hidden sm:inline">{s.inCall.transferring ? 'Transferring…' : 'Transfer'}</span>
             </button>
           )}
+          {/* Live call capture: the booking form fills from the call. */}
+          <LiveCaptureButton logId={s.inCall.logId} />
           <button onClick={phone.toggleMute} aria-label={s.inCall.muted ? 'Unmute' : 'Mute'}
             className="w-11 h-11 rounded-full flex items-center justify-center"
             style={{ background: 'var(--surface2)', color: s.inCall.muted ? 'var(--amber)' : 'var(--text2)' }}>

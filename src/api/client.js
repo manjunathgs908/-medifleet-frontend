@@ -139,6 +139,72 @@ export const aiCallerApi = {
   get      : (id)      => api.get(`/ai-caller/calls/${id}`, { skipErrorToast: true }),
 };
 
+// LIVE CALL CAPTURE — medifleet-backend /api/call-capture. The draft the
+// listen-only transcriber fills while a customer call is going; booking it
+// is the operator's own POST /trips with callCaptureId.
+export const callCaptureApi = {
+  byCall: (logId) => api.get(`/call-capture/by-call/${logId}`, { skipErrorToast: true }),
+  get   : (id)    => api.get(`/call-capture/${id}`, { skipErrorToast: true }),
+};
+
+// Live updates for one draft: the server's text/event-stream, read with
+// fetch so the login token goes in the Authorization header (EventSource
+// cannot send one). Reconnects (refreshing the token first) until the call
+// ends or stop() is called. handlers: onCapture(draft), onPartial({ role,
+// itemId, delta }), onEnd(), onError(message).
+export function streamCallCapture(id, { onCapture, onPartial, onEnd, onError } = {}) {
+  let stopped = false;
+  let controller = null;
+  let attempts = 0;
+
+  const run = async () => {
+    while (!stopped) {
+      controller = new AbortController();
+      try {
+        const res = await fetch(`${api.defaults.baseURL}/call-capture/${id}/events`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('accessToken') || ''}` },
+          signal : controller.signal,
+        });
+        if (res.status === 401) {
+          // Let the axios interceptor refresh the token, then try again.
+          await callCaptureApi.get(id).catch(() => {});
+          if (++attempts > 3) { onError?.('Signed out — reload the page'); return; }
+          continue;
+        }
+        if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+        attempts = 0;
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          let i;
+          while ((i = buf.indexOf('\n\n')) >= 0) {
+            const chunk = buf.slice(0, i);
+            buf = buf.slice(i + 2);
+            const event = /^event: (.*)$/m.exec(chunk)?.[1];
+            const data = /^data: (.*)$/m.exec(chunk)?.[1];
+            if (!event) continue; // heartbeat
+            const payload = data ? JSON.parse(data) : {};
+            if (event === 'capture') onCapture?.(payload);
+            else if (event === 'partial') onPartial?.(payload);
+            else if (event === 'end') { stopped = true; onEnd?.(); return; }
+          }
+        }
+      } catch (err) {
+        if (stopped || err.name === 'AbortError') return;
+        if (++attempts > 5) { onError?.('Live updates lost — the form keeps what was captured'); return; }
+      }
+      // Dropped (Render restart, network): try again shortly.
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+  };
+  run();
+  return () => { stopped = true; controller?.abort(); };
+}
+
 // Open / Dismiss on the incoming alert for a WhatsApp lead (type 'wa_lead')
 // or WhatsApp conversation ('wa_chat'); bookings use tripsApi.acknowledge.
 export const alertsApi = {

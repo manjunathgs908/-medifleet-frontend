@@ -14,6 +14,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { PhoneForwarded, Smartphone } from 'lucide-react';
 import { callsApi } from '../api/client';
 import { describe, Elapsed, useInAppPhone } from './InAppPhone';
+import { LiveCaptureButton } from './LiveCallCapture';
 
 const POLL_MS = 4000;
 // After "the call has ended", the note stays this long before the bar goes.
@@ -104,6 +105,7 @@ export default function PhoneCallBar({ active }) {
             <span className="truncate">On your phone · {about} · <Elapsed since={since} /></span>
           </div>
         </div>
+        <LiveCaptureButton logId={call.id} />
         {(call.canTransfer || transferring) && (
           <button onClick={transfer} disabled={transferring || !call.canTransfer} aria-label="Transfer call"
             title="Transfer to another telecaller (English speakers first)"

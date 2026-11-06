@@ -7,6 +7,7 @@ import AddressAutocomplete from '../components/AddressAutocomplete';
 import CallButton from '../components/CallButton';
 import { ambulanceTypeLabel, servicesFromPricing, fmtDuration } from '../utils/serviceTypes';
 import RoutePreviewMap from '../components/RoutePreviewMap';
+import LiveCallCapture from '../components/LiveCallCapture';
 import { PageHeader, StatusBadge, Badge, Btn, Modal, rupee, Spinner, fmtDateTime as fmtStamp, timeAgo, custPhone } from '../components/ui';
 import toast from 'react-hot-toast';
 import { Send, RefreshCw, CheckCircle, XCircle, MapPin, Phone, Link2, ExternalLink } from 'lucide-react';
@@ -233,6 +234,12 @@ export default function DispatchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const focusTripId = searchParams.get('trip');
   const [flashId, setFlashId] = useState(null);
+  // ?captureCall=<call log id> — "Fill booking" on the in-call bar: the
+  // form fills from the live call capture (components/LiveCallCapture).
+  // Only fields the operator has not touched are ever filled.
+  const captureLogId = searchParams.get('captureCall');
+  const [capture, setCapture] = useState(null);
+  const touched = useRef(new Set());
 
   // The dropdown is whatever the Pricing collection currently offers.
   const services = useMemo(() => servicesFromPricing(pricing), [pricing]);
@@ -291,7 +298,7 @@ export default function DispatchPage() {
     requestAnimationFrame(() => {
       document.querySelector(`[data-trip-id="${focusTripId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
-    setSearchParams({}, { replace: true });
+    setSearchParams((p) => { p.delete('trip'); return p; }, { replace: true });
   }, [focusTripId, liveTrips]);
 
   useEffect(() => {
@@ -376,7 +383,12 @@ export default function DispatchPage() {
     } catch { /* silent */ }
   };
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  // Every operator edit goes through set / selectService / the place
+  // pickers, and marks the field as theirs: the live capture never
+  // overwrites it.
+  const set = (k, v) => { touched.current.add(k); setForm(f => ({ ...f, [k]: v })); };
+  const choosePickup = (p) => { touched.current.add('pickup'); setPickup(p); };
+  const chooseDrop   = (p) => { touched.current.add('drop'); setDrop(p); };
 
   const resetForm = () => {
     setForm(EMPTY_FORM);
@@ -384,19 +396,64 @@ export default function DispatchPage() {
     setDrop(null);
     setEstimate(null);
     setEstimateError('');
+    touched.current = new Set();
   };
 
   // Selecting a service that has no AC rate must also drop an AC choice made
   // against the previous one, or the operator sees "AC Included" on a trip
   // whose fare has no AC component.
-  const selectService = (id) => setForm(f => {
+  const selectService = (id) => { touched.current.add('selectedType'); setForm(f => {
     const svc = services.find(s => s.id === id);
     return { ...f, selectedType: id, acEnabled: svc?.acPerKm ? f.acEnabled : false };
-  });
+  }); };
+
+  // A new draft from the live capture: fill what was heard into every field
+  // the operator has not touched. Places only when resolved to coordinates
+  // (several matches are offered in the panel instead); the fare then comes
+  // from the same estimate as any booking.
+  const applyCapture = (c) => {
+    setCapture(c);
+    const f = c?.fields || {};
+    const mine = touched.current;
+    setForm(prev => {
+      const next = { ...prev };
+      if (f.patientName && !mine.has('patientName')) next.patientName = f.patientName;
+      if (f.patientPhone && !mine.has('patientPhone')) next.patientPhone = f.patientPhone; // owner only; others leave it blank
+      const svc = f.serviceType && services.find(s => s.id === String(f.serviceType).toLowerCase());
+      if (svc && !mine.has('selectedType')) { next.selectedType = svc.id; if (!svc.acPerKm) next.acEnabled = false; }
+      if (f.scheduleType && !mine.has('scheduleType')) next.scheduleType = f.scheduleType;
+      if (f.scheduleAt && !mine.has('scheduleDate')) next.scheduleDate = f.scheduleAt;
+      return next;
+    });
+    const samePlace = (a, b) => a && b && a.lat === b.lat && a.lng === b.lng && a.label === b.label;
+    if (c?.pickup?.lat && !mine.has('pickup')) setPickup(p => (samePlace(p, c.pickup) ? p : { label: c.pickup.label, lat: c.pickup.lat, lng: c.pickup.lng }));
+    if (c?.drop?.lat && !mine.has('drop')) setDrop(p => (samePlace(p, c.drop) ? p : { label: c.drop.label, lat: c.drop.lat, lng: c.drop.lng }));
+  };
+  // Services load after the first draft can arrive.
+  useEffect(() => { if (capture) applyCapture(capture); }, [services]);
+
+  // A different call's capture: start from a clean form (asking first if
+  // the operator was in the middle of one).
+  const lastCaptureLog = useRef(null);
+  useEffect(() => {
+    if (!captureLogId || captureLogId === lastCaptureLog.current) return;
+    lastCaptureLog.current = captureLogId;
+    if (touched.current.size === 0 || window.confirm('Clear the booking form for this call?')) resetForm();
+    setCapture(null);
+  }, [captureLogId]);
+
+  const closeCapture = () => {
+    setCapture(null);
+    lastCaptureLog.current = null;
+    setSearchParams((p) => { p.delete('captureCall'); return p; }, { replace: true });
+  };
 
   const dispatch = async (e) => {
     e.preventDefault();
-    if (!form.patientName.trim() || !form.patientPhone.trim()) { toast.error('Patient name and phone are required'); return; }
+    // From a call capture the phone may stay blank: the server uses the
+    // number said on the call, else the caller's own (a telecaller never
+    // sees either).
+    if (!form.patientName.trim() || (!form.patientPhone.trim() && !capture)) { toast.error('Patient name and phone are required'); return; }
     if (!pickup || !drop)      { toast.error('Pick both locations from the suggestions'); return; }
     if (!form.selectedType)    { toast.error('Select an ambulance / service type'); return; }
     if (form.scheduleType === 'later' && !form.scheduleDate) { toast.error('Choose a date and time for the scheduled booking'); return; }
@@ -423,9 +480,11 @@ export default function DispatchPage() {
         acEnabled    : form.acEnabled,
         scheduleType : form.scheduleType,
         scheduleDate : form.scheduleType === 'later' ? form.scheduleDate : null,
+        ...(capture ? { callCaptureId: capture._id } : {}),
       });
       toast.success('🚑 Ambulance dispatched!');
       resetForm();
+      if (capture) closeCapture();
       await loadLiveBoard();
     } finally { setSubmitting(false); }
   };
@@ -532,6 +591,16 @@ export default function DispatchPage() {
         <form onSubmit={dispatch} className="lg:col-span-3 card space-y-4">
           <h2 className="font-bold font-display" style={{ color: 'var(--accent)' }}>🚑 New Emergency Booking</h2>
 
+          {captureLogId && (
+            <LiveCallCapture
+              key={captureLogId}
+              logId={captureLogId}
+              onCapture={applyCapture}
+              onPickPlace={(which, o) => (which === 'pickup' ? choosePickup : chooseDrop)({ label: o.label, lat: o.lat, lng: o.lng })}
+              onClose={closeCapture}
+            />
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>Patient Name *</label>
@@ -539,20 +608,23 @@ export default function DispatchPage() {
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>Phone *</label>
-              <input className="inp" value={form.patientPhone} onChange={e => set('patientPhone', e.target.value)} placeholder="+91 XXXXX XXXXX" required />
+              <input className="inp" value={form.patientPhone} onChange={e => set('patientPhone', e.target.value)}
+                placeholder={!capture ? '+91 XXXXX XXXXX'
+                  : capture.fields?.patientPhoneMasked ? `Blank = ${capture.fields.patientPhoneMasked} (said on the call)` : "Blank = the caller's number"}
+                required={!capture} />
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <AddressAutocomplete
               label="Pickup" required
-              value={pickup} onSelect={setPickup}
+              value={pickup} onSelect={choosePickup}
               dotColor="#00d4aa"
               placeholder="Where is the patient?"
             />
             <AddressAutocomplete
               label="Drop / Destination" required
-              value={drop} onSelect={setDrop}
+              value={drop} onSelect={chooseDrop}
               dotColor="#ff4d6d"
               placeholder="Hospital, address or landmark"
             />
