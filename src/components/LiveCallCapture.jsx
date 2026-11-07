@@ -118,6 +118,9 @@ export default function LiveCallCapture({ logId, onCapture, onPickPlace, onClose
         </div>
       ))}
 
+      {capture?.pickupSource === 'whatsapp' && capture.pickup && (
+        <div className="text-xs" style={{ color: 'var(--accent)' }}>📍 Pickup shared by the caller on WhatsApp: {capture.pickup.label}</div>
+      )}
       {capture?.summary && <div className="text-xs"><span className="font-semibold">Summary:</span> {capture.summary}</div>}
 
       {problems.length > 0 && (

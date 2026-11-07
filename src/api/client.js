@@ -137,6 +137,13 @@ export const aiCallerApi = {
   call     : (phone)   => api.post('/ai-caller/calls', { phone }),
   calls    : ()        => api.get('/ai-caller/calls', { skipErrorToast: true }),
   get      : (id)      => api.get(`/ai-caller/calls/${id}`, { skipErrorToast: true }),
+  // Real SaveLife calls the assistant copies the talking style of.
+  styleExamples : ()         => api.get('/ai-caller/style-examples'),
+  addStyle      : (body)     => api.post('/ai-caller/style-examples', body),
+  updateStyle   : (id, body) => api.put(`/ai-caller/style-examples/${id}`, body),
+  removeStyle   : (id)       => api.delete(`/ai-caller/style-examples/${id}`),
+  styleCandidates: ()        => api.get('/ai-caller/style-candidates'),
+  promptPreview : ()         => api.get('/ai-caller/prompt-preview'),
 };
 
 // LIVE CALL CAPTURE — medifleet-backend /api/call-capture. The draft the

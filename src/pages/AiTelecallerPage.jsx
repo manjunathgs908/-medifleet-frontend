@@ -13,6 +13,7 @@ import { aiCallerApi } from '../api/client';
 import { PageHeader, Btn, Badge, Spinner, Empty, fmtDateTime, custPhone, rupee } from '../components/ui';
 import toast from 'react-hot-toast';
 import { PhoneOutgoing, Power, RefreshCw, AlertTriangle, Bot } from 'lucide-react';
+import AiStyleExamples from '../components/AiStyleExamples';
 
 const OUTCOME = {
   booked    : { color: 'green', label: 'Booked' },
@@ -112,6 +113,13 @@ export default function AiTelecallerPage() {
             {status.models.realtime} + {status.models.delegate} · voice {status.models.voice} · max {status.limits.maxCallSeconds}s AI time
             {!status.costRatesSet && ' · cost not estimated (AI_COST_* not set)'}
           </div>
+          {status.whatsappLocation && (
+            <div className="text-[11px]" style={{ color: 'var(--text3)' }}>
+              WhatsApp pickup-location request: {status.whatsappLocation.enabled
+                ? `on${status.whatsappLocation.template ? ` · template ${status.whatsappLocation.template}` : ' · no template set (only works for numbers that messaged us in 24 h)'}`
+                : 'off (WA_CALL_LOCATION_ENABLED)'}
+            </div>
+          )}
         </div>
 
         {/* Allowlist */}
@@ -139,6 +147,9 @@ export default function AiTelecallerPage() {
         </div>
       </div>
 
+      {/* How it should talk: real SaveLife calls */}
+      <div className="mb-5"><AiStyleExamples /></div>
+
       {/* Sessions */}
       <div className="card">
         <h2 className="font-bold font-display mb-3 flex items-center gap-2"><Bot size={16} /> AI calls</h2>
@@ -160,6 +171,22 @@ export default function AiTelecallerPage() {
                     <div className="mt-3 space-y-2 text-sm">
                       {detail.summary && <div><span className="font-semibold">Summary:</span> {detail.summary}</div>}
                       {detail.trip && <div><span className="font-semibold">Booking:</span> {detail.trip.tripNumber} ({detail.trip.status})</div>}
+                      {detail.needs && (detail.needs.condition || detail.needs.oxygen != null || detail.needs.helper != null || detail.needs.patientAt) && (
+                        <div><span className="font-semibold">Patient:</span> {[
+                          detail.needs.condition,
+                          detail.needs.patientAt && `at ${detail.needs.patientAt}`,
+                          detail.needs.oxygen != null && (detail.needs.oxygen ? 'oxygen needed' : 'no oxygen'),
+                          detail.needs.helper != null && (detail.needs.helper ? 'helper needed' : 'no helper'),
+                        ].filter(Boolean).join(' · ')}</div>
+                      )}
+                      {detail.request?.type === 'freezer_box' && (
+                        <div><span className="font-semibold">Freezer box at home:</span> {detail.request.area} · {detail.request.days} day{detail.request.days === 1 ? '' : 's'} — team to call back with the price</div>
+                      )}
+                      {detail.sharedLocation?.lat != null && (
+                        <div><span className="font-semibold">Pickup shared on WhatsApp:</span>{' '}
+                          <a href={`https://www.google.com/maps?q=${detail.sharedLocation.lat},${detail.sharedLocation.lng}`} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>{detail.sharedLocation.address || 'open map'}</a>
+                        </div>
+                      )}
                       {detail.error && <div style={{ color: 'var(--red)' }}>{detail.error}</div>}
                       {/* Why the OpenAI side ended, in OpenAI's own words. */}
                       {detail.openaiClose && (detail.openaiClose.code || detail.openaiClose.reason) && (
