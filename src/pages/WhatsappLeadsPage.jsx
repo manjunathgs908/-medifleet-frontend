@@ -5,6 +5,8 @@ import { PageHeader, Btn, Spinner, Empty, StatusBadge, Tabs, fmtDateTime, timeAg
 import { AlertTriangle } from 'lucide-react';
 import CallButton from '../components/CallButton';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
+import { dispatchLinkForLead, pickupFromLead, pickupConfirmed } from '../utils/whatsappLeadPrefill';
 
 const POLL_MS = 30000;
 
@@ -23,6 +25,7 @@ export default function WhatsappLeadsPage() {
   const [filter,     setFilter]     = useState('new');
   const [updatingId, setUpdatingId] = useState(null);
   const intervalRef = useRef();
+  const navigate = useNavigate();
 
   // Re-runs on every filter change: fetches immediately (non-silent, so
   // switching tabs shows a spinner), then resumes background polling on
@@ -114,7 +117,17 @@ export default function WhatsappLeadsPage() {
                         <div className="text-xs font-mono mb-1" style={{ color: 'var(--text2)' }}>{custPhone(l.phone, l.phoneMasked)}</div>
                         <CallButton target={{ whatsappLeadId: l._id }} />
                       </td>
-                      <td className="text-sm">{l.service}</td>
+                      <td className="text-sm">
+                        {l.service}
+                        {pickupFromLead(l) && (
+                          <div className="text-xs mt-1" style={{ color: 'var(--accent)' }}>
+                            📍 {pickupFromLead(l).label}
+                            <span style={{ color: pickupConfirmed(l) ? 'var(--text2)' : 'var(--amber)' }}>
+                              {pickupConfirmed(l) ? ' · confirmed' : ' · not confirmed yet'}
+                            </span>
+                          </div>
+                        )}
+                      </td>
                       <td><StatusBadge status={l.status} /></td>
                       <td className="text-xs whitespace-nowrap">
                         <div className="font-mono" style={{ color: 'var(--text2)' }}>{fmtDateTime(l.createdAt)}</div>
@@ -122,6 +135,13 @@ export default function WhatsappLeadsPage() {
                       </td>
                       <td>
                         <div className="flex gap-1">
+                          {/* Only for a lead that shared its pickup: Dispatch opens with it filled. */}
+                          {dispatchLinkForLead(l) && (
+                            <Btn size="sm" variant="primary" onClick={() => navigate(dispatchLinkForLead(l))}
+                              title="Open the booking form with this customer's WhatsApp pickup filled in">
+                              Book
+                            </Btn>
+                          )}
                           {l.status === 'new' && (
                             <Btn size="sm" variant="blue" onClick={() => advance(l, 'contacted')} disabled={updatingId === l._id}>
                               {updatingId === l._id ? 'Updating...' : 'Mark Contacted'}

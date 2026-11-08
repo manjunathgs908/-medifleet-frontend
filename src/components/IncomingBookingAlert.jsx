@@ -25,6 +25,7 @@ import { Phone, PhoneOff, MapPin, Volume2, MessageCircle } from 'lucide-react';
 import { tripsApi, alertsApi } from '../api/client';
 import { ambulanceTypeLabel } from '../utils/serviceTypes';
 import { custPhone, rupee, fmtDateTime } from './ui';
+import { dispatchLinkForLead } from '../utils/whatsappLeadPrefill';
 
 const POLL_MS         = 5000;
 const RING_TIMEOUT_MS = 60000;
@@ -187,7 +188,9 @@ export default function IncomingBookingAlert({ active, audioCtxRef, soundEnabled
 
   if (!current) return null;
 
-  const answer = async (action) => {
+  // goTo: where an accept lands — the alert's own link, or (Book on a
+  // WhatsApp lead that shared its pickup) the pre-filled Dispatch form.
+  const answer = async (action, goTo) => {
     const alert = current;
     setBusy(true);
     handledRef.current.add(alert.key);
@@ -206,11 +209,12 @@ export default function IncomingBookingAlert({ active, audioCtxRef, soundEnabled
     } finally {
       setBusy(false);
     }
-    if (action === 'accepted') navigate(alert.link);
+    if (action === 'accepted') navigate(goTo || alert.link);
   };
 
   const kind    = kindOf(current);
   const waiting = queue.length - 1;
+  const bookLink = current.type === 'wa_lead' ? dispatchLinkForLead(current) : null;
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4"
@@ -236,6 +240,15 @@ export default function IncomingBookingAlert({ active, audioCtxRef, soundEnabled
             className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold mb-3"
             style={{ background: 'rgba(255,184,0,.12)', color: 'var(--amber)', border: '1px solid rgba(255,184,0,.35)' }}>
             <Volume2 size={16} /> Sound is off — tap to enable ringing
+          </button>
+        )}
+
+        {bookLink && (
+          <button onClick={() => answer('accepted', bookLink)} disabled={busy}
+            title="Open the booking form with the customer's WhatsApp pickup filled in"
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-base font-bold mb-3"
+            style={{ background: 'var(--accent)', color: 'var(--ink)' }}>
+            <MapPin size={20} /> Book — pickup filled
           </button>
         )}
 
