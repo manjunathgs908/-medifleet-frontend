@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { authApi, ownersApi } from '../api/client';
 import toast from 'react-hot-toast';
 import MyCallSettings from '../components/MyCallSettings';
+import { canToggleStatus, statusOutcome } from '../utils/staffStatus';
 
 // Telecaller logins: phone + password at the CRM. Passwords are typed or
 // generated here, saved hashed by the backend, and shown ONCE in a
@@ -62,6 +63,7 @@ const Staff = () => {
   const [pwTarget, setPwTarget] = useState(null);         // telecaller whose password is being set, or null
   const [pwValue, setPwValue] = useState('');
   const [pwSaving, setPwSaving] = useState(false);
+  const [statusBusy, setStatusBusy] = useState(null);     // _id of the row whose status is being changed
   const [form, setForm] = useState({
     name: '', phone: '', password: '', role: 'driver',
     driverType: 'shift_driver', baseSalary: 15000, perTripBonus: 100,
@@ -150,15 +152,23 @@ const Staff = () => {
     setEditingPosting(null);
   };
 
-  const handleDeactivate = async (id) => {
-    if (!window.confirm('Deactivate this user?')) return;
+  // Activate / Deactivate — PATCH /auth/users/:id/status. Not updateUser
+  // (isActive is not on EDITABLE_USER_FIELDS) and no longer the old
+  // /deactivate route: this one refuses a driver on duty and the owner's
+  // own account. The row takes the isActive the server returns.
+  const handleToggleStatus = async (s) => {
+    const next = !s.isActive;
+    if (!next && !window.confirm(`Deactivate ${s.name}? They are signed out and can't log in until you activate them again.`)) return;
+    setStatusBusy(s._id);
     try {
-      // The dedicated route, not updateUser: isActive is not on
-      // EDITABLE_USER_FIELDS, so the generic edit now rejects it.
-      await authApi.deactivateUser(id);
-      toast.success('Deactivated');
-      loadStaff();
-    } catch (e) { toast.error(e.response?.data?.message || 'Failed'); }
+      const { data } = await authApi.setUserStatus(s._id, next);
+      const out = statusOutcome({ data }, next);
+      if (!out.ok) { toast.error(out.message); return; }
+      setStaff((list) => list.map((u) => (u._id === s._id ? { ...u, isActive: out.isActive } : u)));
+      toast.success(out.message);
+    } catch (error) {
+      toast.error(statusOutcome({ error }, next).message);
+    } finally { setStatusBusy(null); }
   };
 
   const savePassword = async () => {
@@ -378,29 +388,34 @@ const Staff = () => {
                   </span>
                 </td>
                 <td className="p-4">
-                  {s.isActive && (
-                    <div className="flex gap-2">
-                      {s.role === 'driver' && (
-                        <button onClick={() => openMove(s)}
-                          className="text-xs px-2 py-1 rounded-lg"
-                          style={{ background: 'var(--surface2)', color: 'var(--text2)' }}>
-                          Move fleet
-                        </button>
-                      )}
-                      {s.role === 'telecaller' && (
-                        <button onClick={() => { setPwTarget(s); setPwValue(''); }}
-                          className="text-xs px-2 py-1 rounded-lg"
-                          style={{ background: 'var(--surface2)', color: 'var(--text2)' }}>
-                          Set password
-                        </button>
-                      )}
-                      <button onClick={() => handleDeactivate(s._id)}
-                        className="text-xs px-3 py-1 rounded-lg"
-                        style={{ background: 'rgba(255,77,109,.1)', color: 'var(--red)' }}>
-                        Deactivate
+                  {/* Rendered for inactive rows too, so they can be
+                      activated again; the other actions stay active-only. */}
+                  <div className="flex gap-2">
+                    {s.isActive && s.role === 'driver' && (
+                      <button onClick={() => openMove(s)}
+                        className="text-xs px-2 py-1 rounded-lg"
+                        style={{ background: 'var(--surface2)', color: 'var(--text2)' }}>
+                        Move fleet
                       </button>
-                    </div>
-                  )}
+                    )}
+                    {s.isActive && s.role === 'telecaller' && (
+                      <button onClick={() => { setPwTarget(s); setPwValue(''); }}
+                        className="text-xs px-2 py-1 rounded-lg"
+                        style={{ background: 'var(--surface2)', color: 'var(--text2)' }}>
+                        Set password
+                      </button>
+                    )}
+                    {canToggleStatus(s) && (
+                      <button onClick={() => handleToggleStatus(s)}
+                        disabled={statusBusy === s._id}
+                        className="text-xs px-3 py-1 rounded-lg disabled:opacity-60"
+                        style={s.isActive
+                          ? { background: 'rgba(255,77,109,.1)', color: 'var(--red)' }
+                          : { background: 'rgba(0,212,170,.1)', color: 'var(--accent)' }}>
+                        {statusBusy === s._id ? 'Saving…' : s.isActive ? 'Deactivate' : 'Activate'}
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

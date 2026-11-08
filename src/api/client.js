@@ -88,6 +88,11 @@ export const authApi = {
   // Deactivation has its own route. PUT /auth/users/:id takes an explicit
   // field allowlist and isActive is deliberately not on it.
   deactivateUser: (id) => api.put(`/auth/users/${id}/deactivate`),
+  // The Staff page's Activate / Deactivate toggle (drivers and telecallers).
+  // Checks the old route doesn't: refuses a driver on duty (409
+  // DRIVER_ON_DUTY), the owner's own account and owner logins. The page
+  // shows the backend's message itself, so no interceptor toast.
+  setUserStatus: (id, isActive) => api.patch(`/auth/users/${encodeURIComponent(id)}/status`, { isActive }, { skipErrorToast: true }),
   // Owner sets a telecaller's CRM login password. The response never echoes it.
   setUserPassword: (id, password) => api.put(`/auth/users/${id}/password`, { password }),
   // Moving a driver between partners — its own endpoint because it changes
