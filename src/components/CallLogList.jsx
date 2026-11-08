@@ -16,6 +16,7 @@ import React, { useState } from 'react';
 import { PhoneIncoming, PhoneOutgoing, ChevronDown } from 'lucide-react';
 import { Badge, fmtDateTime, custPhone } from './ui';
 import CallButton from './CallButton';
+import SendWelcomeButton from './SendWelcomeButton';
 import RecordingPlayer from './RecordingPlayer';
 import DeliveryTrail from './DeliveryTrail';
 
@@ -246,7 +247,13 @@ export default function CallLogList({ logs, emptyText = 'No recorded calls yet.'
                 {verdict && <div className="text-[11px] mt-1" style={{ color: 'var(--amber)' }}>{verdict}</div>}
                 <TransferHistory transfers={log.transfers} />
               </div>
-              {showCallBack && log.customerMasked && <CallButton target={{ callLogId: log._id }} label="Call back" />}
+              {showCallBack && log.customerMasked && (
+                <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                  <CallButton target={{ callLogId: log._id }} label="Call back" />
+                  {/* The WhatsApp welcome with "📍 Send Location" — number stays masked. */}
+                  <SendWelcomeButton callLogId={log._id} />
+                </div>
+              )}
             </div>
             {/* Streamed through the backend; the Plivo URL is never sent here.
                 Only answered calls are recorded, so a missed one just says so
