@@ -295,6 +295,11 @@ export const callsApi = {
   // 'app' (ring inside the CRM) or 'phone' (ring my call ring number).
   setMode    : (callMode) => api.put('/calls/me', { callMode }),
   testRing   : ()         => api.post('/calls/test-ring'),
+  // The savelife_welcome WhatsApp template to this call's customer (the
+  // backend resolves the number). Shown inline by SendWelcomeButton, so no
+  // error toast: { status: 'sent' | 'already_sent_today' | 'in_progress' |
+  // 'not_mobile' | 'failed', message?, reason? }.
+  sendWelcome: (callLogId) => api.post(`/calls/${encodeURIComponent(callLogId)}/send-welcome`, {}, { skipErrorToast: true }),
   // Which provider is live and the caller ID customers see.
   config     : ()         => api.get('/calls/config', { skipErrorToast: true }),
   // In-app (WebRTC) calling: a receive-only Plivo access token, the
