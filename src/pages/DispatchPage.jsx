@@ -8,6 +8,8 @@ import CallButton from '../components/CallButton';
 import { ambulanceTypeLabel, servicesFromPricing, fmtDuration } from '../utils/serviceTypes';
 import RoutePreviewMap from '../components/RoutePreviewMap';
 import LiveCallCapture from '../components/LiveCallCapture';
+import WhatsAppLeadPrefill from '../components/WhatsAppLeadPrefill';
+import { WHATSAPP_LEAD_PARAM, pickupFromLead } from '../utils/whatsappLeadPrefill';
 import { PageHeader, StatusBadge, Badge, Btn, Modal, rupee, Spinner, fmtDateTime as fmtStamp, timeAgo, custPhone } from '../components/ui';
 import toast from 'react-hot-toast';
 import { Send, RefreshCw, CheckCircle, XCircle, MapPin, Phone, Link2, ExternalLink } from 'lucide-react';
@@ -240,6 +242,11 @@ export default function DispatchPage() {
   const captureLogId = searchParams.get('captureCall');
   const [capture, setCapture] = useState(null);
   const touched = useRef(new Set());
+  // ?whatsappLead=<lead id> — "Book" on a WhatsApp lead (or its alert) that
+  // shared a pickup: the same URL-param pre-fill as ?captureCall=, filling
+  // only the pickup (components/WhatsAppLeadPrefill).
+  const waLeadId = searchParams.get(WHATSAPP_LEAD_PARAM);
+  const [waLead, setWaLead] = useState(null);
 
   // The dropdown is whatever the Pricing collection currently offers.
   const services = useMemo(() => servicesFromPricing(pricing), [pricing]);
@@ -448,6 +455,29 @@ export default function DispatchPage() {
     setSearchParams((p) => { p.delete('captureCall'); return p; }, { replace: true });
   };
 
+  // A WhatsApp lead's Book: a clean form (asking first if the operator was
+  // in the middle of one), then only the pickup it shared — unless the
+  // operator has already picked one themselves.
+  const lastWaLead = useRef(null);
+  useEffect(() => {
+    if (!waLeadId || waLeadId === lastWaLead.current) return;
+    lastWaLead.current = waLeadId;
+    if (touched.current.size === 0 || window.confirm('Clear the booking form for this WhatsApp lead?')) resetForm();
+    setWaLead(null);
+  }, [waLeadId]);
+
+  const applyWaLead = (lead) => {
+    setWaLead(lead);
+    const p = pickupFromLead(lead);
+    if (p && !touched.current.has('pickup')) setPickup(p);
+  };
+
+  const closeWaLead = () => {
+    setWaLead(null);
+    lastWaLead.current = null;
+    setSearchParams((p) => { p.delete(WHATSAPP_LEAD_PARAM); return p; }, { replace: true });
+  };
+
   const dispatch = async (e) => {
     e.preventDefault();
     // From a call capture the phone may stay blank: the server uses the
@@ -485,6 +515,7 @@ export default function DispatchPage() {
       toast.success('🚑 Ambulance dispatched!');
       resetForm();
       if (capture) closeCapture();
+      if (waLeadId) closeWaLead();
       await loadLiveBoard();
     } finally { setSubmitting(false); }
   };
@@ -601,6 +632,15 @@ export default function DispatchPage() {
             />
           )}
 
+          {waLeadId && (
+            <WhatsAppLeadPrefill
+              key={waLeadId}
+              leadId={waLeadId}
+              onLead={applyWaLead}
+              onClose={closeWaLead}
+            />
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>Patient Name *</label>
@@ -609,7 +649,7 @@ export default function DispatchPage() {
             <div>
               <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>Phone *</label>
               <input className="inp" value={form.patientPhone} onChange={e => set('patientPhone', e.target.value)}
-                placeholder={!capture ? '+91 XXXXX XXXXX'
+                placeholder={!capture ? (waLead?.phoneMasked ? `+91 XXXXX XXXXX (WhatsApp ${waLead.phoneMasked})` : '+91 XXXXX XXXXX')
                   : capture.fields?.patientPhoneMasked ? `Blank = ${capture.fields.patientPhoneMasked} (said on the call)` : "Blank = the caller's number"}
                 required={!capture} />
             </div>
