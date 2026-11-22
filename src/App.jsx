@@ -38,6 +38,24 @@ import AiTelecallerPage from './pages/AiTelecallerPage';
 // Driver mobile app pages
 import DriverApp       from './pages/driver/DriverApp';
 
+// Staff phone layout (<= 430px) — src/mobile/. Routed for the owner and
+// telecallers alike; each screen reads only APIs that role already uses.
+import MobileHome        from './mobile/MobileHome';
+import MobileLeads       from './mobile/MobileLeads';
+import MobileLeadDetails from './mobile/MobileLeadDetails';
+import MobileWork        from './mobile/MobileWork';
+import { useIsMobile }   from './mobile/hooks';
+
+const MOBILE_ROUTES = [
+  ['m',             <MobileHome />],
+  ['m/leads',       <MobileLeads />],
+  ['m/leads/:id',   <MobileLeadDetails />],
+  ['m/work',        <MobileWork />],
+];
+
+// On a phone the landing page is the mobile Home; above 430px, exactly as before.
+const PhoneHomeOr = ({ children }) => (useIsMobile() ? <Navigate to="/m" replace /> : children);
+
 // ── Route guard ──────────────────────────────────────────────
 const ProtectedRoute = ({ children, roles }) => {
   const { user, loading } = useAuth();
@@ -100,7 +118,8 @@ export default function App() {
                 <Route path="whatsapp-leads"         element={<WhatsappLeadsPage />} />
                 <Route path="leads"                  element={<LeadsPage />} />
                 <Route path="hospitals"              element={<HospitalsPage />} />
-                <Route path="*" element={<Navigate to="/call-logs" replace />} />
+                {MOBILE_ROUTES.map(([path, el]) => <Route key={path} path={path} element={el} />)}
+                <Route path="*" element={<PhoneHomeOr><Navigate to="/call-logs" replace /></PhoneHomeOr>} />
               </Routes>
             </Shell>
           </ProtectedRoute>
@@ -112,7 +131,8 @@ export default function App() {
         <ProtectedRoute roles={['owner']}>
           <Shell>
             <Routes>
-              <Route index element={<DashboardPage />} />
+              <Route index element={<PhoneHomeOr><DashboardPage /></PhoneHomeOr>} />
+              {MOBILE_ROUTES.map(([path, el]) => <Route key={path} path={path} element={el} />)}
               <Route path="dispatch"   element={<DispatchPage />} />
               <Route path="fleet"      element={<FleetPage />} />
               <Route path="trips"      element={<TripsPage />} />

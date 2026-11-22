@@ -11,6 +11,11 @@ import { bookingPushState, enableBookingPush, disableBookingPush, pushPref, push
 import { APP_BUILD } from '../lib/pwaUpdate';
 import { fmtDateTime } from './ui';
 import toast from 'react-hot-toast';
+// Phone layout (<= 430px): its own header + tab bar in place of the ones
+// below; everything else Shell runs is unchanged. See src/mobile/.
+import { useIsMobile } from '../mobile/hooks';
+import { MobileHeader, MobileTabBar } from '../mobile/MobileChrome';
+import { NAV_ACCESS } from '../lib/navAccess.mjs';
 import {
   LayoutDashboard, Radio, Truck, FileText, Receipt,
   TrendingUp, Users, Target, ShieldCheck, Building2, UserCheck,
@@ -32,43 +37,16 @@ const soundWasEnabled = () => {
 // starts open. Posting Alerts is under Operations: it is the live feed of
 // drivers leaving / returning to their fixed duty posting (geofence), i.e.
 // crew supervision next to SOS and Trip Alerts, not marketing.
-const NAV_GROUPS = [
-  { id: 'overview', label: 'Overview', pinned: true, items: [
-    { label: 'Dashboard',   to: '/',           icon: LayoutDashboard, roles: ['owner'] },
-  ] },
-  { id: 'operations', label: 'Operations', items: [
-    { label: 'Dispatch',    to: '/dispatch',   icon: Radio,           roles: ['owner', 'telecaller'] },
-    { label: 'Trips',       to: '/trips',      icon: FileText,        roles: ['owner', 'telecaller'] },
-    { label: 'Fleet',       to: '/fleet',      icon: Truck,           roles: ['owner', 'telecaller'] },
-    { label: 'SOS Alerts',  to: '/sos',        icon: AlertTriangle,   roles: ['owner', 'telecaller'], badgeKey: 'sos' },
-    { label: 'Trip Alerts', to: '/trip-alerts', icon: PhoneMissed,    roles: ['owner', 'telecaller'], badgeKey: 'noResponse' },
-    { label: 'Posting Alerts', to: '/posting-alerts', icon: MapPin,   roles: ['owner', 'telecaller'] },
-  ] },
-  { id: 'customers', label: 'Customers', items: [
-    { label: 'Leads',       to: '/leads',      icon: Target,          roles: ['owner', 'telecaller'], badgeKey: 'leads' },
-    { label: 'WhatsApp Leads', to: '/whatsapp-leads', icon: MessageCircle, roles: ['owner', 'telecaller'] },
-    { label: 'WhatsApp Chats', to: '/whatsapp-conversations', icon: MessageSquare, roles: ['owner', 'telecaller'] },
-    { label: 'Callbacks',   to: '/callbacks',  icon: PhoneForwarded,  roles: ['owner', 'telecaller'], badgeKey: 'callbacks' },
-    { label: 'Call Logs',   to: '/call-logs',  icon: PhoneCall,       roles: ['owner', 'telecaller'] },
-    { label: 'AI Telecaller (pilot)', to: '/ai-telecaller', icon: Bot, roles: ['owner'] },
-  ] },
-  { id: 'finance', label: 'Finance', items: [
-    { label: 'Billing',     to: '/billing',    icon: Receipt,         roles: ['owner'] },
-    { label: 'GST Invoicing', to: '/invoicing', icon: FileText,      roles: ['owner'] },
-    { label: 'Finance',     to: '/finance',    icon: TrendingUp,      roles: ['owner'] },
-    { label: 'Salaries',    to: '/salary',     icon: Wallet,          roles: ['owner'] },
-    { label: 'Advances',    to: '/advances',   icon: Banknote,        roles: ['owner'] },
-  ] },
-  { id: 'management', label: 'Management', items: [
-    { label: 'Staff',       to: '/staff',      icon: Users,           roles: ['owner'] },
-    { label: 'Owners',      to: '/owners',     icon: UserCheck,       roles: ['owner'] },
-    { label: 'Hospitals',   to: '/hospitals',  icon: Building2,       roles: ['owner', 'telecaller'] },
-    { label: 'Compliance',  to: '/compliance', icon: ShieldCheck,     roles: ['owner'] },
-  ] },
-  { id: 'marketing', label: 'Marketing', items: [
-    { label: 'SEO Studio',  to: '/seo-studio', icon: Sparkles,        roles: ['owner'] },
-  ] },
-];
+// The labels, routes, roles and badges live in lib/navAccess.mjs, shared
+// with the phone "More" sheet; only the icons are added here.
+const NAV_ICONS = {
+  '/': LayoutDashboard, '/dispatch': Radio, '/trips': FileText, '/fleet': Truck, '/sos': AlertTriangle,
+  '/trip-alerts': PhoneMissed, '/posting-alerts': MapPin, '/leads': Target, '/whatsapp-leads': MessageCircle,
+  '/whatsapp-conversations': MessageSquare, '/callbacks': PhoneForwarded, '/call-logs': PhoneCall, '/ai-telecaller': Bot,
+  '/billing': Receipt, '/invoicing': FileText, '/finance': TrendingUp, '/salary': Wallet, '/advances': Banknote,
+  '/staff': Users, '/owners': UserCheck, '/hospitals': Building2, '/compliance': ShieldCheck, '/seo-studio': Sparkles,
+};
+const NAV_GROUPS = NAV_ACCESS.map((g) => ({ ...g, items: g.items.map((i) => ({ ...i, icon: NAV_ICONS[i.to] })) }));
 
 // Which groups are open — remembered per browser. Used day to day open
 // first; the rest start closed until opened once.
@@ -102,6 +80,9 @@ export default function Shell({ children }) {
   const { user, logout } = useAuth();
   const navigate  = useNavigate();
   const { pathname } = useLocation();
+  const mobile = useIsMobile();
+  // The new mobile screens (/m...) draw their own light background edge to edge.
+  const mobileScreen = mobile && (pathname === '/m' || pathname.startsWith('/m/'));
   const [sideOpen, setSideOpen] = useState(false);
   const [openGroups, setOpenGroups] = useState(readOpenGroups);
   const toggleGroup = (id) => setOpenGroups((prev) => {
@@ -696,7 +677,19 @@ export default function Shell({ children }) {
             {soundWasEnabled() ? '🔔 Tap anywhere to turn the booking ring back on' : '🔔 Tap to enable booking ring'}
           </button>
         )}
+        {mobile && (
+          <MobileHeader
+            user={user}
+            sosCount={sosCount}
+            isCallStaff={isCallStaff}
+            onDuty={onDuty}
+            onToggleDuty={toggleDuty}
+            onLogout={logout}
+            onOpenFullMenu={() => setSideOpen(true)}
+          />
+        )}
         {/* Top bar */}
+        {!mobile && (
         <header className="flex items-center gap-3 px-5 py-3 sticky top-0 z-40"
           style={{ background: 'rgba(10,15,30,.85)', backdropFilter: 'blur(12px)', borderBottom: '1px solid var(--border)' }}>
           <button className="md:hidden p-2.5 rounded-lg"
@@ -793,10 +786,11 @@ export default function Shell({ children }) {
             </div>
           </div>
         </header>
+        )}
 
         {/* Page content. Extra bottom padding on phones keeps the last row
             clear of the bottom tab bar. */}
-        <main className="flex-1 p-4 pb-28 md:p-7 page-enter overflow-x-hidden">
+        <main className={mobileScreen ? 'flex-1 overflow-x-clip' : 'flex-1 p-4 pb-28 md:p-7 page-enter overflow-x-hidden'}>
           {children}
         </main>
       </div>
@@ -818,7 +812,10 @@ export default function Shell({ children }) {
           through to phones when nobody answers in the app. */}
       {isCallStaff && <PhoneCallBar active={!!onDuty} />}
 
-      {/* Phone bottom tab bar — hidden from md up, where the sidebar shows. */}
+      {mobile && <MobileTabBar role={user?.role} sosCount={sosCount} onOpenFullMenu={() => setSideOpen(true)} />}
+      {/* Phone bottom tab bar — hidden from md up, where the sidebar shows.
+          At <= 430px the mobile tab bar above replaces it. */}
+      {!mobile && (
       <nav className="mobile-tabbar md:hidden fixed bottom-0 inset-x-0 z-40 flex"
         style={{ background: 'rgba(17,24,39,.97)', backdropFilter: 'blur(12px)', borderTop: '1px solid var(--border)' }}>
         {(user?.role === 'telecaller' ? TELECALLER_TABS : MOBILE_TABS).map(({ label, to, icon: Icon, badgeKey }) => (
@@ -849,6 +846,7 @@ export default function Shell({ children }) {
           More
         </button>
       </nav>
+      )}
     </div>
   );
 }

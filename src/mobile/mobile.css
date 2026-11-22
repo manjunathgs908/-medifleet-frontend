@@ -1,0 +1,145 @@
+/* src/mobile/mobile.css — the phone layout (<= 430px). Scoped under .m-ui so
+   nothing here can touch the desktop pages. Light, high-contrast, large
+   tap targets (>= 48px). */
+
+.m-ui {
+  --m-bg:      #f4f6fa;
+  --m-card:    #ffffff;
+  --m-line:    #e3e8ef;
+  --m-text:    #0f172a;
+  --m-text2:   #475569;
+  --m-text3:   #64748b;
+  --m-brand:   #d6242b;   /* SaveLife red */
+  --m-brand2:  #b81d23;
+  --m-blue:    #1d64d8;
+  --m-blue-bg: #e8f0fe;
+  --m-amber:   #a15c00;
+  --m-amber-bg:#fff4e0;
+  --m-red:     #c81e1e;
+  --m-red-bg:  #fdeaea;
+  --m-green:   #0f7a4f;
+  --m-green-bg:#e6f6ee;
+  color: var(--m-text);
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+
+/* A new mobile screen fills the area between header and tab bar. */
+.m-screen {
+  background: var(--m-bg);
+  min-height: calc(100dvh - 56px);
+  /* Content stays a readable column (<= 640px) on wide phones and in
+     landscape; side notches respected. */
+  padding: 16px max(16px, calc((100% - 640px) / 2), env(safe-area-inset-right)) calc(96px + env(safe-area-inset-bottom)) max(16px, calc((100% - 640px) / 2), env(safe-area-inset-left));
+  /* clip, not hidden: hidden would make this a scroll container and break
+     the sticky Save bar below. */
+  overflow-x: clip;
+}
+
+.m-card {
+  background: var(--m-card);
+  border: 1px solid var(--m-line);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+
+.m-tap {
+  min-height: 48px;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.m-tap:active { transform: scale(.98); }
+.m-tap:focus-visible { outline: 3px solid var(--m-blue); outline-offset: 2px; }
+
+.m-title { font-size: 20px; font-weight: 700; letter-spacing: -.01em; }
+.m-sub   { font-size: 13px; color: var(--m-text3); }
+
+.m-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 48px; padding: 0 16px; border-radius: 12px;
+  font-size: 15px; font-weight: 600;
+  border: 1px solid var(--m-line); background: var(--m-card); color: var(--m-text);
+}
+.m-btn svg { flex-shrink: 0; }
+/* A row of three actions on a 320px screen: icon above a short label. */
+.m-btn-stack { flex-direction: column; gap: 2px; min-height: 60px; padding: 6px 4px; font-size: 13px; min-width: 0; }
+.m-btn-primary { background: var(--m-brand); border-color: var(--m-brand); color: #fff; }
+.m-btn-blue    { background: var(--m-blue); border-color: var(--m-blue); color: #fff; }
+.m-btn:disabled { opacity: .55; }
+
+.m-chip {
+  display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px;
+  border-radius: 999px; font-size: 14px; font-weight: 600; white-space: nowrap;
+  border: 1px solid var(--m-line); background: var(--m-card); color: var(--m-text2);
+}
+.m-chip[aria-pressed="true"] { background: var(--m-text); border-color: var(--m-text); color: #fff; }
+
+.m-pill { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.m-pill-red   { background: var(--m-red-bg);   color: var(--m-red); }
+.m-pill-amber { background: var(--m-amber-bg); color: var(--m-amber); }
+.m-pill-blue  { background: var(--m-blue-bg);  color: var(--m-blue); }
+.m-pill-green { background: var(--m-green-bg); color: var(--m-green); }
+.m-pill-gray  { background: #eef1f5;           color: var(--m-text2); }
+
+.m-input {
+  width: 100%; min-height: 48px; padding: 10px 12px; border-radius: 12px;
+  border: 1px solid var(--m-line); background: #fff; color: var(--m-text);
+  font-size: 16px; /* 16px: iOS does not zoom the page on focus */
+}
+.m-input:focus { border-color: var(--m-blue); box-shadow: 0 0 0 3px rgba(29,100,216,.15); }
+
+/* Chip rows scroll inside themselves, never the page. */
+.m-scroll-x { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px 2px; }
+.m-scroll-x::-webkit-scrollbar { display: none; }
+
+/* Header + tab bar */
+.m-header {
+  position: sticky; top: 0; z-index: 40;
+  height: 56px; padding: 0 8px 0 12px;
+  display: flex; align-items: center; gap: 8px;
+  background: #fff; border-bottom: 1px solid var(--m-line);
+}
+.m-tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  display: flex; background: #fff; border-top: 1px solid var(--m-line);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.m-tab {
+  position: relative; flex: 1; min-height: 60px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  font-size: 11px; font-weight: 600; color: var(--m-text3);
+  background: none; border: 0;
+}
+.m-tab[aria-current="page"] { color: var(--m-brand); }
+.m-badge {
+  position: absolute; top: 6px; left: 50%; margin-left: 6px;
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  background: var(--m-red); color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center;
+}
+
+/* Bottom sheets (More / notifications / profile) */
+.m-sheet-backdrop { position: fixed; inset: 0; z-index: 70; background: rgba(15,23,42,.45); }
+.m-sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 71;
+  max-height: 85dvh; overflow-y: auto; overscroll-behavior: contain;
+  background: #fff; border-radius: 18px 18px 0 0;
+  padding: 8px 16px calc(16px + env(safe-area-inset-bottom));
+  max-width: 640px; margin: 0 auto;
+}
+.m-sheet-grip { width: 40px; height: 4px; border-radius: 4px; background: var(--m-line); margin: 4px auto 12px; }
+
+/* A form's Save bar sits above the tab bar and rides up with the keyboard
+   (100dvh tracks the visible viewport; sticky keeps it on screen). */
+.m-savebar {
+  position: sticky; bottom: calc(68px + env(safe-area-inset-bottom)); z-index: 5;
+  display: flex; gap: 8px; padding-top: 10px; margin-top: 10px;
+  background: linear-gradient(to bottom, rgba(255,255,255,0), #fff 30%);
+}
+/* Keyboard open (a text field has focus): the tab bar steps aside, as in
+   native apps, and the Save bar sits on the keyboard's top edge. */
+html.m-kbd .m-tabbar { display: none; }
+html.m-kbd .m-savebar { bottom: 0; }
+
+/* Skeleton shimmer for loading states */
+.m-skel { background: linear-gradient(90deg, #e9edf3 25%, #f4f6fa 50%, #e9edf3 75%); background-size: 200% 100%; animation: m-shimmer 1.2s infinite; border-radius: 10px; }
+@keyframes m-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .m-skel { animation: none; } .m-tap:active { transform: none; } }
