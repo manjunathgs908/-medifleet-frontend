@@ -441,6 +441,9 @@ export const attendanceApi = {
 // follow-up time without a zone ("2026-11-02T10:30") is India time.
 export const leadsApi = {
   getAll   : (params) => api.get('/leads', { params }),
+  // One lead (+ customerRef for the customer-history endpoint) — mobile
+  // lead details. Shows its own error state, so no toast.
+  getOne   : (id)     => api.get(`/leads/${encodeURIComponent(id)}`, { skipErrorToast: true }),
   summary  : ()       => api.get('/leads/summary', { skipErrorToast: true }),
   assignees: ()       => api.get('/leads/assignees'),
   assign   : (id, userId, rev)         => api.patch(`/leads/${id}/assign`, { userId, rev }),
