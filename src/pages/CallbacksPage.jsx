@@ -12,6 +12,7 @@
 // "Not routed by CRM" calls are kept apart: nobody was rung for them, so a
 // person decides whether they need a callback.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { RefreshCw, ChevronDown, PhoneIncoming, PhoneOutgoing, CheckCircle2 } from 'lucide-react';
 import { callbacksApi } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
@@ -201,6 +202,7 @@ function TaskCard({ task, assignees, me, onChanged }) {
         </div>
         {/* The masked call: your phone rings first. It does not close the task. */}
         <CallButton target={{ callbackTaskId: task._id }} label="Call back" />
+        {task.customerRef && <Link to={`/customer/${encodeURIComponent(task.customerRef)}`} className="text-xs font-semibold underline self-center" style={{ color: 'var(--accent)' }}>View customer</Link>}
       </div>
 
       {open && (
@@ -332,6 +334,15 @@ export default function CallbacksPage() {
   const [assignees, setAssignees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Open tasks past the first 300 (the list returns the 300 most URGENT and
+  // says how many more there are): "Load more" pages on through the same
+  // order (GET /api/callbacks?page=&limit=), so nothing is unreachable.
+  const FIRST = 300;
+  const MORE_LIMIT = 100;
+  const [truncated, setTruncated] = useState(0);
+  const [extra, setExtra] = useState([]);
+  const [morePages, setMorePages] = useState(0);
+  const [moreBusy, setMoreBusy] = useState(false);
   const intervalRef = useRef();
 
   const load = async ({ silent } = {}) => {
@@ -341,7 +352,7 @@ export default function CallbacksPage() {
         tab === 'not_routed' ? null : callbacksApi.list(tab === 'resolved' ? 'resolved' : 'open'),
         callbacksApi.notRouted(),
       ]);
-      if (list) { setTasks(list.data.tasks || []); setCounts(list.data.counts); setDueMinutes(list.data.config?.dueMinutes ?? null); }
+      if (list) { setTasks(list.data.tasks || []); setCounts(list.data.counts); setDueMinutes(list.data.config?.dueMinutes ?? null); setTruncated(list.data.truncated || 0); }
       setNotRouted(nr.data.calls || []);
       setError(null);
       window.dispatchEvent(new Event('callbacks:changed'));
@@ -354,10 +365,27 @@ export default function CallbacksPage() {
 
   useEffect(() => { callbacksApi.assignees().then(({ data }) => setAssignees(data.users || [])).catch(() => {}); }, []);
   useEffect(() => {
+    setExtra([]); setMorePages(0); setTruncated(0);
     load();
     intervalRef.current = setInterval(() => load({ silent: true }), POLL_MS);
     return () => clearInterval(intervalRef.current);
   }, [tab]);
+
+  const loadMore = async () => {
+    setMoreBusy(true);
+    try {
+      // Pages of 100 in the same most-urgent order: page 4 = tasks 301-400, …
+      const page = FIRST / MORE_LIMIT + morePages + 1;
+      const { data } = await callbacksApi.page({ page, limit: MORE_LIMIT });
+      setExtra((prev) => [...prev, ...(data.tasks || [])]);
+      setMorePages((n) => n + 1);
+      setTruncated(Math.max(0, (data.page?.total ?? 0) - FIRST - (morePages + 1) * MORE_LIMIT));
+    } catch (e) {
+      setError(e.response?.data?.message || 'Could not load more callbacks.');
+    } finally {
+      setMoreBusy(false);
+    }
+  };
 
   const replace = (t) => {
     setTasks((prev) => {
@@ -369,9 +397,10 @@ export default function CallbacksPage() {
   };
 
   // Overdue first, then whatever is due soonest.
+  const allTasks = tab === 'open' ? [...tasks, ...extra.filter((x) => !tasks.some((t) => t._id === x._id))] : tasks;
   const shown = tab === 'open'
-    ? [...tasks].sort((a, b) => (b.due?.overdue - a.due?.overdue) || (new Date(a.due?.dueAt) - new Date(b.due?.dueAt)))
-    : tasks;
+    ? [...allTasks].sort((a, b) => (b.due?.overdue - a.due?.overdue) || (new Date(a.due?.dueAt) - new Date(b.due?.dueAt)))
+    : allTasks;
 
   return (
     <div className="page-enter">
@@ -407,6 +436,14 @@ export default function CallbacksPage() {
           : (
             <div className="flex flex-col gap-2">
               {shown.map((t) => <TaskCard key={t._id} task={t} assignees={assignees} me={user?.id || user?._id} onChanged={replace} />)}
+              {tab === 'open' && truncated > 0 && (
+                <div className="card-sm flex flex-wrap items-center gap-3" data-callbacks-more>
+                  <span className="text-sm" style={{ color: 'var(--text2)' }}>
+                    Showing {shown.length} of {counts?.open ?? shown.length} pending, most urgent first · {truncated} more
+                  </span>
+                  <Btn size="sm" onClick={loadMore} disabled={moreBusy}>{moreBusy ? 'Loading…' : `Load ${Math.min(MORE_LIMIT, truncated)} more`}</Btn>
+                </div>
+              )}
             </div>
           )}
     </div>

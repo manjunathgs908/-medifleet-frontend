@@ -9,7 +9,7 @@
 // Missed-call callbacks stay on their own page; a lead only shows a
 // callback the call log already linked to it.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Target, Megaphone, Search, PhoneIncoming, PenLine, Footprints, Users, MessageCircle, Mail,
   RefreshCw, ChevronDown, PhoneForwarded, StickyNote,
@@ -57,6 +57,7 @@ const historyText = (e) => {
       d.reason && `reason: “${d.reason}”`,
       d.followUpCleared && `follow-up ${fmtIst(d.followUpCleared)} ended`,
     ].filter(Boolean).join(' · ');
+    case 'created'          : return `Lead added by hand${d.source ? ` (${String(d.source).replace('_', ' ')})` : ''}`;
     case 'whatsapp_outcome' : return [
       `WhatsApp call outcome: ${WA_OUTCOME[d.outcome] || d.outcome}`,
       d.from !== d.to && `status ${d.from || 'new'} → ${d.to}`,
@@ -189,7 +190,10 @@ function LeadCard({ lead, assignees, me, onChanged }) {
             </div>
           )}
         </div>
-        {lead.phoneMasked && <CallButton target={{ leadId: lead._id }} />}
+        <div className="flex flex-col items-end gap-1.5">
+          {lead.phoneMasked && <CallButton target={{ leadId: lead._id }} />}
+          {lead.customerRef && <Link to={`/customer/${encodeURIComponent(lead.customerRef)}`} className="text-xs font-semibold underline" style={{ color: 'var(--accent)' }}>View customer</Link>}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 mt-2.5">
@@ -266,6 +270,7 @@ function LeadCard({ lead, assignees, me, onChanged }) {
 
 export default function LeadsPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const me = user?.id || user?._id;
   const [status, setStatus] = useState('new');
   const [view, setView] = useState('all');
@@ -346,9 +351,13 @@ export default function LeadsPage() {
         title="Leads Dashboard"
         subtitle="FB Ads · Google Ads · Inbound Calls · WhatsApp · follow-up times are India time (IST)"
         action={
-          <button onClick={() => load()} aria-label="Refresh" className="p-2 rounded-lg" style={{ color: 'var(--text3)', background: 'var(--surface2)' }}>
-            <RefreshCw size={14} />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Add a lead by hand (POST /api/leads; duplicates offered, never merged). */}
+            <Btn size="sm" onClick={() => navigate('/m/leads/new')}>New lead</Btn>
+            <button onClick={() => load()} aria-label="Refresh" className="p-2 rounded-lg" style={{ color: 'var(--text3)', background: 'var(--surface2)' }}>
+              <RefreshCw size={14} />
+            </button>
+          </div>
         }
       />
 

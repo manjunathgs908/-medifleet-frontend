@@ -13,6 +13,7 @@
 // Nothing is inferred: a name, a staff member or a talk time shows only when
 // the call log has it.
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { PhoneIncoming, PhoneOutgoing, ChevronDown } from 'lucide-react';
 import { Badge, fmtDateTime, custPhone } from './ui';
 import CallButton from './CallButton';
@@ -247,6 +248,9 @@ export default function CallLogList({ logs, emptyText = 'No recorded calls yet.'
                 {verdict && <div className="text-[11px] mt-1" style={{ color: 'var(--amber)' }}>{verdict}</div>}
                 <TransferHistory transfers={log.transfers} />
               </div>
+              {log.customerRef && showCallBack && (
+                <Link to={`/customer/${encodeURIComponent(log.customerRef)}`} className="text-xs font-semibold underline" style={{ color: 'var(--accent)' }}>View customer</Link>
+              )}
               {showCallBack && log.customerMasked && (
                 <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                   <CallButton target={{ callLogId: log._id }} label="Call back" />

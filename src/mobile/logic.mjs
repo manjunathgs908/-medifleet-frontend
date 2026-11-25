@@ -109,15 +109,65 @@ export function moreItems(role) {
   ];
 }
 
-// Home's quick actions, each an existing flow. "New lead" is deliberately
-// absent: the CRM has no create-lead form or endpoint, and a button that
-// goes nowhere is worse than none.
+// Home's quick actions, each a working flow (New lead: POST /api/leads).
 const QUICK = [
   { key: 'call',     label: 'Call',           to: '/call-logs' },
   { key: 'whatsapp', label: 'WhatsApp chats', to: '/whatsapp-conversations' },
+  { key: 'newLead',  label: 'New lead',       to: '/m/leads/new' },
   { key: 'book',     label: 'Book ambulance', to: '/dispatch' },
 ];
 export const quickActions = (role) => (['owner', 'telecaller'].includes(role) ? QUICK : []);
+
+/**
+ * The My Work tab badge. A telecaller: their OWN overdue items (leads +
+ * callbacks assigned to them) — unassigned work is shown separately on the
+ * My Work screen, never folded into a personal number. The owner: the
+ * team's overdue, which is what the owner's My Work lists. Shown only
+ * when both counts are known (no half-known numbers), and from the same
+ * rules the lists use (backend summaries: mineOverdue / overdue).
+ */
+export function myWorkBadge(role, leadCounts, callbackCounts) {
+  if (!leadCounts || !callbackCounts) return 0;
+  const pick = (o, k) => (isCount(o[k]) ? o[k] : null);
+  const key = role === 'owner' ? 'overdue' : 'mineOverdue';
+  const a = pick(leadCounts, key); const b = pick(callbackCounts, key);
+  return a === null || b === null ? 0 : a + b;
+}
+/** Unassigned overdue (leads + callbacks), shown apart from personal work. */
+export function unassignedOverdue(leadCounts, callbackCounts) {
+  const a = leadCounts?.unassignedOverdue; const b = callbackCounts?.unassignedOverdue;
+  return isCount(a) && isCount(b) ? a + b : null;
+}
+
+/**
+ * Home's "Today's calls", from GET /api/calls/performance for the India day
+ * so far — the server's own (already-correct) call classification, not a
+ * new one. Each number says whose calls it counts:
+ *   company line (team)  incoming calls, and missed ones (nobody answered)
+ *   you / team           outgoing attempts, and customer-connected calls
+ *                        (incoming answered + outgoing connected)
+ * A telecaller's outgoing/connected are their own row; the owner's are the
+ * whole team's.
+ */
+export function callsSummary(perf, role, userId) {
+  if (!perf?.team) return null;
+  const n = (v) => (isCount(v) ? v : 0);
+  const people = Array.isArray(perf.people) ? perf.people : [];
+  const own = people.find((p) => String(p.user) === String(userId));
+  const mineOnly = role !== 'owner';
+  const rows = mineOnly ? (own ? [own] : []) : people;
+  const sum = (k) => rows.reduce((s, p) => s + n(p[k]), 0);
+  return {
+    incoming: n(perf.team.incoming),
+    missed: n(perf.team.missed),
+    outgoing: sum('placed'),
+    connected: (mineOnly ? sum('answered') : n(perf.team.answered)) + sum('connected'),
+    scope: mineOnly ? 'you' : 'team',
+  };
+}
+
+// "YYYY-MM-DDT00:00 IST" of `now`, as an ISO instant (start of the India day).
+export const istDayStart = (now = Date.now()) => new Date(istDayEnd(now) - DAY_MS).toISOString();
 
 /** Full number only if the backend sent it (owner); else the masked one. */
 export function shownPhone(full, masked, fallback = 'No number') {
@@ -177,11 +227,13 @@ export function buildMyWork({ overdueLeads = [], todayLeads = [], callbacks = []
       overdue : l.followUp === 'overdue' || dueAt < now,
       action  : { label: 'Call', target: { leadId: l._id } },
       to      : `/m/leads/${l._id}`,
+      customerRef: l.customerRef || null,
     });
   }
 
   for (const c of callbacks) {
-    if (!c?._id || (c.state && c.state !== 'open')) continue;
+    if (!c?._id || (c.state && c.state !== 'open') || seen.has(`cb:${c._id}`)) continue;
+    seen.add(`cb:${c._id}`);
     const bucket = bucketOf(c.assignedTo);
     if (bucket === 'team' && !owner) continue;
     const dueAt = c.due?.dueAt ? new Date(c.due.dueAt).getTime() : NaN;
@@ -198,6 +250,7 @@ export function buildMyWork({ overdueLeads = [], todayLeads = [], callbacks = []
       overdue : !!c.due?.overdue || dueAt < now,
       action  : { label: 'Call back', target: { callbackTaskId: c._id } },
       to      : '/callbacks',
+      customerRef: c.customerRef || null,
     });
   }
 
@@ -247,6 +300,7 @@ function historyText(e, fmt) {
     case 'follow_up_cleared': return 'Follow-up cleared';
     case 'status'           : return [`Status ${d.from || 'new'} → ${d.to}`, d.reason && `reason: “${d.reason}”`].filter(Boolean).join(' · ');
     case 'whatsapp_outcome' : return `WhatsApp call outcome: ${WA_OUTCOME[d.outcome] || d.outcome}`;
+    case 'created'          : return `Lead added by hand${d.source ? ` (${String(d.source).replace('_', ' ')})` : ''}`;
     default                 : return e.type || 'Update';
   }
 }

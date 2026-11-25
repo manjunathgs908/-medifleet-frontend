@@ -5,8 +5,10 @@
 //   Call      the existing masked call ({ leadId })
 //   WhatsApp chat   this customer's WhatsApp history on the WhatsApp Chats
 //                   page (?customer=<customerRef>); read-only, sends nothing
-//   Open Dispatch   the existing booking form, empty — the lead is NOT
-//                   carried over (Dispatch has no lead hand-off yet)
+//   Book ambulance  Dispatch with this lead (?lead=<id>): name filled in, the
+//                   number filled in by the server (never shown to a
+//                   telecaller), the booking linked to the lead, once
+//   Open booking    instead, when the lead is already booked
 // Add note / set follow-up use the existing lead endpoints (rev-guarded;
 // on a 409 the screen takes the server's current lead).
 // Notes & history (from the lead) and customer history
@@ -14,13 +16,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, MessageCircle, Truck, ChevronDown, StickyNote, CalendarClock, User, Clock } from 'lucide-react';
-import { leadsApi, whatsappCustomerApi } from '../api/client';
+import { leadsApi } from '../api/client';
 import { leadHistoryRows, shownPhone, dueLabel, istInput } from './logic.mjs';
 import { Skeleton, ErrorState, MCallButton, StatusPill } from './ui';
 import './mobile.css';
 
 const fmt = (v) => (v ? dueLabel(new Date(v).getTime()) : '—');
-const OUTCOME = { booked: 'Booked', followup: 'Follow up', not_interested: 'Not interested', no_answer: 'No answer' };
 
 function Expander({ id, title, count, children, onOpen }) {
   const [open, setOpen] = useState(false);
@@ -33,44 +34,6 @@ function Expander({ id, title, count, children, onOpen }) {
       </button>
       {open && <div id={id} className="px-4 pb-4">{children}</div>}
     </section>
-  );
-}
-
-function CustomerHistory({ customerRef }) {
-  const [state, setState] = useState({ status: 'idle' });
-  const load = useCallback(async () => {
-    setState({ status: 'loading' });
-    try {
-      const { data } = await whatsappCustomerApi.get(customerRef);
-      setState({ status: 'ready', data });
-    } catch (e) {
-      setState({ status: 'error', error: e?.response?.data?.message || e?.message });
-    }
-  }, [customerRef]);
-  useEffect(() => { load(); }, [load]);
-
-  if (state.status === 'loading' || state.status === 'idle') return <Skeleton rows={2} height={48} />;
-  if (state.status === 'error') return <ErrorState message={state.error} onRetry={load} />;
-  const { summary = {}, trips = [], calls = [] } = state.data || {};
-  const rows = [
-    ...trips.map((t) => ({ at: t.createdAt, text: `Trip ${t.tripNumber || ''} · ${t.status}${t.serviceType ? ` · ${t.serviceType}` : ''}` })),
-    ...calls.map((c) => ({ at: c.createdAt, text: `WhatsApp call: ${OUTCOME[c.outcome] || c.outcome}${c.note ? ` — “${c.note}”` : ''}` })),
-  ].sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 20);
-  return (
-    <div>
-      <div className="grid grid-cols-3 gap-2 text-center mb-3">
-        {[['Trips', summary.totalTrips], ['Bookings', summary.completedBookings], ['Calls', summary.totalCallsMade]].map(([l, n]) => (
-          <div key={l} className="rounded-xl py-2" style={{ background: '#f6f8fb' }}>
-            <div className="text-[18px] font-bold">{n ?? '—'}</div><div className="m-sub">{l}</div>
-          </div>
-        ))}
-      </div>
-      {rows.length ? (
-        <ol className="space-y-2">
-          {rows.map((r, i) => <li key={i} className="text-[14px]"><span className="m-sub block">{fmt(r.at)}</span>{r.text}</li>)}
-        </ol>
-      ) : <div className="m-sub">No earlier trips or calls for this customer.</div>}
-    </div>
   );
 }
 
@@ -155,6 +118,18 @@ export default function MobileLeadDetails() {
           <h1 className="m-title flex-1 min-w-0 break-words">{lead.patientName || 'Unknown'}</h1>
           <StatusPill status={lead.status} />
         </div>
+        {lead.booking && !lead.booking.needsReview && (
+          <div className="mt-2"><span className="m-pill m-pill-green">Booked{lead.booking.tripNumber ? ` · ${lead.booking.tripNumber}` : ''}</span></div>
+        )}
+        {lead.booking?.needsReview && (
+          // An older booking carries this lead but the lead never recorded it.
+          <div className="mt-2" data-booking-review="needs-review">
+            <span className="m-pill m-pill-amber">Booking needs review{lead.booking.tripNumber ? ` · ${lead.booking.tripNumber}` : ''}</span>
+            <p className="text-[13px] mt-1" style={{ color: 'var(--m-text2)' }}>
+              A booking from this lead already exists, but the lead was never marked as booked. Open it and check before booking again.
+            </p>
+          </div>
+        )}
         <div className="font-mono text-[16px] mt-1" style={{ color: 'var(--m-text2)' }}>{shownPhone(lead.phone, lead.phoneMasked)}</div>
         <dl className="mt-3 space-y-2 text-[14px]">
           <div className="flex items-center gap-2"><User size={16} aria-hidden="true" style={{ color: 'var(--m-text3)' }} />
@@ -175,9 +150,14 @@ export default function MobileLeadDetails() {
             <MessageCircle size={18} aria-hidden="true" />WhatsApp chat
           </Link>
         )}
-        {/* Opens the booking form as it is today: the lead is NOT carried
-            over (Dispatch cannot take a lead yet — see the release notes). */}
-        <Link to="/dispatch" className={`m-btn m-tap ${stack}`}><Truck size={18} aria-hidden="true" />Open Dispatch</Link>
+        {lead.booking
+          ? <Link to={`/dispatch?trip=${encodeURIComponent(lead.booking._id)}`} className={`m-btn m-tap ${stack}`}
+              aria-label={`Open booking${lead.booking.tripNumber ? ` ${lead.booking.tripNumber}` : ''}`}>
+              <Truck size={18} aria-hidden="true" />Open booking
+            </Link>
+          : <Link to={`/dispatch?lead=${encodeURIComponent(lead._id)}`} className={`m-btn m-tap ${stack}`}>
+              <Truck size={18} aria-hidden="true" />Book ambulance
+            </Link>}
       </div>
 
       <div className="grid grid-cols-2 gap-2 mt-2">
@@ -231,9 +211,10 @@ export default function MobileLeadDetails() {
       </Expander>
 
       {lead.customerRef && (
-        <Expander id="m-lead-customer" title="Customer history">
-          <CustomerHistory customerRef={lead.customerRef} />
-        </Expander>
+        <Link to={`/customer/${encodeURIComponent(lead.customerRef)}`} className="m-card m-tap mt-3 px-4 flex items-center justify-between font-semibold">
+          <span>View customer<span className="block m-sub font-normal">Calls, callbacks, bookings and the full timeline</span></span>
+          <span aria-hidden="true">›</span>
+        </Link>
       )}
     </div>
   );

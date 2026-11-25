@@ -6,14 +6,25 @@
 // same customer through the masked call, so a missed incoming call can be
 // returned without anyone seeing the number.
 import React, { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { callsApi } from '../api/client';
 import { PageHeader, Spinner, Tabs, fmtDateTime } from '../components/ui';
 import CallLogList from '../components/CallLogList';
+import { CallFilters, AllCallEvents, CallsByCustomer, EMPTY_FILTERS } from '../components/CallHistoryViews';
 import MyCallSettings from '../components/MyCallSettings';
 import { useAuth } from '../contexts/AuthContext';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 const POLL_MS = 30000;
+
+// Recent: the newest calls, refreshed every 30 s (as before).
+// All call events / By customer: every call, searchable and filtered on the
+// server, paged (components/CallHistoryViews.jsx).
+const VIEWS = [
+  { key: 'recent',    label: 'Recent calls' },
+  { key: 'events',    label: 'All call events' },
+  { key: 'customers', label: 'By customer' },
+];
 
 const DIRECTIONS = [
   { key: 'all',      label: 'All calls' },
@@ -299,6 +310,10 @@ export default function CallLogsPage() {
   const [agent,     setAgent]     = useState('');
   const [people,    setPeople]    = useState([]);
   const intervalRef = useRef();
+  const [params, setParams] = useSearchParams();
+  const view = VIEWS.some((v) => v.key === params.get('view')) ? params.get('view') : 'recent';
+  const setView = (v) => setParams((p) => { const n = new URLSearchParams(p); if (v === 'recent') n.delete('view'); else n.set('view', v); return n; }, { replace: true });
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
 
   useEffect(() => {
     callsApi.config().then(({ data }) => setConfig(data)).catch(() => {});
@@ -321,10 +336,11 @@ export default function CallLogsPage() {
   };
 
   useEffect(() => {
+    if (view !== 'recent') return undefined;
     load();
     intervalRef.current = setInterval(() => load({ silent: true }), POLL_MS);
     return () => clearInterval(intervalRef.current);
-  }, [direction, agent]);
+  }, [direction, agent, view]);
 
   return (
     <div className="page-enter">
@@ -359,6 +375,8 @@ export default function CallLogsPage() {
       {isOwner && config?.provider === 'plivo' && <LivePlivoCalls />}
       {config?.provider === 'plivo' && <MyInAppDevices />}
 
+      <Tabs tabs={VIEWS} active={view} onChange={setView} />
+      {view === 'recent' ? (<>
       <div className="flex flex-wrap items-center gap-3">
         <Tabs tabs={DIRECTIONS} active={direction} onChange={setDirection} />
         {isOwner ? (
@@ -383,6 +401,12 @@ export default function CallLogsPage() {
       )}
 
       {loading ? <Spinner /> : <CallLogList logs={logs} emptyText="No calls yet." />}
+      </>) : (
+        <>
+          <CallFilters f={filters} setF={setFilters} isOwner={isOwner} people={people} user={user} />
+          {view === 'events' ? <AllCallEvents f={filters} /> : <CallsByCustomer f={filters} />}
+        </>
+      )}
     </div>
   );
 }

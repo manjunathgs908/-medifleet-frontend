@@ -1,6 +1,6 @@
 // src/pages/WhatsappConversationsPage.jsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { whatsappConversationsApi, whatsappCustomerApi, callsApi } from '../api/client';
 import { PageHeader, Spinner, Empty, SectionLabel, StatusBadge, rupee, fmtDateTime, custPhone } from '../components/ui';
 import CallButton from '../components/CallButton';
@@ -518,13 +518,19 @@ export default function WhatsappConversationsPage() {
 
             {historyData && (
               <>
+                {historyData.overview && (
+                  <div className="card-sm mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs" data-history-calls style={{ color: 'var(--text2)' }}>
+                    <span><strong style={{ color: 'var(--text)' }}>Phone calls, all time:</strong> customer called {historyData.overview.counts.allTime.incoming.total} ({historyData.overview.counts.allTime.incoming.answered} answered, {historyData.overview.counts.allTime.incoming.missed} missed) · we called {historyData.overview.counts.allTime.outgoing.attempts} ({historyData.overview.counts.allTime.outgoing.connected} connected)</span>
+                    {historyData.customerRef && <Link to={`/customer/${encodeURIComponent(historyData.customerRef)}`} className="ml-auto underline font-semibold" style={{ color: 'var(--accent)' }}>View customer</Link>}
+                  </div>
+                )}
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-6">
                   {[
                     ['Conversations', historyData.summary.totalConversations],
                     ['Completed', historyData.summary.completedBookings],
                     ['Trips', historyData.summary.totalTrips],
                     ['Cancelled', historyData.summary.cancelledTrips],
-                    ['Calls made', historyData.summary.totalCallsMade],
+                    ['Outcomes logged here', historyData.summary.totalCallsMade],
                   ].map(([label, value]) => (
                     <div key={label} className="card-sm text-center">
                       <div className="text-lg font-bold font-mono">{value}</div>
@@ -552,9 +558,9 @@ export default function WhatsappConversationsPage() {
                   </div>
                 )}
 
-                <SectionLabel>Calls</SectionLabel>
+                <SectionLabel>Call outcomes logged from WhatsApp Chats</SectionLabel>
                 {historyData.calls.length === 0 ? (
-                  <div className="text-sm mb-6" style={{ color: 'var(--text3)' }}>No calls logged.</div>
+                  <div className="text-sm mb-6" style={{ color: 'var(--text3)' }}>No outcomes logged here. Phone calls are under Recorded calls below.</div>
                 ) : (
                   <div className="flex flex-col gap-2 mb-6">
                     {historyData.calls.map((call, i) => (

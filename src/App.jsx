@@ -44,13 +44,18 @@ import MobileHome        from './mobile/MobileHome';
 import MobileLeads       from './mobile/MobileLeads';
 import MobileLeadDetails from './mobile/MobileLeadDetails';
 import MobileWork        from './mobile/MobileWork';
+import MobileNewLead     from './mobile/MobileNewLead';
+import CustomerOverview  from './mobile/CustomerOverview';
 import { useIsMobile }   from './mobile/hooks';
 
 const MOBILE_ROUTES = [
   ['m',             <MobileHome />],
   ['m/leads',       <MobileLeads />],
+  ['m/leads/new',   <MobileNewLead />],
   ['m/leads/:id',   <MobileLeadDetails />],
   ['m/work',        <MobileWork />],
+  // One customer at a glance — owner and telecallers, desktop and phone.
+  ['customer/:ref',  <CustomerOverview />],
 ];
 
 // On a phone the landing page is the mobile Home; above 430px, exactly as before.

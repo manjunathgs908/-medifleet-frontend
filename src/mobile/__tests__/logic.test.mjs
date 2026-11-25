@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import {
   dashboardCards, moreItems, quickActions, buildMyWork, notifications, workLimitsHit,
   leadListQuery, shownPhone, istDayEnd, leadHistoryRows, dueLabel, MOBILE_QUERY,
-  LEAD_VIEW_LIMIT, CALLBACK_OPEN_LIMIT,
+  LEAD_VIEW_LIMIT, CALLBACK_OPEN_LIMIT, myWorkBadge, unassignedOverdue, callsSummary, istDayStart,
 } from '../logic.mjs';
 import { NAV_ACCESS, navItemsFor } from '../../lib/navAccess.mjs';
 
@@ -116,10 +116,48 @@ describe('role access: navigation, routes and More agree', () => {
     assert.equal(NAV_ACCESS.flatMap((g) => g.items).length, 23);
   });
 
-  test('quick actions are existing flows only — no "New lead" (no create flow exists)', () => {
+  test('quick actions: each a working flow, New lead included now that it exists', () => {
     assert.deepEqual(quickActions('telecaller').map((q) => [q.key, q.label, q.to]), [
-      ['call', 'Call', '/call-logs'], ['whatsapp', 'WhatsApp chats', '/whatsapp-conversations'], ['book', 'Book ambulance', '/dispatch'],
+      ['call', 'Call', '/call-logs'], ['whatsapp', 'WhatsApp chats', '/whatsapp-conversations'],
+      ['newLead', 'New lead', '/m/leads/new'], ['book', 'Book ambulance', '/dispatch'],
     ]);
+  });
+});
+
+describe('personal My Work badge', () => {
+  const leads = { overdue: 9, mineOverdue: 2, unassignedOverdue: 4 };
+  const cbs = { overdue: 5, mineOverdue: 1, unassignedOverdue: 3 };
+  test('telecaller: only their OWN overdue (leads + callbacks); unassigned kept apart', () => {
+    assert.equal(myWorkBadge('telecaller', leads, cbs), 3);
+    assert.equal(unassignedOverdue(leads, cbs), 7);
+  });
+  test('owner: the team overdue, which is what the owner’s My Work lists', () => {
+    assert.equal(myWorkBadge('owner', leads, cbs), 14);
+  });
+  test('a count not loaded (or an older backend without mineOverdue): no badge, never a half number', () => {
+    assert.equal(myWorkBadge('telecaller', leads, undefined), 0);
+    assert.equal(myWorkBadge('telecaller', { overdue: 3 }, { overdue: 1 }), 0);
+    assert.equal(unassignedOverdue(leads, {}), null);
+  });
+});
+
+describe('Today’s calls (server classification, labelled scope)', () => {
+  const perf = {
+    team: { incoming: 12, answered: 9, missed: 3 },
+    people: [{ user: 'u1', answered: 4, placed: 6, connected: 3 }, { user: 'u2', answered: 5, placed: 2, connected: 1 }],
+  };
+  test('owner: team figures throughout', () => {
+    assert.deepEqual(callsSummary(perf, 'owner', 'o1'), { incoming: 12, missed: 3, outgoing: 8, connected: 9 + 4, scope: 'team' });
+  });
+  test('telecaller: company-line incoming/missed, and their OWN outgoing / connected', () => {
+    assert.deepEqual(callsSummary(perf, 'telecaller', 'u1'), { incoming: 12, missed: 3, outgoing: 6, connected: 4 + 3, scope: 'you' });
+  });
+  test('no data: null (the screen shows its error state, not zeros)', () => {
+    assert.equal(callsSummary(null, 'owner'), null);
+    assert.equal(callsSummary({}, 'owner'), null);
+  });
+  test('the India day starts at 00:00 IST', () => {
+    assert.equal(istDayStart(Date.parse('2026-11-22T04:30:00Z')), '2026-11-21T18:30:00.000Z');
   });
 });
 
@@ -211,6 +249,11 @@ describe('buildMyWork', () => {
   });
 
   test('empty input: empty list', () => assert.deepEqual(buildMyWork({ role: 'owner', now: NOW }), []));
+
+  test('a callback returned by two section queries appears once', () => {
+    const items = buildMyWork({ callbacks: [cb('C1', NOW - H, { assignedTo: null }), cb('C1', NOW - H, { assignedTo: null })], role: 'owner', userId: 'o', now: NOW });
+    assert.deepEqual(items.map((i) => i.id), ['C1']);
+  });
 });
 
 describe('notifications (derived, no new system)', () => {
@@ -251,5 +294,6 @@ describe('leadHistoryRows', () => {
     });
     assert.deepEqual(rows.map((r) => [r.text, r.by, r.note]), [['Status new → contacted', 'Ravi', false], ['Call after 6', 'Asha', true]]);
     assert.deepEqual(leadHistoryRows(null), []);
+    assert.equal(leadHistoryRows({ history: [{ at: iso(NOW), type: 'created', byName: 'Asha', detail: { source: 'walk_in' } }] })[0].text, 'Lead added by hand (walk in)');
   });
 });

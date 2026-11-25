@@ -5,11 +5,13 @@
 // lead's details; Call is the existing masked call.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Target, RefreshCw, Clock, User } from 'lucide-react';
+import { Target, RefreshCw, Clock, User, Plus } from 'lucide-react';
 import { leadsApi } from '../api/client';
 import { LEAD_FILTERS, leadListQuery, shownPhone, dueLabel } from './logic.mjs';
 import { Skeleton, ErrorState, EmptyState, MCallButton, StatusPill } from './ui';
 import './mobile.css';
+
+const PAGE_SIZE = 25;
 
 const EMPTY = {
   new: 'No new leads right now.',
@@ -26,17 +28,23 @@ export default function MobileLeads() {
   const [leads, setLeads] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [pageInfo, setPageInfo] = useState(null); // { page, total, hasMore }
+  const [moreBusy, setMoreBusy] = useState(false);
+  const [moreError, setMoreError] = useState(null);
   const seq = useRef(0);
 
+  // Server-side filter, then pages of 25 with the true total (nothing hidden
+  // behind the old 500 cap). "Load more" appends the next page.
   const load = useCallback(async () => {
     const n = ++seq.current;
     setLoading(true);
     setLeads(null);
+    setMoreError(null);
     try {
-      const { data } = await leadsApi.getAll(filter.params);
+      const { data } = await leadsApi.page({ ...filter.params, page: 1, limit: PAGE_SIZE });
       if (n !== seq.current) return;
-      const rows = data.leads || [];
-      setLeads(filter.params.status ? rows.filter((l) => (l.status || 'new') === filter.params.status) : rows);
+      setLeads(data.leads || []);
+      setPageInfo(data.page || null);
       setError(null);
     } catch (e) {
       if (n !== seq.current) return;
@@ -46,6 +54,26 @@ export default function MobileLeads() {
     }
   }, [filter.key]);
 
+  const loadMore = async () => {
+    if (!pageInfo?.hasMore) return;
+    const n = seq.current;
+    setMoreBusy(true);
+    setMoreError(null);
+    try {
+      const { data } = await leadsApi.page({ ...filter.params, page: pageInfo.page + 1, limit: PAGE_SIZE });
+      if (n !== seq.current) return;
+      setLeads((prev) => {
+        const have = new Set((prev || []).map((l) => l._id));
+        return [...(prev || []), ...(data.leads || []).filter((l) => !have.has(l._id))];
+      });
+      setPageInfo(data.page || null);
+    } catch (e) {
+      if (n === seq.current) setMoreError(e?.response?.data?.message || 'Could not load more.');
+    } finally {
+      if (n === seq.current) setMoreBusy(false);
+    }
+  };
+
   useEffect(() => { load(); }, [load]);
 
   const pick = (f) => navigate(`/m/leads?${new URLSearchParams(f.params).toString()}`, { replace: true });
@@ -54,7 +82,10 @@ export default function MobileLeads() {
     <div className="m-ui m-screen">
       <div className="flex items-center mb-3">
         <h1 className="m-title">Leads</h1>
-        <button type="button" onClick={load} className="m-tap ml-auto w-12 flex items-center justify-center -mr-2" aria-label="Refresh">
+        <button type="button" onClick={() => navigate('/m/leads/new')} className="m-btn m-btn-primary m-tap ml-auto !min-h-[40px] !px-3 !text-[14px]">
+          <Plus size={16} aria-hidden="true" /> New
+        </button>
+        <button type="button" onClick={load} className="m-tap w-12 flex items-center justify-center -mr-2" aria-label="Refresh">
           <RefreshCw size={20} style={{ color: 'var(--m-text2)' }} />
         </button>
       </div>
@@ -98,6 +129,17 @@ export default function MobileLeads() {
                 })}
               </ul>
             )}
+      {!loading && !error && leads?.length > 0 && pageInfo && (
+        <div className="mt-4 text-center">
+          <div className="m-sub mb-2">Showing {leads.length} of {pageInfo.total}</div>
+          {moreError && <div className="text-[14px] mb-2" role="alert" style={{ color: 'var(--m-red)' }}>{moreError}</div>}
+          {pageInfo.hasMore && (
+            <button type="button" className="m-btn m-tap w-full" onClick={loadMore} disabled={moreBusy}>
+              {moreBusy ? 'Loading…' : moreError ? 'Try again' : 'Load more'}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

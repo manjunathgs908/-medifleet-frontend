@@ -15,9 +15,11 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { ClipboardCheck, RefreshCw, Clock, User, UserPlus } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { leadsApi, callbacksApi } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
-import { buildMyWork, dueLabel, workLimitsHit, LEAD_VIEW_LIMIT, CALLBACK_OPEN_LIMIT } from './logic.mjs';
+import { dueLabel } from './logic.mjs';
+import { loadMyWork } from './work';
 import { Skeleton, ErrorState, EmptyState, MCallButton } from './ui';
 import './mobile.css';
 
@@ -43,6 +45,9 @@ function WorkCard({ item, onOpen, onAssign, assigning }) {
           <span>{item.kind === 'callback' ? 'Missed-call callback' : 'Lead follow-up'}</span>
         </div>
       </button>
+      {item.customerRef && (
+        <Link to={`/customer/${encodeURIComponent(item.customerRef)}`} className="inline-block mt-2 text-[14px] font-semibold underline m-tap" style={{ color: 'var(--m-blue)' }}>View customer</Link>
+      )}
       <div className={`grid ${item.bucket === 'unassigned' ? 'grid-cols-2' : 'grid-cols-1'} gap-2 mt-3`}>
         <MCallButton target={item.action.target} label={item.action.label} />
         {item.bucket === 'unassigned' && (
@@ -55,11 +60,11 @@ function WorkCard({ item, onOpen, onAssign, assigning }) {
   );
 }
 
-function Section({ id, title, tone, items, render }) {
+function Section({ id, title, tone, items, render, total }) {
   if (!items.length) return null;
   return (
     <section aria-labelledby={id}>
-      <h2 id={id} className="text-[15px] font-bold mb-2" style={tone ? { color: tone } : undefined}>{title} ({items.length})</h2>
+      <h2 id={id} className="text-[15px] font-bold mb-2" style={tone ? { color: tone } : undefined}>{title} ({total != null && total > items.length ? `${items.length} of ${total}` : items.length})</h2>
       <div className="space-y-3">{items.map(render)}</div>
     </section>
   );
@@ -71,7 +76,7 @@ export default function MobileWork() {
   const me = user?.id || user?._id;
   const isOwner = user?.role === 'owner';
   const [items, setItems] = useState(null);
-  const [limits, setLimits] = useState({ leads: false, callbacks: false });
+  const [meta, setMeta] = useState(null); // { totals, hasMore }
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [callbacksFailed, setCallbacksFailed] = useState(false);
@@ -82,18 +87,14 @@ export default function MobileWork() {
     const n = ++seq.current;
     if (!silent) setLoading(true);
     try {
-      // Team-wide lists (telecallers already see every lead on the Leads
-      // page); buildMyWork keeps only what this user should see.
-      const [over, today, cbs] = await Promise.all([
-        leadsApi.getAll({ view: 'overdue' }),
-        leadsApi.getAll({ view: 'due_today' }),
-        callbacksApi.list('open').catch(() => ({ data: { tasks: [] }, failed: true })),
-      ]);
+      // Server-filtered, paged requests (src/mobile/work.js): a telecaller's
+      // own items and the unassigned ones, the owner's everyone's — each
+      // with its true total, nothing hidden behind a list cap.
+      const r = await loadMyWork({ role: user?.role, userId: me, limit: 50 });
       if (n !== seq.current) return;
-      const input = { overdueLeads: over.data.leads || [], todayLeads: today.data.leads || [], callbacks: cbs.data.tasks || [] };
-      setCallbacksFailed(!!cbs.failed);
-      setLimits(workLimitsHit(input));
-      setItems(buildMyWork({ ...input, role: user?.role, userId: me }));
+      setCallbacksFailed(r.callbacksFailed);
+      setMeta({ totals: r.totals, hasMore: r.hasMore });
+      setItems(r.items);
       setError(null);
     } catch (e) {
       if (n !== seq.current) return;
@@ -151,12 +152,12 @@ export default function MobileWork() {
           Callbacks couldn’t load — showing lead follow-ups only. <button type="button" className="underline font-semibold" onClick={() => load()}>Retry</button>
         </div>
       )}
-      {(limits.leads || limits.callbacks) && items && (
-        <div className="m-card p-3 mb-3 text-[14px]" role="status" style={{ background: 'var(--m-amber-bg)', borderColor: '#f5d9a8' }}>
-          This list may be incomplete: {[
-            limits.leads && `lead follow-ups stop at ${LEAD_VIEW_LIMIT} per list`,
-            limits.callbacks && `callbacks stop at the newest ${CALLBACK_OPEN_LIMIT} open`,
-          ].filter(Boolean).join('; ')}. Open the full Leads or Callbacks page for everything.
+      {meta && (meta.hasMore.leads || meta.hasMore.callbacks) && items && (
+        <div className="m-card p-3 mb-3 text-[14px]" role="status" style={{ background: 'var(--m-blue-bg)', borderColor: '#c9dafb' }}>
+          Showing the most urgent first; there is more.{' '}
+          {meta.hasMore.leads && <Link className="underline font-semibold" to="/m/leads?view=overdue">All overdue leads</Link>}
+          {meta.hasMore.leads && meta.hasMore.callbacks && ' · '}
+          {meta.hasMore.callbacks && <Link className="underline font-semibold" to="/callbacks">All callbacks</Link>}
         </div>
       )}
 
@@ -173,7 +174,7 @@ export default function MobileWork() {
               {!assigned.length && (
                 <div className="m-sub">{isOwner ? 'No assigned work is due.' : 'Nothing is assigned to you right now.'}</div>
               )}
-              <Section id="m-work-unassigned" title="Unassigned — needs someone" items={unassigned} render={card} />
+              <Section id="m-work-unassigned" title="Unassigned — needs someone" items={unassigned} render={card} total={meta?.totals?.unassigned} />
             </div>
           )}
     </div>

@@ -272,6 +272,9 @@ const deviceHeaders = () => (inAppDevice.key
 // and never resolves a task.
 export const callbacksApi = {
   list        : (state)  => api.get('/callbacks', { params: { state } }),
+  // Open tasks, most urgent first, filtered then paged on the server, with
+  // totals for the whole queue: { page, limit, assignee: all|me|unassigned|<id>, due: all|overdue|today|due }.
+  page        : (params) => api.get('/callbacks', { params, skipErrorToast: true }),
   summary     : ()       => api.get('/callbacks/summary', { skipErrorToast: true }),
   assignees   : ()       => api.get('/callbacks/assignees'),
   assign      : (id, userId, rev)        => api.patch(`/callbacks/${id}/assign`, { userId, rev }),
@@ -285,8 +288,15 @@ export const callbacksApi = {
 export const callsApi = {
   clickToCall: (target)   => api.post('/calls/click-to-call', target),
   logs       : (params)   => api.get('/calls/logs', { params }),
+  // Call Logs "All call events": every call, paged with an opaque cursor.
+  // { q, period|from,to, staff, direction, outcome, customerRef, cursor, limit }
+  history    : (params)   => api.get('/calls/history', { params }),
+  // Call Logs "By customer": one row per customer number (same filters).
+  customers  : (params)   => api.get('/calls/customers', { params }),
   // { from, to } ISO. Every person for the owner; only yourself otherwise.
   performance: (params)   => api.get('/calls/performance', { params }),
+  // The same, polled by the mobile Home (which shows its own error + Retry).
+  performanceQuiet: (params) => api.get('/calls/performance', { params, skipErrorToast: true }),
   getDuty    : ()         => api.get('/calls/duty', { skipErrorToast: true }),
   setDuty    : (onDuty)   => api.put('/calls/duty', { onDuty }),
   // Your own call settings: the "call ring number" Plivo rings for you,
@@ -444,6 +454,11 @@ export const leadsApi = {
   // One lead (+ customerRef for the customer-history endpoint) — mobile
   // lead details. Shows its own error state, so no toast.
   getOne   : (id)     => api.get(`/leads/${encodeURIComponent(id)}`, { skipErrorToast: true }),
+  // Paged list ({ ...filters, page, limit } -> { leads, page: { total, hasMore } }).
+  page     : (params) => api.get('/leads', { params, skipErrorToast: true }),
+  // A lead added by hand: { patientName, phone, message?, source?, assignToMe?, confirmDuplicate? }.
+  // 409 DUPLICATE carries the existing leads (masked) to offer instead.
+  create   : (body)   => api.post('/leads', body, { skipErrorToast: true }),
   summary  : ()       => api.get('/leads/summary', { skipErrorToast: true }),
   assignees: ()       => api.get('/leads/assignees'),
   assign   : (id, userId, rev)         => api.patch(`/leads/${id}/assign`, { userId, rev }),

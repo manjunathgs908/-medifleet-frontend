@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { tripsApi, hospitalsApi, financeApi, salaryApi, vehiclesApi, authApi } from '../api/client';
 import api from '../api/client';
 import { PageHeader, StatusBadge, Btn, Modal, StatCard, Tabs, Spinner, Empty, rupee, fmtDateTime, fmtDate, custPhone } from '../components/ui';
@@ -118,7 +119,7 @@ useEffect(() => { load(); }, [filter]);
                   {trips.map(t => (
                     <tr key={t._id}>
                       <td className="font-mono text-xs" style={{ color: 'var(--accent)' }}>{t.tripNumber || t._id.slice(-6)}</td>
-                      <td><div className="font-medium text-sm">{t.patientName}</div><div className="text-xs" style={{ color:'var(--text3)' }}>{custPhone(t.patientPhone, t.patientPhoneMasked)}</div></td>
+                      <td><div className="font-medium text-sm">{t.patientName}</div><div className="text-xs" style={{ color:'var(--text3)' }}>{custPhone(t.patientPhone, t.patientPhoneMasked)}</div>{t.customerRef && <Link to={`/customer/${encodeURIComponent(t.customerRef)}`} className="text-xs font-semibold underline" style={{ color: 'var(--accent)' }}>View customer</Link>}</td>
                       <td><span className="badge badge-blue text-xs capitalize">{t.emergencyType}</span></td>
                       <td className="text-sm" style={{ color:'var(--text2)' }}>{t.dropHospital?.name}</td>
                       <td className="font-mono text-xs" style={{ color:'var(--text2)' }}>{t.vehicle?.registrationNumber}</td>

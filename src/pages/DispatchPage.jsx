@@ -1,7 +1,7 @@
 // src/pages/DispatchPage.jsx
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { tripsApi, hospitalsApi, pricingApi, quotesApi, billingApi } from '../api/client';
+import { useSearchParams, Link } from 'react-router-dom';
+import { tripsApi, hospitalsApi, pricingApi, quotesApi, billingApi, leadsApi } from '../api/client';
 import { billHtml, printHtml } from '../lib/customerDocs';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import CallButton from '../components/CallButton';
@@ -247,6 +247,13 @@ export default function DispatchPage() {
   // only the pickup (components/WhatsAppLeadPrefill).
   const waLeadId = searchParams.get(WHATSAPP_LEAD_PARAM);
   const [waLead, setWaLead] = useState(null);
+  // ?lead=<lead id> — "Book" on a lead (mobile Lead details): the booking is
+  // linked to that lead, its number filled in by the server (a telecaller
+  // never sees it), once per lead (the server refuses a second one and says
+  // which booking it already is).
+  const leadParamId = searchParams.get('lead');
+  const [bookLead, setBookLead] = useState(null); // the lead, or { error }
+  const bookingFromLead = !!(bookLead?._id && !bookLead.booking);
 
   // The dropdown is whatever the Pricing collection currently offers.
   const services = useMemo(() => servicesFromPricing(pricing), [pricing]);
@@ -478,12 +485,43 @@ export default function DispatchPage() {
     setSearchParams((p) => { p.delete(WHATSAPP_LEAD_PARAM); return p; }, { replace: true });
   };
 
+  // A lead's Book: a clean form (asking first if one is in progress), then
+  // the lead's name — only if the operator has not typed one. An already
+  // booked lead is shown with its booking instead, and is not sent.
+  const lastLead = useRef(null);
+  useEffect(() => {
+    if (!leadParamId || leadParamId === lastLead.current) return;
+    lastLead.current = leadParamId;
+    if (touched.current.size === 0 || window.confirm('Clear the booking form to book this lead?')) resetForm();
+    setBookLead(null);
+    leadsApi.getOne(leadParamId)
+      .then(({ data }) => {
+        setBookLead(data.lead);
+        if (!data.lead.booking && data.lead.patientName && !touched.current.has('patientName')) {
+          setForm((f) => ({ ...f, patientName: data.lead.patientName }));
+        }
+      })
+      .catch((e) => setBookLead({ error: e?.response?.status === 404 ? 'That lead no longer exists.' : 'Could not load the lead.' }));
+  }, [leadParamId]);
+
+  const closeLead = () => {
+    setBookLead(null);
+    lastLead.current = null;
+    setSearchParams((p) => { p.delete('lead'); return p; }, { replace: true });
+  };
+  const openBooking = (b) => {
+    if (!b?._id) return;
+    closeLead();
+    setSearchParams((p) => { p.set('trip', b._id); return p; }, { replace: true });
+  };
+
   const dispatch = async (e) => {
     e.preventDefault();
     // From a call capture the phone may stay blank: the server uses the
     // number said on the call, else the caller's own (a telecaller never
     // sees either).
-    if (!form.patientName.trim() || (!form.patientPhone.trim() && !capture)) { toast.error('Patient name and phone are required'); return; }
+    // From a lead, likewise: the server fills in the lead's number.
+    if (!form.patientName.trim() || (!form.patientPhone.trim() && !capture && !bookingFromLead)) { toast.error('Patient name and phone are required'); return; }
     if (!pickup || !drop)      { toast.error('Pick both locations from the suggestions'); return; }
     if (!form.selectedType)    { toast.error('Select an ambulance / service type'); return; }
     if (form.scheduleType === 'later' && !form.scheduleDate) { toast.error('Choose a date and time for the scheduled booking'); return; }
@@ -511,12 +549,27 @@ export default function DispatchPage() {
         scheduleType : form.scheduleType,
         scheduleDate : form.scheduleType === 'later' ? form.scheduleDate : null,
         ...(capture ? { callCaptureId: capture._id } : {}),
+        ...(bookingFromLead ? { leadId: bookLead._id } : {}),
       });
       toast.success('🚑 Ambulance dispatched!');
       resetForm();
       if (capture) closeCapture();
       if (waLeadId) closeWaLead();
+      if (leadParamId) closeLead();
       await loadLiveBoard();
+    } catch (err) {
+      // From a lead the server may say it is already booked (another tab,
+      // a retry) or being booked right now: show that, never book twice.
+      const d = err?.response?.data;
+      if (err?.response?.status === 409 && d?.code === 'ALREADY_BOOKED' && d.booking) {
+        setBookLead((l) => (l ? { ...l, booking: d.booking } : l));
+        await loadLiveBoard();
+      } else if (err?.response?.status === 409 && d?.code === 'IN_PROGRESS') {
+        await loadLiveBoard();
+      } else if (!err?.response) {
+        throw err;
+      }
+      // Other API errors: the client already showed the server's message.
     } finally { setSubmitting(false); }
   };
 
@@ -641,6 +694,29 @@ export default function DispatchPage() {
             />
           )}
 
+          {leadParamId && (
+            <div className="rounded-xl p-3 text-sm" role="status" data-lead-booking
+              style={{ background: bookLead?.booking ? 'rgba(255,184,0,.1)' : 'rgba(59,158,255,.1)', border: `1px solid ${bookLead?.booking ? 'rgba(255,184,0,.35)' : 'rgba(59,158,255,.3)'}` }}>
+              {!bookLead ? <span style={{ color: 'var(--text2)' }}>Loading the lead…</span>
+                : bookLead.error ? <span style={{ color: 'var(--red)' }}>{bookLead.error}</span>
+                  : bookLead.booking ? (
+                    <div className="flex flex-wrap items-center gap-2" data-booking-review={bookLead.booking.needsReview ? 'needs-review' : undefined}>
+                      {bookLead.booking.needsReview ? (
+                        // An older booking that carries this lead but was never
+                        // recorded on it: check it, don't book a second one.
+                        <span><strong>Needs review:</strong> <strong>{bookLead.patientName || 'This lead'}</strong> already has booking{bookLead.booking.tripNumber ? ` ${bookLead.booking.tripNumber}` : ''}{bookLead.booking.status ? ` (${String(bookLead.booking.status).replace(/_/g, ' ')})` : ''}{bookLead.booking.tripCount > 1 ? ` and ${bookLead.booking.tripCount - 1} more` : ''}, but the lead was never marked as booked. Check that booking before booking again. Close this to make a separate booking.</span>
+                      ) : (
+                        <span><strong>{bookLead.patientName || 'This lead'}</strong> is already booked{bookLead.booking.tripNumber ? ` as ${bookLead.booking.tripNumber}` : ''}. Close this to make a separate booking.</span>
+                      )}
+                      <Btn size="sm" type="button" onClick={() => openBooking(bookLead.booking)}>Open booking</Btn>
+                    </div>
+                  ) : (
+                    <span>Booking for lead <strong>{bookLead.patientName || 'Unknown'}</strong> · <span className="font-mono">{custPhone(bookLead.phone, bookLead.phoneMasked)}</span>. Leave Phone blank to use the lead’s number; the booking is linked to this lead.</span>
+                  )}
+              <button type="button" onClick={closeLead} className="ml-2 text-xs underline" style={{ color: 'var(--text3)' }}>Close</button>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>Patient Name *</label>
@@ -649,9 +725,10 @@ export default function DispatchPage() {
             <div>
               <label className="block text-xs font-semibold mb-1 uppercase tracking-wide" style={{ color: 'var(--text2)' }}>Phone *</label>
               <input className="inp" value={form.patientPhone} onChange={e => set('patientPhone', e.target.value)}
-                placeholder={!capture ? (waLead?.phoneMasked ? `+91 XXXXX XXXXX (WhatsApp ${waLead.phoneMasked})` : '+91 XXXXX XXXXX')
+                placeholder={bookingFromLead ? `Blank = ${bookLead.phoneMasked || 'the lead’s number'} (from the lead)`
+                  : !capture ? (waLead?.phoneMasked ? `+91 XXXXX XXXXX (WhatsApp ${waLead.phoneMasked})` : '+91 XXXXX XXXXX')
                   : capture.fields?.patientPhoneMasked ? `Blank = ${capture.fields.patientPhoneMasked} (said on the call)` : "Blank = the caller's number"}
-                required={!capture} />
+                required={!capture && !bookingFromLead} />
             </div>
           </div>
 
@@ -854,6 +931,7 @@ export default function DispatchPage() {
                           {/* Masked: the CRM never has the number; this rings
                               your phone and connects to the customer. */}
                           <CallButton target={{ tripId: t._id }} />
+                          {t.customerRef && <Link to={`/customer/${encodeURIComponent(t.customerRef)}`} className="text-xs font-semibold underline ml-2" style={{ color: 'var(--accent)' }}>View customer</Link>}
                         </div>
                       </div>
                       <div className="mb-2.5">

@@ -52,7 +52,8 @@ const set = (key, value) => { state = { ...state, [key]: value }; emit(); };
 
 const SOURCES = {
   leads    : () => leadsApi.summary().then(({ data }) => data.counts),
-  callbacks: () => callbacksApi.summary().then(({ data }) => ({ open: data.open, overdue: data.overdue })),
+  // open / overdue plus the personal and unassigned counts (same rules as the lists).
+  callbacks: () => callbacksApi.summary().then(({ data }) => { const { success, dueMinutes, ...counts } = data; return counts; }),
   // Same endpoint as tripsApi.getLive, without its error toast: this polls,
   // and the Home card shows its own "Couldn't load" instead.
   live     : () => api.get('/trips/live', { skipErrorToast: true }).then(({ data }) => data.counts),

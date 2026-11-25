@@ -12,7 +12,7 @@ import {
   Headphones, LogOut, LayoutGrid,
 } from 'lucide-react';
 import logo from '../assets/invoice/savelife-logo.png';
-import { moreItems, notifications } from './logic.mjs';
+import { moreItems, notifications, myWorkBadge } from './logic.mjs';
 import { useMobileSummary, readyData } from './hooks';
 import './mobile.css';
 
@@ -154,13 +154,21 @@ const TYPING = 'textarea, select, input:not([type=button]):not([type=submit]):no
 function useKeyboardFlag() {
   useEffect(() => {
     const root = document.documentElement;
-    const sync = () => root.classList.toggle('m-kbd', !!document.activeElement?.matches?.(TYPING));
-    const onOut = () => setTimeout(sync, 0); // after focus has moved
-    document.addEventListener('focusin', sync);
+    const typing = () => !!document.activeElement?.matches?.(TYPING);
+    const sync = () => root.classList.toggle('m-kbd', typing());
+    // Entering a field hides the tab bar at once. Leaving one brings it back
+    // only after a short pause, and pressing a button never brings it back
+    // directly: showing it at once moved the Save bar up 68px between
+    // pressing and releasing Save, so the tap was lost (no click fired).
+    let timer = null;
+    const onIn = () => { if (typing()) { clearTimeout(timer); root.classList.add('m-kbd'); } };
+    const onOut = () => { clearTimeout(timer); timer = setTimeout(sync, 300); };
+    document.addEventListener('focusin', onIn);
     document.addEventListener('focusout', onOut);
     sync();
     return () => {
-      document.removeEventListener('focusin', sync);
+      clearTimeout(timer);
+      document.removeEventListener('focusin', onIn);
       document.removeEventListener('focusout', onOut);
       root.classList.remove('m-kbd');
     };
@@ -175,13 +183,10 @@ export function MobileTabBar({ role, sosCount = 0, onOpenFullMenu }) {
   const [more, setMore] = useState(false);
   useEffect(() => { setMore(false); }, [pathname]);
   const items = moreItems(role);
-  // Owner only: team-wide overdue follow-ups + callbacks, which is what the
-  // owner's My Work lists. No per-person count exists, so a telecaller gets
-  // no badge rather than a team number that would not match their list.
-  // Shown only when both counts loaded — a half-known number is not shown.
-  const lc = readyData(summary.leads);
-  const cc = readyData(summary.callbacks);
-  const workBadge = role === 'owner' && lc && cc ? (lc.overdue || 0) + (cc.overdue || 0) : 0;
+  // A telecaller: their OWN overdue leads + callbacks (unassigned work is
+  // shown apart, on the My Work screen). The owner: the team's overdue,
+  // which is what the owner's My Work lists. Only from loaded counts.
+  const workBadge = myWorkBadge(role, readyData(summary.leads), readyData(summary.callbacks));
   const moreActive = items.some((m) => pathname === m.to || pathname.startsWith(`${m.to}/`));
 
   return (
