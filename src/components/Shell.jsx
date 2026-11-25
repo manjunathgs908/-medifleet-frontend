@@ -478,7 +478,7 @@ export default function Shell({ children }) {
          focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]
          ${isActive
            ? 'text-[var(--accent)] bg-[rgba(0,212,170,.1)] shadow-[inset_3px_0_0_var(--accent)]'
-           : 'text-[var(--text2)] hover:text-[var(--text)] hover:bg-[rgba(255,255,255,.04)]'
+           : 'text-[var(--text2)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
          }`
       }
     >
@@ -504,7 +504,7 @@ export default function Shell({ children }) {
       {/* Logo */}
       <div className="p-5 flex items-center gap-3" style={{ borderBottom: '1px solid var(--border)' }}>
         <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xl"
-          style={{ background: 'linear-gradient(135deg, var(--accent), #3b9eff)' }}>
+          style={{ background: 'linear-gradient(135deg, var(--accent), var(--blue))' }}>
           🚑
         </div>
         <div>
@@ -535,7 +535,7 @@ export default function Shell({ children }) {
                 aria-expanded={open}
                 aria-controls={listId}
                 className={`w-full flex items-center gap-2 px-3 ${mobile ? 'py-2.5' : 'py-2'} rounded-lg text-[11px] font-semibold uppercase tracking-wider transition-all
-                  focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] hover:bg-[rgba(255,255,255,.04)]`}
+                  focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] hover:bg-[var(--hover)]`}
                 style={{ color: g.id === activeGroupId ? 'var(--text)' : 'var(--text3)' }}
               >
                 <span>{g.label}</span>
@@ -692,7 +692,7 @@ export default function Shell({ children }) {
         {/* Top bar */}
         {!mobile && (
         <header className="flex items-center gap-3 px-5 py-3 sticky top-0 z-40"
-          style={{ background: 'rgba(10,15,30,.85)', backdropFilter: 'blur(12px)', borderBottom: '1px solid var(--border)' }}>
+          style={{ background: 'rgba(255,255,255,.9)', backdropFilter: 'blur(12px)', borderBottom: '1px solid var(--border)' }}>
           <button className="md:hidden p-2.5 rounded-lg"
             style={{ color: 'var(--text2)', background: 'var(--surface2)' }}
             onClick={() => setSideOpen(true)}
@@ -818,7 +818,7 @@ export default function Shell({ children }) {
           At <= 430px the mobile tab bar above replaces it. */}
       {!mobile && (
       <nav className="mobile-tabbar md:hidden fixed bottom-0 inset-x-0 z-40 flex"
-        style={{ background: 'rgba(17,24,39,.97)', backdropFilter: 'blur(12px)', borderTop: '1px solid var(--border)' }}>
+        style={{ background: 'rgba(255,255,255,.97)', backdropFilter: 'blur(12px)', borderTop: '1px solid var(--border)' }}>
         {(user?.role === 'telecaller' ? TELECALLER_TABS : MOBILE_TABS).map(({ label, to, icon: Icon, badgeKey }) => (
           <NavLink
             key={to}

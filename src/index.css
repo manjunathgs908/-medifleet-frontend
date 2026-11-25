@@ -4,24 +4,36 @@
 @tailwind components;
 @tailwind utilities;
 
+/* The CRM's one theme: light. Every page, the sidebar, the phone layout
+   (src/mobile/mobile.css maps its --m-* names onto these) and the call
+   pages read these tokens; nothing else defines colours. Text tokens are
+   chosen for at least 4.5:1 on --ink, --surface and --surface2. */
 :root {
-  --ink:      #0a0f1e;
-  --ink2:     #1a2035;
-  --ink3:     #242c45;
-  --surface:  #111827;
-  --surface2: #1f2937;
-  --surface3: #374151;
-  --border:   rgba(255,255,255,0.07);
-  --border2:  rgba(255,255,255,0.12);
-  --accent:   #00d4aa;
-  --accent2:  #00b896;
-  --red:      #ff4d6d;
-  --amber:    #ffb830;
-  --blue:     #3b9eff;
-  --purple:   #a78bfa;
-  --text:     #f0f4ff;
-  --text2:    #94a3b8;
-  --text3:    #64748b;
+  color-scheme: light;
+  --ink:      #f4f6fa;   /* page background */
+  --ink2:     #ffffff;   /* sidebar, raised panels */
+  --ink3:     #f8fafc;   /* input fields */
+  --surface:  #ffffff;   /* cards */
+  --surface2: #eef2f6;   /* inset blocks, chips, ghost buttons */
+  --surface3: #dfe5ec;   /* selected / pressed, scrollbar */
+  --border:   #e3e8ef;
+  --border2:  #cbd5e1;
+  --accent:   #0c6b45;   /* SaveLife green: actions, success */
+  --accent2:  #0a5a3a;
+  --green:    var(--accent);
+  --green-dim:#e6f6ee;
+  --red:      #b91c1c;   /* SOS, errors, missed */
+  --amber:    #925300;   /* warnings, pending */
+  --blue:     #1a5ac4;   /* info, links */
+  --purple:   #7040b0;
+  --text:     #0f172a;
+  --text2:    #475569;
+  --text3:    #526277;
+  --brand:    #d6242b;   /* SaveLife red (logo, phone layout primary) */
+  --brand2:   #b81d23;
+  --hover:    rgba(15, 23, 42, .045);   /* row / menu hover */
+  --scrim:    rgba(15, 23, 42, .55);    /* behind a modal */
+  --shadow:   0 1px 2px rgba(15, 23, 42, .05), 0 1px 3px rgba(15, 23, 42, .04);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -44,6 +56,7 @@ input, select, textarea {
   outline: none;
   font-family: 'DM Sans', sans-serif;
 }
+input::placeholder, textarea::placeholder { color: var(--text3); opacity: 1; }
 
 /* ── Utility classes ───────────────────────────────── */
 .font-display { font-family: 'Syne', sans-serif; }
@@ -55,12 +68,14 @@ input, select, textarea {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 20px;
+  box-shadow: var(--shadow);
 }
 .card-sm {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 14px 16px;
+  box-shadow: var(--shadow);
 }
 
 /* ── Stat card accent bars ─────────────────────────── */
@@ -81,7 +96,7 @@ input, select, textarea {
   transition: border-color .15s;
 }
 .inp:focus { border-color: var(--accent); }
-.inp option { background: var(--ink2); }
+.inp option { background: var(--surface); color: var(--text); }
 
 /* ── Table ─────────────────────────────────────────── */
 .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -93,7 +108,7 @@ input, select, textarea {
 }
 .tbl td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .tbl tr:last-child td { border-bottom: none; }
-.tbl tbody tr:hover td { background: rgba(255,255,255,.015); }
+.tbl tbody tr:hover td { background: var(--hover); }
 
 /* ── Badge ─────────────────────────────────────────── */
 .badge {
@@ -101,11 +116,11 @@ input, select, textarea {
   padding: 2px 8px; border-radius: 20px;
   font-size: 11px; font-weight: 600;
 }
-.badge-green  { background: rgba(0,212,170,.15); color: var(--accent); border: 1px solid rgba(0,212,170,.25); }
-.badge-amber  { background: rgba(255,184,48,.15); color: var(--amber); border: 1px solid rgba(255,184,48,.25); }
-.badge-red    { background: rgba(255,77,109,.15); color: var(--red);   border: 1px solid rgba(255,77,109,.25); }
-.badge-blue   { background: rgba(59,158,255,.15); color: var(--blue);  border: 1px solid rgba(59,158,255,.25); }
-.badge-gray   { background: rgba(100,116,139,.12); color: var(--text3); border: 1px solid rgba(100,116,139,.2); }
+.badge-green  { background: #e6f6ee; color: var(--accent); border: 1px solid #b9e4cd; }
+.badge-amber  { background: #fff4e0; color: var(--amber);  border: 1px solid #f3d9a6; }
+.badge-red    { background: #fdeaea; color: var(--red);    border: 1px solid #f5c2c2; }
+.badge-blue   { background: #e8f0fe; color: var(--blue);   border: 1px solid #c3d6f8; }
+.badge-gray   { background: var(--surface2); color: var(--text2); border: 1px solid var(--border2); }
 
 /* ── Page fade ─────────────────────────────────────── */
 .page-enter { animation: slideUp .25s ease-out; }

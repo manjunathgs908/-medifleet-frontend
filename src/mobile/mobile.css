@@ -3,21 +3,22 @@
    tap targets (>= 48px). */
 
 .m-ui {
-  --m-bg:      #f4f6fa;
-  --m-card:    #ffffff;
-  --m-line:    #e3e8ef;
-  --m-text:    #0f172a;
-  --m-text2:   #475569;
-  --m-text3:   #64748b;
-  --m-brand:   #d6242b;   /* SaveLife red */
-  --m-brand2:  #b81d23;
-  --m-blue:    #1d64d8;
+  /* The app's one light theme (src/index.css :root). */
+  --m-bg:      var(--ink);
+  --m-card:    var(--surface);
+  --m-line:    var(--border);
+  --m-text:    var(--text);
+  --m-text2:   var(--text2);
+  --m-text3:   var(--text3);
+  --m-brand:   var(--brand);   /* SaveLife red */
+  --m-brand2:  var(--brand2);
+  --m-blue:    var(--blue);
   --m-blue-bg: #e8f0fe;
-  --m-amber:   #a15c00;
+  --m-amber:   var(--amber);
   --m-amber-bg:#fff4e0;
-  --m-red:     #c81e1e;
+  --m-red:     var(--red);
   --m-red-bg:  #fdeaea;
-  --m-green:   #0f7a4f;
+  --m-green:   var(--accent);
   --m-green-bg:#e6f6ee;
   color: var(--m-text);
   font-family: 'DM Sans', system-ui, sans-serif;

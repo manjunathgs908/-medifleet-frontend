@@ -38,7 +38,7 @@ export default function SendWelcomeButton({ callLogId }) {
         disabled={sending || done}
         title="WhatsApp this caller the SaveLife welcome with a one-tap “Send Location” button — the number stays masked"
         className="inline-flex items-center justify-center gap-1.5 rounded-lg font-semibold transition-all disabled:opacity-60 px-3 py-1.5 text-xs whitespace-nowrap"
-        style={{ background: 'rgba(37,211,102,.12)', color: '#25d366', border: '1px solid rgba(37,211,102,.3)' }}
+        style={{ background: 'rgba(37,211,102,.12)', color: 'var(--accent)', border: '1px solid rgba(37,211,102,.3)' }}
       >
         {sending ? <Loader2 size={12} className="animate-spin" /> : <span aria-hidden="true">📲</span>}
         {sending ? 'Sending…' : 'Send WhatsApp'}

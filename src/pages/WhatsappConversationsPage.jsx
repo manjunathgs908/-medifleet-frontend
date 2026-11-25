@@ -66,7 +66,7 @@ const OUTCOME_LABELS = {
 const OUTCOME_BUTTONS = [
   { key: 'booked',         label: 'Booked',         color: 'var(--accent)', bg: 'rgba(0,212,170,.12)',  border: 'rgba(0,212,170,.3)' },
   { key: 'followup',       label: 'Follow-up',      color: 'var(--blue)',   bg: 'rgba(59,158,255,.12)', border: 'rgba(59,158,255,.3)' },
-  { key: 'not_interested', label: 'Not interested', color: 'var(--text2)',  bg: 'var(--surface2)',      border: 'rgba(255,255,255,.08)' },
+  { key: 'not_interested', label: 'Not interested', color: 'var(--text2)',  bg: 'var(--surface2)',      border: 'var(--border2)' },
   { key: 'no_answer',      label: 'No answer',      color: 'var(--amber)',  bg: 'rgba(255,184,48,.12)', border: 'rgba(255,184,48,.3)' },
 ];
 

@@ -56,7 +56,7 @@ export const Btn = ({ children, variant = 'primary', size = 'md', className = ''
   const variants = {
     primary : 'bg-[var(--accent)] text-[var(--ink)] hover:bg-[var(--accent2)]',
     danger  : 'bg-[rgba(255,77,109,.12)] text-[var(--red)] border border-[rgba(255,77,109,.3)] hover:bg-[rgba(255,77,109,.22)]',
-    ghost   : 'bg-[var(--surface2)] text-[var(--text2)] border border-[rgba(255,255,255,.08)] hover:text-[var(--text)]',
+    ghost   : 'bg-[var(--surface2)] text-[var(--text2)] border border-[var(--border2)] hover:text-[var(--text)]',
     amber   : 'bg-[rgba(255,184,48,.12)] text-[var(--amber)] border border-[rgba(255,184,48,.3)] hover:bg-[rgba(255,184,48,.22)]',
     blue    : 'bg-[rgba(59,158,255,.12)] text-[var(--blue)] border border-[rgba(59,158,255,.3)] hover:bg-[rgba(59,158,255,.22)]',
   };

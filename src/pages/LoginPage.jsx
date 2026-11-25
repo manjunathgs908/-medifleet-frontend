@@ -45,7 +45,7 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl text-3xl mb-4"
-            style={{ background: 'linear-gradient(135deg, var(--accent), #3b9eff)', boxShadow: '0 0 40px rgba(0,212,170,.3)' }}>
+            style={{ background: 'linear-gradient(135deg, var(--accent), var(--blue))', boxShadow: '0 8px 30px rgba(15,122,79,.25)' }}>
             🚑
           </div>
           <h1 className="text-3xl font-bold font-display">MediFleet</h1>

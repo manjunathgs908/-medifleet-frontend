@@ -10,12 +10,13 @@ export default {
         mono:    ['DM Mono', 'monospace'],
       },
       colors: {
-        ink:     { DEFAULT: '#0a0f1e', 2: '#1a2035', 3: '#242c45' },
-        surface: { DEFAULT: '#111827', 2: '#1f2937', 3: '#374151' },
-        accent:  { DEFAULT: '#00d4aa', 2: '#00b896' },
-        danger:  '#ff4d6d',
-        warn:    '#ffb830',
-        info:    '#3b9eff',
+        // Same values as the CSS tokens in src/index.css (light theme).
+        ink:     { DEFAULT: '#f4f6fa', 2: '#ffffff', 3: '#f8fafc' },
+        surface: { DEFAULT: '#ffffff', 2: '#eef2f6', 3: '#dfe5ec' },
+        accent:  { DEFAULT: '#0c6b45', 2: '#0a5a3a' },
+        danger:  '#b91c1c',
+        warn:    '#925300',
+        info:    '#1a5ac4',
       },
       animation: {
         'fade-in'  : 'fadeIn .2s ease-out',

@@ -1,25 +1,7 @@
-/* Phase 2: only Shell's existing phone detection enables this class, and
-   only on Call Logs / Callbacks. Desktop and all other routes keep their theme.
-   Accent stays semantic green; primary actions use the SaveLife brand red. */
+/* Phone layout of Call Logs / Callbacks (Shell adds .m-call-pages there on
+   a phone). Spacing and touch sizes only: colours come from the app's one
+   light theme (src/index.css :root), like every other page. */
 .m-call-pages {
-  --ink: #f4f6fa;
-  --ink2: #ffffff;
-  --ink3: #f1f5f9;
-  --surface: #ffffff;
-  --surface2: #edf2f7;
-  --surface3: #e2e8f0;
-  --border: #e3e8ef;
-  --border2: #cbd5e1;
-  --text: #0f172a;
-  --text2: #475569;
-  --text3: #526277;
-  --accent: #0f7a4f;
-  --accent2: #08613d;
-  --red: #c81e1e;
-  --amber: #925300;
-  --blue: #1d64d8;
-  --purple: #7040b0;
-  color-scheme: light;
   color: var(--text);
   background: var(--ink);
   padding: 20px max(14px, calc((100% - 640px) / 2));
@@ -29,7 +11,6 @@
 .m-call-pages .card,
 .m-call-pages .card-sm {
   border-radius: 16px;
-  box-shadow: 0 2px 5px rgb(15 23 42 / 4%);
   overflow-wrap: anywhere;
 }
 .m-call-pages .text-xs,
@@ -44,12 +25,8 @@
 .m-call-pages select:focus-visible,
 .m-call-pages textarea:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
 .m-call-pages .inp { min-height: 48px; font-size: 16px; max-width: 100%; min-width: 0; border-radius: 10px; }
-.m-call-pages .crm-btn-primary { background: #d6242b; color: #fff; }
-.m-call-pages .crm-btn-primary:hover { background: #b81d23; }
-.m-call-pages .crm-btn-ghost { border-color: var(--border2); }
 .m-call-pages .crm-tabs { max-width: 100%; flex-wrap: wrap; gap: 6px; border: 1px solid var(--border); }
 .m-call-pages .crm-tabs button { flex: 1 1 auto; padding: 10px 12px; }
-.m-call-pages .crm-tabs button[aria-pressed="true"] { color: #b81d23; background: #fdeaea; }
 .m-call-pages [data-call-filters] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .m-call-pages [data-call-filters] > label { min-width: 0; }
 .m-call-pages [data-call-filters] > label:first-child { grid-column: 1 / -1; }
@@ -60,10 +37,4 @@
 /* Wide data tables remain horizontally scrollable within their own card.
    Keep native table semantics and all columns, rather than hiding information. */
 .m-call-pages .tbl { display: block; max-width: 100%; overflow-x: auto; white-space: nowrap; }
-.m-call-pages .tbl th { color: var(--text2); background: var(--surface2); }
-.m-call-pages .tbl td { color: var(--text); padding-top: 14px; padding-bottom: 14px; }
-.m-call-pages .badge-green { background: #e6f6ee; color: #0f7a4f; }
-.m-call-pages .badge-red { background: #fdeaea; color: #c81e1e; }
-.m-call-pages .badge-amber { background: #fff4e0; color: #925300; }
-.m-call-pages .badge-blue { background: #e8f0fe; color: #1d64d8; }
-.m-call-pages .badge-gray { background: #edf2f7; color: #475569; }
+.m-call-pages .tbl td { padding-top: 14px; padding-bottom: 14px; }

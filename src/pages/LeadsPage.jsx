@@ -108,7 +108,7 @@ function Activity({ lead }) {
             </li>
           ))}
           {lead.notes && (
-            <li className="pt-1.5" style={{ borderTop: '1px solid var(--border, rgba(255,255,255,.06))' }}>
+            <li className="pt-1.5" style={{ borderTop: '1px solid var(--border)' }}>
               <div className="font-semibold mb-0.5" style={{ color: 'var(--text3)' }}>Earlier notes</div>
               <div className="whitespace-pre-wrap break-words">{lead.notes}</div>
             </li>
@@ -371,7 +371,7 @@ export default function LeadsPage() {
               style={{
                 background: on ? 'var(--surface2)' : 'var(--surface)',
                 color: on ? 'var(--text)' : 'var(--text2)',
-                borderColor: on ? 'var(--accent)' : 'rgba(255,255,255,.06)',
+                borderColor: on ? 'var(--accent)' : 'var(--border)',
               }}>
               {label}
               {n != null && (

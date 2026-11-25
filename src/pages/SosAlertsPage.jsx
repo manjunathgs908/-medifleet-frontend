@@ -102,7 +102,7 @@ export default function SosAlertsPage() {
                       {a.lat != null && a.lng != null && (
                         <a href={`https://maps.google.com/?q=${a.lat},${a.lng}`} target="_blank" rel="noreferrer"
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
-                          style={{ background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid rgba(255,255,255,.08)' }}>
+                          style={{ background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border2)' }}>
                           <MapPin size={13} /> View on map
                         </a>
                       )}

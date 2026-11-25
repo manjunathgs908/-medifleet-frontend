@@ -1704,7 +1704,7 @@ export default function SeoStudioPage() {
             </thead>
             <tbody>
               {articles.map((a) => (
-                <tr key={a._id} className="border-t" style={{ borderColor: 'rgba(255,255,255,.06)' }}>
+                <tr key={a._id} className="border-t" style={{ borderColor: 'var(--border)' }}>
                   <td className="py-2.5 px-2 font-semibold">{a.keyword}</td>
                   <td className="py-2.5 px-2" style={{ color: 'var(--text2)' }}>{a.title}</td>
                   <td className="py-2.5 px-2"><StatusChip status={a.status} /></td>
