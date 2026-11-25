@@ -67,7 +67,7 @@ export const Btn = ({ children, variant = 'primary', size = 'md', className = ''
   };
   return (
     <button
-      className={`inline-flex items-center font-semibold rounded-lg transition-all
+      className={`crm-btn crm-btn-${variant} inline-flex items-center font-semibold rounded-lg transition-all
         disabled:opacity-50 disabled:cursor-not-allowed
         ${variants[variant]} ${sizes[size]} ${className}`}
       style={{ fontFamily: "'DM Sans', sans-serif" }}
@@ -236,9 +236,10 @@ export const timeAgo = (v) => {
 
 // ── Tab strip ─────────────────────────────────────────────────
 export const Tabs = ({ tabs, active, onChange }) => (
-  <div className="flex gap-1 p-1 rounded-xl mb-5" style={{ background: 'var(--surface)', width: 'fit-content' }}>
+  <div className="crm-tabs flex gap-1 p-1 rounded-xl mb-5" style={{ background: 'var(--surface)', width: 'fit-content' }}>
     {tabs.map(t => (
       <button key={t.key}
+        aria-pressed={active === t.key}
         onClick={() => onChange(t.key)}
         className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all
           ${active === t.key

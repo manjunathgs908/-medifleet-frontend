@@ -16,6 +16,7 @@ import toast from 'react-hot-toast';
 import { useIsMobile } from '../mobile/hooks';
 import { MobileHeader, MobileTabBar } from '../mobile/MobileChrome';
 import { NAV_ACCESS } from '../lib/navAccess.mjs';
+import '../mobile/callPages.css';
 import {
   LayoutDashboard, Radio, Truck, FileText, Receipt,
   TrendingUp, Users, Target, ShieldCheck, Building2, UserCheck,
@@ -790,7 +791,7 @@ export default function Shell({ children }) {
 
         {/* Page content. Extra bottom padding on phones keeps the last row
             clear of the bottom tab bar. */}
-        <main className={mobileScreen ? 'flex-1 overflow-x-clip' : 'flex-1 p-4 pb-28 md:p-7 page-enter overflow-x-hidden'}>
+        <main className={`${mobileScreen ? 'flex-1 overflow-x-clip' : 'flex-1 p-4 pb-28 md:p-7 page-enter overflow-x-hidden'}${mobile && ['/call-logs', '/callbacks'].includes(pathname) ? ' m-call-pages' : ''}`}>
           {children}
         </main>
       </div>

@@ -348,7 +348,7 @@ export default function CallLogsPage() {
         title="Call Logs"
         subtitle="Masked calls through 918065591088 · recordings · call back"
         action={
-          <button onClick={() => load()} className="p-2 rounded-lg" style={{ color: 'var(--text3)', background: 'var(--surface2)' }}>
+          <button onClick={() => load()} aria-label="Refresh call logs" className="p-2 rounded-lg" style={{ color: 'var(--text3)', background: 'var(--surface2)' }}>
             <RefreshCw size={14} />
           </button>
         }
