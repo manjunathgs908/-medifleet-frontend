@@ -47,7 +47,7 @@ export default function InAppPhone({ active }) {
     const { who, about } = describe(s.incoming.log);
     return (
       <div className="fixed inset-0 z-[300] flex flex-col items-center justify-center p-6"
-        style={{ background: 'rgba(5,8,18,.96)', backdropFilter: 'blur(8px)' }}>
+        style={{ background: 'rgba(244,246,250,.97)', backdropFilter: 'blur(8px)' }}>
         <div className="text-xs uppercase tracking-widest mb-3 pulse-dot" style={{ color: 'var(--accent)' }}>
           {s.incoming.transferred ? 'Transferred call' : 'Incoming call'} · 918065591088
         </div>

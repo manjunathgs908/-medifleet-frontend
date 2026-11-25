@@ -122,7 +122,7 @@ function PaymentForm({ tripId, kind, maxPaise, onDone, onCancel }) {
         <div className="flex flex-wrap gap-2">
           {['cash', 'upi', 'bank_transfer'].map((m) => (
             <label key={m} className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border focus-within:ring-2 focus-within:ring-[var(--accent)] ${method === m ? 'text-[var(--text)]' : 'text-[var(--text3)]'}`}
-              style={{ background: method === m ? 'var(--surface3, var(--surface))' : 'var(--surface)', borderColor: method === m ? 'var(--accent)' : 'rgba(255,255,255,.06)' }}>
+              style={{ background: method === m ? 'var(--surface3, var(--surface))' : 'var(--surface)', borderColor: method === m ? 'var(--accent)' : 'var(--border)' }}>
               <input type="radio" name={`${id}-method`} value={m} checked={method === m} onChange={() => setMethod(m)} className="sr-only" />
               {METHOD_LABEL[m]}
             </label>
@@ -261,7 +261,7 @@ function RefundForm({ tripId, maxPaise, onBill, onDone, onCancel }) {
   };
   return (
     <form onSubmit={submit} className="rounded-xl p-3 space-y-3" style={{ background: 'var(--surface2)', border: '1px solid rgba(167,139,250,.35)' }} aria-label="Record a refund">
-      <div role="note" className="rounded-md px-2.5 py-2 text-xs font-semibold" style={{ background: 'rgba(167,139,250,.12)', color: '#a78bfa', border: '1px solid rgba(167,139,250,.3)' }}>{REFUND_NOTICE}</div>
+      <div role="note" className="rounded-md px-2.5 py-2 text-xs font-semibold" style={{ background: 'rgba(167,139,250,.12)', color: 'var(--purple)', border: '1px solid rgba(167,139,250,.3)' }}>{REFUND_NOTICE}</div>
       <div className="text-[11px]" style={{ color: 'var(--text3)' }}>
         Up to {rs(maxPaise)} (what was received{onBill ? ' on this bill' : ' as advance'}).{onBill ? ' The refunded amount stops counting as received, so the bill shows it as outstanding again.' : ''}
       </div>
@@ -280,7 +280,7 @@ function RefundForm({ tripId, maxPaise, onBill, onDone, onCancel }) {
         <div className="flex flex-wrap gap-2">
           {['cash', 'upi', 'bank_transfer'].map((m) => (
             <label key={m} className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border focus-within:ring-2 focus-within:ring-[var(--accent)] ${method === m ? 'text-[var(--text)]' : 'text-[var(--text3)]'}`}
-              style={{ background: 'var(--surface)', borderColor: method === m ? 'var(--accent)' : 'rgba(255,255,255,.06)' }}>
+              style={{ background: 'var(--surface)', borderColor: method === m ? 'var(--accent)' : 'var(--border)' }}>
               <input type="radio" name={`${id}-method`} value={m} checked={method === m} onChange={() => setMethod(m)} className="sr-only" />
               {METHOD_LABEL[m]}
             </label>
@@ -366,15 +366,15 @@ function ReceiptRows({ list, onOpen, onChanged }) {
         const isRefund = p.kind === 'refund';
         return (
           <li key={p._id} className="rounded-lg px-3 py-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" data-receipt={p.receiptNumber}
-            style={{ background: 'var(--surface2)', ...(isRev ? { borderLeft: '3px solid var(--red)' } : isRefund ? { borderLeft: '3px solid #a78bfa' } : {}) }}>
-            <span className="font-mono font-bold" style={{ color: isRev ? 'var(--red)' : isRefund ? '#a78bfa' : p.reversedBy ? 'var(--text3)' : 'var(--accent)', textDecoration: p.reversedBy ? 'line-through' : undefined }}>{signed(p.amountPaise)}</span>
+            style={{ background: 'var(--surface2)', ...(isRev ? { borderLeft: '3px solid var(--red)' } : isRefund ? { borderLeft: '3px solid var(--purple)' } : {}) }}>
+            <span className="font-mono font-bold" style={{ color: isRev ? 'var(--red)' : isRefund ? 'var(--purple)' : p.reversedBy ? 'var(--text3)' : 'var(--accent)', textDecoration: p.reversedBy ? 'line-through' : undefined }}>{signed(p.amountPaise)}</span>
             {isRefund
               ? <span>Refund paid out · {METHOD_LABEL[p.method] || p.method}{p.payoutReference ? ` · ${p.payoutReference}` : ''}</span>
               : isRev
               ? <span>Reversal of <span className="font-mono">{p.reversesReceipt?.receiptNumber || '—'}</span></span>
               : <span>{METHOD_LABEL[p.method] || p.method}{p.reference ? ` · ${p.reference}` : ''}</span>}
             {p.kind === 'advance' && <Badge color="blue">Advance</Badge>}
-            {isRefund ? <span className="badge" style={{ background: 'rgba(167,139,250,.15)', color: '#a78bfa', border: '1px solid rgba(167,139,250,.3)' }}>Refund</span> : isRev ? <Badge color="red">Accounting correction</Badge> : <VerifiedBadge p={p} />}
+            {isRefund ? <span className="badge" style={{ background: 'rgba(167,139,250,.15)', color: 'var(--purple)', border: '1px solid rgba(167,139,250,.3)' }}>Refund</span> : isRev ? <Badge color="red">Accounting correction</Badge> : <VerifiedBadge p={p} />}
             {p.reversedBy && <Badge color="red">Reversed · {p.reversedBy.receiptNumber}</Badge>}
             <span className="basis-full sm:basis-auto" style={{ color: 'var(--text3)' }}>
               {isRev ? 'Reversed' : isRefund ? 'Paid back' : 'Received'} {fmtIst(p.receivedAt)}{p.recordedByName ? ` · by ${p.recordedByName}` : ''}
@@ -618,7 +618,7 @@ function BillsTab({ openReceipt }) {
           return (
             <button key={k} type="button" aria-pressed={filter === k} onClick={() => setFilter(k)}
               className="px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 border focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-              style={{ background: filter === k ? 'var(--surface2)' : 'var(--surface)', color: filter === k ? 'var(--text)' : 'var(--text2)', borderColor: filter === k ? 'var(--accent)' : 'rgba(255,255,255,.06)' }}>
+              style={{ background: filter === k ? 'var(--surface2)' : 'var(--surface)', color: filter === k ? 'var(--text)' : 'var(--text2)', borderColor: filter === k ? 'var(--accent)' : 'var(--border)' }}>
               {label}{n != null && <span className={`badge ${k === 'reconcile' && n ? 'badge-amber' : 'badge-gray'}`} style={{ padding: '0 6px' }}>{n}</span>}
             </button>
           );

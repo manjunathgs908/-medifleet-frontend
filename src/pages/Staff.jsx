@@ -42,7 +42,7 @@ function CredentialsBox({ creds, onClose }) {
         </div>
         <div className="flex justify-end gap-2 mt-4">
           <button className="text-sm px-3 py-2 rounded-lg" style={{ background: 'var(--surface2)', color: 'var(--text2)' }} onClick={copy}>Copy</button>
-          <button className="text-sm px-3 py-2 rounded-lg" style={{ background: 'var(--accent)', color: '#00110d', fontWeight: 600 }} onClick={onClose}>Done</button>
+          <button className="text-sm px-3 py-2 rounded-lg" style={{ background: 'var(--accent)', color: 'var(--ink)', fontWeight: 600 }} onClick={onClose}>Done</button>
         </div>
       </div>
     </div>
@@ -444,7 +444,7 @@ const Staff = () => {
             <div className="flex justify-end gap-2">
               <button className="text-sm px-3 py-2 rounded-lg" style={{ background: 'var(--surface2)', color: 'var(--text2)' }}
                 onClick={() => { setPwTarget(null); setPwValue(''); }}>Cancel</button>
-              <button className="text-sm px-3 py-2 rounded-lg" style={{ background: 'var(--accent)', color: '#00110d', fontWeight: 600 }}
+              <button className="text-sm px-3 py-2 rounded-lg" style={{ background: 'var(--accent)', color: 'var(--ink)', fontWeight: 600 }}
                 disabled={pwSaving} onClick={savePassword}>
                 {pwSaving ? 'Saving…' : 'Save password'}
               </button>
@@ -483,7 +483,7 @@ const Staff = () => {
                 style={{ background: 'var(--surface2)', color: 'var(--text2)' }}
                 onClick={() => setMoveTarget(null)}>Cancel</button>
               <button className="text-sm px-3 py-2 rounded-lg"
-                style={{ background: 'var(--accent)', color: '#00110d', fontWeight: 600 }}
+                style={{ background: 'var(--accent)', color: 'var(--ink)', fontWeight: 600 }}
                 disabled={moving} onClick={confirmMove}>
                 {moving ? 'Moving…' : 'Move driver'}
               </button>

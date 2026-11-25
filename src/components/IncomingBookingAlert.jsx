@@ -219,7 +219,7 @@ export default function IncomingBookingAlert({ active, audioCtxRef, soundEnabled
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4"
       role="alertdialog" aria-modal="true" aria-labelledby="incoming-booking-title"
-      style={{ background: 'rgba(5,8,18,.88)', backdropFilter: 'blur(6px)' }}>
+      style={{ background: 'var(--scrim)', backdropFilter: 'blur(6px)' }}>
       <div className="w-full max-w-md rounded-3xl p-6 banner-pop"
         style={{ background: 'var(--surface)', border: '2px solid var(--accent)', boxShadow: '0 0 0 6px rgba(0,212,170,.15), 0 20px 60px rgba(0,0,0,.6)' }}>
 
@@ -260,7 +260,7 @@ export default function IncomingBookingAlert({ active, audioCtxRef, soundEnabled
           </button>
           <button onClick={() => answer('accepted')} disabled={busy}
             className="flex items-center justify-center gap-2 py-4 rounded-2xl text-base font-bold"
-            style={{ background: '#16a34a', color: '#fff' }}>
+            style={{ background: 'var(--accent)', color: '#fff' }}>
             {current.type === 'booking' ? <Phone size={20} /> : <MessageCircle size={20} />} {kind.accept}
           </button>
         </div>
