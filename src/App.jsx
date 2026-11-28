@@ -21,6 +21,7 @@ import SalaryPage      from './pages/SalaryPage';
 import LeadsPage       from './pages/LeadsPage';
 import CompliancePage  from './pages/CompliancePage';
 import StaffPage       from './pages/Staff';
+import MyProfilePage   from './pages/MyProfilePage';
 import AdvancePage     from './pages/AdvancePage';
 import HospitalsPage   from './pages/HospitalsPage';
 import OwnersPage      from './pages/OwnersPage';
@@ -123,6 +124,7 @@ export default function App() {
                 <Route path="whatsapp-leads"         element={<WhatsappLeadsPage />} />
                 <Route path="leads"                  element={<LeadsPage />} />
                 <Route path="hospitals"              element={<HospitalsPage />} />
+                <Route path="profile"                element={<MyProfilePage />} />
                 {MOBILE_ROUTES.map(([path, el]) => <Route key={path} path={path} element={el} />)}
                 <Route path="*" element={<PhoneHomeOr><Navigate to="/call-logs" replace /></PhoneHomeOr>} />
               </Routes>
@@ -168,6 +170,7 @@ export default function App() {
                   <AdvancePage />
                 </ProtectedRoute>
               } />
+              <Route path="profile"    element={<MyProfilePage />} />
               <Route path="staff"      element={
                 <ProtectedRoute roles={['owner']}>
                   <StaffPage />
