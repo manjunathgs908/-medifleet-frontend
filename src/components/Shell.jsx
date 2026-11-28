@@ -21,7 +21,7 @@ import {
   LayoutDashboard, Radio, Truck, FileText, Receipt,
   TrendingUp, Users, Target, ShieldCheck, Building2, UserCheck,
   LogOut, Menu, X, Bell, BellOff, BellRing, ChevronRight, ChevronDown, AlertTriangle, PhoneMissed, MapPin, MessageCircle, MessageSquare, Sparkles,
-  PhoneCall, PhoneForwarded, Headphones, Wallet, Banknote, Bot
+  PhoneCall, PhoneForwarded, Headphones, Wallet, Banknote, Bot, UserCircle2
 } from 'lucide-react';
 
 const SOS_POLL_MS = 30000;
@@ -45,7 +45,7 @@ const NAV_ICONS = {
   '/trip-alerts': PhoneMissed, '/posting-alerts': MapPin, '/leads': Target, '/whatsapp-leads': MessageCircle,
   '/whatsapp-conversations': MessageSquare, '/callbacks': PhoneForwarded, '/call-logs': PhoneCall, '/ai-telecaller': Bot,
   '/billing': Receipt, '/invoicing': FileText, '/finance': TrendingUp, '/salary': Wallet, '/advances': Banknote,
-  '/staff': Users, '/owners': UserCheck, '/hospitals': Building2, '/compliance': ShieldCheck, '/seo-studio': Sparkles,
+  '/staff': Users, '/profile': UserCircle2, '/owners': UserCheck, '/hospitals': Building2, '/compliance': ShieldCheck, '/seo-studio': Sparkles,
 };
 const NAV_GROUPS = NAV_ACCESS.map((g) => ({ ...g, items: g.items.map((i) => ({ ...i, icon: NAV_ICONS[i.to] })) }));
 

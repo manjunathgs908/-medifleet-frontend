@@ -39,6 +39,7 @@ export const NAV_ACCESS = [
     { label: 'Staff',       to: '/staff',      roles: ['owner'] },
     { label: 'Owners',      to: '/owners',     roles: ['owner'] },
     { label: 'Hospitals',   to: '/hospitals',  roles: ['owner', 'telecaller'] },
+    { label: 'My profile',  to: '/profile',    roles: ['owner', 'telecaller'] },
     { label: 'Compliance',  to: '/compliance', roles: ['owner'] },
   ] },
   { id: 'marketing', label: 'Marketing', items: [

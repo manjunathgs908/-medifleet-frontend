@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { authApi, ownersApi } from '../api/client';
+import { authApi, ownersApi, staffProfileApi } from '../api/client';
 import toast from 'react-hot-toast';
 import MyCallSettings from '../components/MyCallSettings';
 import { canToggleStatus, statusOutcome } from '../utils/staffStatus';
@@ -69,6 +69,15 @@ const Staff = () => {
     driverType: 'shift_driver', baseSalary: 15000, perTripBonus: 100,
     shiftHours: '', postingName: '', postingLat: '', postingLng: ''
   });
+
+  // Each telecaller's WhatsApp introduction profile status (they set it
+  // themselves in My profile; consent cannot be given here). Best-effort.
+  const [introProfiles, setIntroProfiles] = useState({});
+  useEffect(() => {
+    staffProfileApi.list()
+      .then(({ data }) => setIntroProfiles(Object.fromEntries((data.profiles || []).map((p) => [String(p.user._id), p]))))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => { loadStaff(); }, []);
 
@@ -349,6 +358,16 @@ const Staff = () => {
                       Speaks English
                     </label>
                   )}
+                  {s.role === 'telecaller' && introProfiles[String(s._id)] && (() => {
+                    const ip = introProfiles[String(s._id)];
+                    const missing = { consent: 'consent', photo: 'photo', name: 'name', languages: 'languages' };
+                    return (
+                      <div className="mt-1.5 text-[11px] whitespace-nowrap" data-intro-status style={{ color: ip.ready ? 'var(--accent)' : 'var(--text3)' }}
+                        title="Set by the telecaller in My profile">
+                        WhatsApp intro: {ip.ready ? 'ready ✓' : `needs ${ip.gaps.map((g) => missing[g]).join(', ')}`}
+                      </div>
+                    );
+                  })()}
                 </td>
                 <td className="p-4">
                   {s.role === 'driver' && (

@@ -529,6 +529,30 @@ export const whatsappConversationsApi = {
   logOutcome: (body)   => api.post('/whatsapp/call-outcome', body),
 };
 
+// Team inbox on the one WhatsApp number (medifleet-backend routes/waChats.js):
+// a chat is addressed by its customerRef, never a number.
+//   assign: { userId | null, rev } — owner any; telecaller "Assign to me"
+//   intro / handover: send the assignee's introduction card / handover
+//   message (inside WhatsApp's 24-hour window only; the server enforces it).
+export const waChatsApi = {
+  get     : (ref)       => api.get(`/whatsapp-chats/${encodeURIComponent(ref)}`),
+  assign  : (ref, body) => api.patch(`/whatsapp-chats/${encodeURIComponent(ref)}/assign`, body),
+  intro   : (ref)       => api.post(`/whatsapp-chats/${encodeURIComponent(ref)}/intro`),
+  handover: (ref)       => api.post(`/whatsapp-chats/${encodeURIComponent(ref)}/handover`),
+};
+
+// My WhatsApp introduction profile (medifleet-backend routes/staffProfile.js):
+// photo, display name, languages, consent — set by the person themselves.
+export const staffProfileApi = {
+  me         : ()        => api.get('/staff-profile/me'),
+  update     : (body)    => api.put('/staff-profile/me', body),
+  setPhoto   : (dataUrl) => api.put('/staff-profile/me/photo', { dataUrl }),
+  deletePhoto: ()        => api.delete('/staff-profile/me/photo'),
+  // The photo is never public: fetched with the session, shown as a blob URL.
+  photo      : (userId = 'me') => api.get(`/staff-profile/${userId}/photo`, { responseType: 'blob' }),
+  list       : ()        => api.get('/staff-profile'), // owner
+};
+
 // Full permanent call/conversation/trip history for one customer, phone-
 // normalised on the backend (medifleet-backend's GET /customer/:phone) —
 // no date limit, unlike whatsappConversationsApi.getAll above.

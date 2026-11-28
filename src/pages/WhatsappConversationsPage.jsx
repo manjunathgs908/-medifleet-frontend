@@ -1,7 +1,9 @@
 // src/pages/WhatsappConversationsPage.jsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { whatsappConversationsApi, whatsappCustomerApi, callsApi } from '../api/client';
+import { whatsappConversationsApi, whatsappCustomerApi, callsApi, staffProfileApi, leadsApi } from '../api/client';
+import { useAuth } from '../contexts/AuthContext';
+import WaTeamBar from '../components/WaTeamBar';
 import { PageHeader, Spinner, Empty, SectionLabel, StatusBadge, rupee, fmtDateTime, custPhone } from '../components/ui';
 import CallButton from '../components/CallButton';
 import CallLogList from '../components/CallLogList';
@@ -51,6 +53,14 @@ function matchesChip(row, chip) {
   return true; // total
 }
 
+// Team inbox (one SaveLife number shared by the team): whose chats to show.
+// A telecaller starts on their own chats; the owner on everyone's.
+const ASSIGNEE_TELECALLER = [
+  { key: 'me',         label: 'My chats' },
+  { key: 'unassigned', label: 'Unassigned' },
+  { key: 'all',        label: 'All' },
+];
+
 const OUTCOME_LABELS = {
   booked: 'Booked',
   followup: 'Follow-up',
@@ -99,6 +109,12 @@ function StatusDot({ row }) {
 }
 
 export default function WhatsappConversationsPage() {
+  const { user } = useAuth();
+  const isOwner = user?.role === 'owner';
+  const meId = user?._id || user?.id;
+  const [assigneeFilter, setAssigneeFilter] = useState(isOwner ? 'all' : 'me');
+  const [staff,        setStaff]        = useState([]);   // owner: who chats can be assigned to
+  const [myProfile,    setMyProfile]    = useState(null); // my introduction profile (caption preview)
   const [conversations, setConversations] = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState(null);
@@ -136,7 +152,23 @@ export default function WhatsappConversationsPage() {
     load();
     intervalRef.current = setInterval(() => load({ silent: true }), POLL_MS);
     return () => clearInterval(intervalRef.current);
-  }, [days, bucket]);
+  }, [days, bucket, assigneeFilter]);
+
+  // Once: my introduction profile, and (owner) the people chats can go to.
+  useEffect(() => {
+    staffProfileApi.me().then(({ data }) => setMyProfile(data.profile)).catch(() => {});
+    if (isOwner) leadsApi.assignees().then(({ data }) => setStaff(data.users || [])).catch(() => {});
+  }, [isOwner]);
+
+  // A change on one card (assign, claim, introduction): apply the server's
+  // fresh state to that row at once, then refresh quietly.
+  const mergeChat = (rowRef, chat) => {
+    if (!chat) return;
+    setConversations((cs) => cs.map((c) => (c.customerRef === rowRef
+      ? { ...c, assignee: chat.assignee, rev: chat.rev, intro: chat.intro, window: { open: chat.window?.open, closesAt: chat.window?.closesAt }, actions: chat.actions }
+      : c)));
+    load({ silent: true });
+  };
 
   // Full-screen modal open while historyPhone is set -- lock body scroll,
   // same convention as components/ui.jsx's own Modal.
@@ -145,10 +177,13 @@ export default function WhatsappConversationsPage() {
     return () => { document.body.style.overflow = ''; };
   }, [historyPhone]);
 
+  const loadSeq = useRef(0);
   const load = async ({ silent } = {}) => {
+    const id = ++loadSeq.current;
     if (!silent) setLoading(true);
     try {
-      const { data } = await whatsappConversationsApi.getAll({ days, status: 'all', bucket });
+      const { data } = await whatsappConversationsApi.getAll({ days, status: 'all', bucket, assignee: assigneeFilter });
+      if (id !== loadSeq.current) return; // a newer request has started
       setConversations(data.conversations || []);
       setError(null);
       setLoadedOnce(true);
@@ -187,10 +222,12 @@ export default function WhatsappConversationsPage() {
   const chipLabel = CHIPS.find((c) => c.key === chip)?.label.toLowerCase();
   const bucketLabel = BUCKET_OPTIONS.find((b) => b.key === bucket)?.label.toLowerCase();
   const dayLabel = `${days} day${days === 1 ? '' : 's'}`;
+  const assigneeNote = assigneeFilter === 'me' ? 'assigned to you' : assigneeFilter === 'unassigned' ? 'unassigned' : assigneeFilter !== 'all' ? `assigned to ${staff.find((p) => String(p._id) === assigneeFilter)?.name || 'that person'}` : null;
   const emptyMessage = [
     'No',
     chip !== 'total' ? chipLabel : null,
     'conversations',
+    assigneeNote,
     bucket !== 'all' ? `(${bucketLabel})` : null,
     `in the last ${dayLabel}`,
   ].filter(Boolean).join(' ');
@@ -297,6 +334,35 @@ export default function WhatsappConversationsPage() {
           </div>
         </div>
       )}
+
+      {/* Team inbox: whose chats. Telecallers start on their own. */}
+      <div className="flex items-center gap-2 flex-wrap mb-3" data-assignee-filter>
+        <span className="text-xs font-semibold" style={{ color: 'var(--text3)' }}>Chats:</span>
+        {isOwner ? (
+          <select className="inp py-1.5 text-sm" style={{ maxWidth: 240 }} aria-label="Whose chats"
+            value={assigneeFilter} onChange={(e) => setAssigneeFilter(e.target.value)}>
+            <option value="all">Everyone’s chats</option>
+            <option value="unassigned">Unassigned</option>
+            <option value="me">Assigned to me</option>
+            {staff.filter((p) => String(p._id) !== String(meId)).map((p) => <option key={p._id} value={p._id}>Assigned to {p.name}</option>)}
+          </select>
+        ) : (
+          <div className="flex gap-1 p-1 rounded-xl" style={{ background: 'var(--surface)' }} role="tablist" aria-label="Whose chats">
+            {ASSIGNEE_TELECALLER.map((o) => (
+              <button key={o.key} role="tab" aria-selected={assigneeFilter === o.key} onClick={() => setAssigneeFilter(o.key)}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+                style={assigneeFilter === o.key ? { background: 'var(--accent)', color: 'var(--ink)' } : { color: 'var(--text3)' }}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {myProfile && !myProfile.ready && (
+          <Link to="/profile" className="text-xs underline ml-auto" style={{ color: 'var(--text3)' }} data-profile-hint>
+            Set up your introduction (photo, name, consent) in My profile
+          </Link>
+        )}
+      </div>
 
       {/* Bucket toggle -- primary control, full-width thumb-sized segments */}
       <div className="grid grid-cols-3 gap-1 p-1 rounded-xl mb-4" style={{ background: 'var(--surface)' }}>
@@ -415,6 +481,10 @@ export default function WhatsappConversationsPage() {
                       <CallButton target={{ customerRef: c.customerRef }} size="lg" className="flex-shrink-0 w-full sm:w-auto" />
 
                     </div>
+
+                    {/* Team inbox: owner, introduction, handover (optional; never blocks the work below). */}
+                    <WaTeamBar row={c} isOwner={isOwner} meId={meId} staff={staff} myProfile={myProfile}
+                      onChat={(chat) => mergeChat(c.customerRef, chat)} />
 
                     {/* Call-outcome logging */}
                     {hasPendingFollowUp && !showButtons ? (

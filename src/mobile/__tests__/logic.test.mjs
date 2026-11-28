@@ -113,7 +113,9 @@ describe('role access: navigation, routes and More agree', () => {
 
   test('NAV_ACCESS still has the exact groups of main’s sidebar', () => {
     assert.deepEqual(NAV_ACCESS.map((g) => g.id), ['overview', 'operations', 'customers', 'finance', 'management', 'marketing']);
-    assert.equal(NAV_ACCESS.flatMap((g) => g.items).length, 23);
+    // 23 on main + "My profile" (WhatsApp introduction, owner + telecaller).
+    assert.equal(NAV_ACCESS.flatMap((g) => g.items).length, 24);
+    assert.deepEqual(NAV_ACCESS.find((g) => g.id === 'management').items.find((i) => i.to === '/profile'), { label: 'My profile', to: '/profile', roles: ['owner', 'telecaller'] });
   });
 
   test('quick actions: each a working flow, New lead included now that it exists', () => {
