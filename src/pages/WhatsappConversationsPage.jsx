@@ -4,10 +4,11 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { whatsappConversationsApi, whatsappCustomerApi, callsApi, staffProfileApi, leadsApi } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import WaTeamBar from '../components/WaTeamBar';
+import WaChatThread from '../components/WaChatThread';
 import { PageHeader, Spinner, Empty, SectionLabel, StatusBadge, rupee, fmtDateTime, custPhone } from '../components/ui';
 import CallButton from '../components/CallButton';
 import CallLogList from '../components/CallLogList';
-import { AlertTriangle, X, RotateCcw } from 'lucide-react';
+import { AlertTriangle, X, RotateCcw, MessageCircle, Bot, UserRound } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const POLL_MS = 30000;
@@ -142,6 +143,8 @@ export default function WhatsappConversationsPage() {
   const [historyData,    setHistoryData]    = useState(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError,   setHistoryError]   = useState(null);
+  // Two-way chat, full screen (components/WaChatThread): the open row's customerRef.
+  const [chatRef,        setChatRef]        = useState(null);
 
   // Re-runs on day-range/bucket change (both are server-side params):
   // fetches immediately (non-silent, so switching either shows a spinner),
@@ -165,7 +168,7 @@ export default function WhatsappConversationsPage() {
   const mergeChat = (rowRef, chat) => {
     if (!chat) return;
     setConversations((cs) => cs.map((c) => (c.customerRef === rowRef
-      ? { ...c, assignee: chat.assignee, rev: chat.rev, intro: chat.intro, window: { open: chat.window?.open, closesAt: chat.window?.closesAt }, actions: chat.actions }
+      ? { ...c, assignee: chat.assignee, rev: chat.rev, intro: chat.intro, window: { open: chat.window?.open, closesAt: chat.window?.closesAt }, actions: chat.actions, ...(chat.mode ? { mode: chat.mode } : {}) }
       : c)));
     load({ silent: true });
   };
@@ -456,6 +459,11 @@ export default function WhatsappConversationsPage() {
                             )}
                           </div>
                           <div className="text-sm mt-1" style={{ color: 'var(--text2)' }}>{c.lastStepLabel}</div>
+                          {c.lastMessage && (
+                            <div className="text-xs mt-1 truncate max-w-[520px]" style={{ color: 'var(--text3)' }} data-last-message>
+                              {c.lastMessage.direction === 'inbound' ? 'Customer: ' : c.lastMessage.sender === 'staff' ? 'Staff: ' : 'Bot: '}{c.lastMessage.preview}
+                            </div>
+                          )}
                           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                             {c.serviceLabel && (
                               <span className="text-xs inline-flex items-center px-2 py-0.5 rounded-full"
@@ -478,7 +486,22 @@ export default function WhatsappConversationsPage() {
 
                       {/* Masked, recorded call: the CRM only has the opaque
                           customerRef, never the number. */}
-                      <CallButton target={{ customerRef: c.customerRef }} size="lg" className="flex-shrink-0 w-full sm:w-auto" />
+                      <div className="flex flex-col sm:items-end gap-2 flex-shrink-0 w-full sm:w-auto">
+                        <CallButton target={{ customerRef: c.customerRef }} size="lg" className="flex-shrink-0 w-full sm:w-auto" />
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full" data-mode-badge={c.mode?.value || 'bot'}
+                            style={c.mode?.value === 'human'
+                              ? { background: 'rgba(59,158,255,.12)', color: 'var(--blue)', border: '1px solid rgba(59,158,255,.3)' }
+                              : { background: 'rgba(0,168,120,.10)', color: 'var(--accent)', border: '1px solid rgba(0,168,120,.3)' }}>
+                            {c.mode?.value === 'human' ? <><UserRound size={11} /> {c.mode.byName ? `${c.mode.byName.split(' ')[0]} handling` : 'Staff handling'}</> : <><Bot size={11} /> Bot handling</>}
+                          </span>
+                          <button type="button" onClick={() => setChatRef(c.customerRef)} data-open-chat
+                            className="ml-auto sm:ml-0 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg"
+                            style={{ background: 'rgba(37,211,102,.12)', color: '#1fa855', border: '1px solid rgba(37,211,102,.35)' }}>
+                            <MessageCircle size={14} /> Open chat
+                          </button>
+                        </div>
+                      </div>
 
                     </div>
 
@@ -560,6 +583,12 @@ export default function WhatsappConversationsPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* ===================== Two-way WhatsApp chat — full-screen ===================== */}
+      {chatRef && conversations.find((c) => c.customerRef === chatRef) && (
+        <WaChatThread key={chatRef} row={conversations.find((c) => c.customerRef === chatRef)} meName={user?.name}
+          onClose={() => setChatRef(null)} onChat={(chat) => mergeChat(chatRef, chat)} />
       )}
 
       {/* ===================== Customer history — full-screen ===================== */}
