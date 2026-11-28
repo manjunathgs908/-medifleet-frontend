@@ -539,6 +539,18 @@ export const waChatsApi = {
   assign  : (ref, body) => api.patch(`/whatsapp-chats/${encodeURIComponent(ref)}/assign`, body),
   intro   : (ref)       => api.post(`/whatsapp-chats/${encodeURIComponent(ref)}/intro`),
   handover: (ref)       => api.post(`/whatsapp-chats/${encodeURIComponent(ref)}/handover`),
+  // Two-way chat (medifleet-backend services/waChat.js)
+  messages : (ref, before) => api.get(`/whatsapp-chats/${encodeURIComponent(ref)}/messages`, { params: before ? { before } : {} }),
+  sendText : (ref, body)   => api.post(`/whatsapp-chats/${encodeURIComponent(ref)}/messages`, body),
+  sendImage: (ref, body)   => api.post(`/whatsapp-chats/${encodeURIComponent(ref)}/messages/image`, body),
+  takeover : (ref)         => api.post(`/whatsapp-chats/${encodeURIComponent(ref)}/takeover`),
+  handback : (ref)         => api.post(`/whatsapp-chats/${encodeURIComponent(ref)}/handback`),
+  media    : (ref, id)     => api.get(`/whatsapp-chats/${encodeURIComponent(ref)}/media/${id}`, { responseType: 'blob' }),
+  // Ambulance photo gallery (photos are never public: fetched with the session)
+  gallery           : ()            => api.get('/whatsapp-chats/gallery'),
+  galleryPhoto      : (id)          => api.get(`/whatsapp-chats/gallery/${id}/photo`, { responseType: 'blob' }),
+  setGalleryPhoto   : (id, dataUrl) => api.put(`/whatsapp-chats/gallery/${id}/photo`, { dataUrl }),   // owner
+  deleteGalleryPhoto: (id)          => api.delete(`/whatsapp-chats/gallery/${id}/photo`),            // owner
 };
 
 // My WhatsApp introduction profile (medifleet-backend routes/staffProfile.js):
